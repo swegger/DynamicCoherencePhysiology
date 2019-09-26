@@ -446,6 +446,18 @@ classdef dcpObj
                 end
         end
         
+        %% Plotting methods
+        function h = rasterPlot(obj,trials,units)
+        % Raster plot
+            h = figure;
+            lineProps.Color = 'k';
+            lineProps.LineStyle = '-';
+            for triali = trials
+                plotVertical(obj.dirPref.spikeTimes{triali}{units},...
+                    'MinMax',[triali,triali+1],'lineProperties',lineProps);
+                hold on
+            end
+        end
         
     end
     
