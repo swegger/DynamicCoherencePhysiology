@@ -446,6 +446,149 @@ classdef dcpObj
                 end
         end
         
+        %% Analysis methods
+        function [condInds, condLogical] = dirPrefSort(obj,directions,speeds,locations)
+        % Find indices of all trials with direction  in directions, speed
+        % in speeds, location in locations.
+            if isnan(directions)
+                dMask = true(size(obj.dirPref.directions));
+            else
+                dMask = ismember(obj.dirPref.directions,directions);
+            end
+            
+            if isnan(speeds)
+                sMask = true(size(obj.dirPref.speeds));
+            else
+                sMask = ismember(obj.dirPref.speeds,speeds);
+            end
+            
+            if any(isnan(locations))
+                lMask = true(size(obj.dirPref.locations));
+            else
+                for li = 1:size(locations,2)
+                    lMask(:,li) = ismember(...
+                        obj.dirPref.locations(:,li),locations(:,li));
+                end
+            end
+            
+            condLogical = prod([dMask,sMask,lMask]);
+            condInds = find(condLogical);
+        end
+        
+        
+        function [condInds, condLogical] = speedPrefSort(obj,directions,speeds,locations)
+        % Find indices of all trials with direction  in directions, speed
+        % in speeds, location in locations.
+            if isnan(directions)
+                dMask = true(size(obj.speedPref.directions));
+            else
+                dMask = ismember(obj.speedPref.directions,directions);
+            end
+            
+            if isnan(speeds)
+                sMask = true(size(obj.speedPref.speeds));
+            else
+                sMask = ismember(obj.speedPref.speeds,speeds);
+            end
+            
+            if isnan(cohs)
+                sMask = true(size(obj.speedPref.speeds));
+            else
+                sMask = ismember(obj.speedPref.speeds,speeds);
+            end
+            
+            if any(isnan(locations))
+                lMask = true(size(obj.speedPref.locations));
+            else
+                for li = 1:size(locations,2)
+                    lMask(:,li) = ismember(...
+                        obj.speedPref.locations(:,li),locations(:,li));
+                end
+            end
+            
+            condLogical = prod([dMask,sMask,lMask]);
+            condInds = find(condLogical);
+        end
+        
+        
+        function [condInds, condLogical] = initiateCohSort(obj,directions,speeds,locations,cohs)
+        % Find indices of all trials with direction  in directions, speed
+        % in speeds, location in locations.
+            if isnan(directions)
+                dMask = true(size(obj.initiateCoh.directions));
+            else
+                dMask = ismember(obj.initiateCoh.directions,directions);
+            end
+            
+            if isnan(speeds)
+                sMask = true(size(obj.initiateCoh.speeds));
+            else
+                sMask = ismember(obj.initiateCoh.speeds,speeds);
+            end
+            
+            if isnan(cohs)
+                cMask = true(size(obj.initiateCoh.coh));
+            else
+                cMask = ismember(obj.initiateCoh.coh,cohs);
+            end
+            
+            if any(isnan(locations))
+                lMask = true(size(obj.initiateCoh.locations));
+            else
+                lMask = true(size(obj.initiateCoh.locations));
+                for li = 1:size(locations,2)
+                    lMask(:,li) = ismember(...
+                        obj.initiateCoh.locations(:,li),locations(:,li));
+                end
+            end
+            
+            condLogical = prod([dMask,sMask,cMask,lMask]);
+            condInds = find(condLogical);
+        end
+        
+        function [condInds, condLogical] = dynamicCohSort(obj,directions,speeds,locations,seqs,perts)
+        % Find indices of all trials with direction  in directions, speed
+        % in speeds, location in locations.
+            if isnan(directions)
+                dMask = true(size(obj.dynamicCoh.directions));
+            else
+                dMask = ismember(obj.dynamicCoh.directions,directions);
+            end
+            
+            if isnan(speeds)
+                sMask = true(size(obj.dynamicCoh.speeds));
+            else
+                sMask = ismember(obj.dynamicCoh.speeds,speeds);
+            end
+            
+            if isnan(seqs)
+                cMask = true(size(obj.dynamicCoh.coh));
+            else
+                cMask = ismember(obj.dynamicCoh.coh,cohs);
+            end
+            
+            if isnan(perts)
+                pMask = true(size(obj.dynamicCoh.coh));
+            else
+                pMask = ismember(obj.dynamicCoh.coh,cohs);
+            end
+            
+            if any(isnan(locations))
+                lMask = true(size(obj.dynamicCoh.locations));
+            else
+                lMask = true(size(obj.dynamicCoh.locations));
+                for li = 1:size(locations,2)
+                    lMask(:,li) = ismember(...
+                        obj.dynamicCoh.locations(:,li),locations(:,li));
+                end
+            end
+            
+            condLogical = prod([dMask,sMask,cMask,pMask,lMask]);
+            condInds = find(condLogical);
+        end
+                
+            
+        
         %% Plotting methods
         function h = rasterPlot(obj,trials,units)
         % Raster plot
