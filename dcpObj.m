@@ -38,6 +38,8 @@ classdef dcpObj
             obj.calib.t = 1:150;
             obj.calib.posGain = 0.025;
             obj.calib.speedGain = 0.09189;
+            obj.calib.accThres = 1.1;
+            obj.calib.windowSize = 40;
         end
         
         function obj = assertSpikesExtracted(obj,assertion)
@@ -82,7 +84,7 @@ classdef dcpObj
             % Determine the index of the first data file
             for fileInx = 1:length(files)
                 if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:4),obj.sname)
+                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
                     break
                 end
             end
@@ -134,6 +136,14 @@ classdef dcpObj
                             obj.dirPref.eye(:,ind).vvel = (file.data(4,:) - ...
                                 mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
                             
+                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
+                                file.data(4,:)*obj.calib.speedGain,...
+                                'accelerationThreshold',obj.calib.accThres,...
+                                'windowSize',40);
+                            obj.dirPref.eye(:,ind).hvel(sacs) = NaN;
+                            obj.dirPref.eye(:,ind).vvel(sacs) = NaN;
+                            obj.dirPref.eye(:,ind).saccades = sacs;
+                            
                             % Add spike times
                             obj.dirPref.spikeTimes{ind} = ...
                                 file.sortedSpikes(obj.unitIndex);                            
@@ -153,7 +163,7 @@ classdef dcpObj
             % Determine the index of the first data file
             for fileInx = 1:length(files)
                 if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:4),obj.sname)
+                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
                     break
                 end
             end
@@ -205,6 +215,14 @@ classdef dcpObj
                             obj.speedPref.eye(:,ind).vvel = (file.data(4,:) - ...
                                 mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
                             
+                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
+                                file.data(4,:)*obj.calib.speedGain,...
+                                'accelerationThreshold',obj.calib.accThres,...
+                                'windowSize',40);
+                            obj.speedPref.eye(:,ind).hvel(sacs) = NaN;
+                            obj.speedPref.eye(:,ind).vvel(sacs) = NaN;
+                            obj.speedPref.eye(:,ind).saccades = sacs;
+                            
                             % Add spike times
                             obj.speedPref.spikeTimes{ind} = ...
                                 file.sortedSpikes(obj.unitIndex);                            
@@ -224,7 +242,7 @@ classdef dcpObj
             % Determine the index of the first data file
             for fileInx = 1:length(files)
                 if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:4),obj.sname)
+                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
                     break
                 end
             end
@@ -280,6 +298,14 @@ classdef dcpObj
                             obj.initiateCoh.eye(:,ind).vvel = (file.data(4,:) - ...
                                 mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
                             
+                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
+                                file.data(4,:)*obj.calib.speedGain,...
+                                'accelerationThreshold',obj.calib.accThres,...
+                                'windowSize',40);
+                            obj.initiateCoh.eye(:,ind).hvel(sacs) = NaN;
+                            obj.initiateCoh.eye(:,ind).vvel(sacs) = NaN;
+                            obj.initiateCoh.eye(:,ind).saccades = sacs;
+                            
                             % Add spike times
                             obj.initiateCoh.spikeTimes{ind} = ...
                                 file.sortedSpikes(obj.unitIndex);                            
@@ -298,7 +324,7 @@ classdef dcpObj
             % Determine the index of the first data file
             for fileInx = 1:length(files)
                 if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:4),obj.sname)
+                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
                     break
                 end
             end
@@ -358,6 +384,14 @@ classdef dcpObj
                             obj.dynamicCoh.eye(:,ind).vvel = (file.data(4,:) - ...
                                 mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
                             
+                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
+                                file.data(4,:)*obj.calib.speedGain,...
+                                'accelerationThreshold',obj.calib.accThres,...
+                                'windowSize',40);
+                            obj.dynamicCoh.eye(:,ind).hvel(sacs) = NaN;
+                            obj.dynamicCoh.eye(:,ind).vvel(sacs) = NaN;
+                            obj.dynamicCoh.eye(:,ind).saccades = sacs;
+                            
                             % Add spike times
                             obj.dynamicCoh.spikeTimes{ind} = ...
                                 file.sortedSpikes(obj.unitIndex);                            
@@ -376,7 +410,7 @@ classdef dcpObj
             % Determine the index of the first data file
             for fileInx = 1:length(files)
                 if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:4),obj.sname)
+                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
                     break
                 end
             end
@@ -436,6 +470,14 @@ classdef dcpObj
                             obj.washout.eye(:,ind).vvel = (file.data(4,:) - ...
                                 mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
                             
+                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
+                                file.data(4,:)*obj.calib.speedGain,...
+                                'accelerationThreshold',obj.calib.accThres,...
+                                'windowSize',40);
+                            obj.washout.eye(:,ind).hvel(sacs) = NaN;
+                            obj.washout.eye(:,ind).vvel(sacs) = NaN;
+                            obj.washout.eye(:,ind).saccades = sacs;
+                            
                             % Add spike times
                             obj.washout.spikeTimes{ind} = ...
                                 file.sortedSpikes(obj.unitIndex);                            
@@ -471,7 +513,7 @@ classdef dcpObj
                 end
             end
             
-            condLogical = prod([dMask,sMask,lMask]);
+            condLogical = prod([dMask,sMask,lMask],2);
             condInds = find(condLogical);
         end
         
@@ -506,7 +548,7 @@ classdef dcpObj
                 end
             end
             
-            condLogical = prod([dMask,sMask,lMask]);
+            condLogical = prod([dMask,sMask,lMask],2);
             condInds = find(condLogical);
         end
         
@@ -542,7 +584,7 @@ classdef dcpObj
                 end
             end
             
-            condLogical = prod([dMask,sMask,cMask,lMask]);
+            condLogical = prod([dMask,sMask,cMask,lMask],2);
             condInds = find(condLogical);
         end
         
@@ -562,15 +604,15 @@ classdef dcpObj
             end
             
             if isnan(seqs)
-                cMask = true(size(obj.dynamicCoh.coh));
+                cMask = true(size(obj.dynamicCoh.sequences));
             else
-                cMask = ismember(obj.dynamicCoh.coh,cohs);
+                cMask = ismember(obj.dynamicCoh.sequences,seqs);
             end
             
             if isnan(perts)
-                pMask = true(size(obj.dynamicCoh.coh));
+                pMask = true(size(obj.dynamicCoh.perturbations));
             else
-                pMask = ismember(obj.dynamicCoh.coh,cohs);
+                pMask = ismember(obj.dynamicCoh.perturbations,perts);
             end
             
             if any(isnan(locations))
@@ -583,7 +625,7 @@ classdef dcpObj
                 end
             end
             
-            condLogical = prod([dMask,sMask,cMask,pMask,lMask]);
+            condLogical = prod([dMask,sMask,cMask,pMask,lMask],2);
             condInds = find(condLogical);
         end
                 
@@ -599,6 +641,69 @@ classdef dcpObj
                 plotVertical(obj.dirPref.spikeTimes{triali}{units},...
                     'MinMax',[triali,triali+1],'lineProperties',lineProps);
                 hold on
+            end
+        end
+        
+        function h = dynamicCohMeanEyeSpeed(obj,condLogical,varargin)
+        % Plots mean eye speed for a set of trials specified in condLogical
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'condLogical')
+            addParameter(Parser,'h',NaN)
+            addParameter(Parser,'sh',NaN)
+            addParameter(Parser,'t',NaN)
+            addParameter(Parser,'color',NaN)
+            
+            parse(Parser,obj,condLogical,varargin{:})
+            
+            obj = Parser.Results.obj;
+            condLogical = Parser.Results.condLogical;
+            h = Parser.Results.h;
+            sh = Parser.Results.sh;
+            t = Parser.Results.t;
+            color = Parser.Results.color;
+            
+            if ishandle(h)
+                figure(h);
+            else
+                h = figure;
+            end
+            if ishandle(sh)
+                subplot(sh)
+            end
+            E = sqrt(vertcat(obj.dynamicCoh.eye(~~condLogical).hvel).^2 + ...
+                    vertcat(obj.dynamicCoh.eye(~~condLogical).vvel).^2 );
+            mE = nanmean(E,1);
+            steE = sqrt(nanvar(E,[],1)/sum(condLogical));
+            
+            if isnan(t)
+                t = 0:length(mE)-1;
+            end
+            
+            patchProps.FaceAlpha = 0.3;
+            if ~any(isnan(color))
+                patchProps.FaceColor = color;
+            else
+                color = [0 0 0];
+                patchProps.FaceColor = color;
+            end
+            myPatch(t(:),mE(:),steE(:),'patchProperties',patchProps);
+            hold on
+            plot(t,mE,'Color',color,'LineWidth',2)
+        end
+        
+        function [h,sh,colors] = dynamicCohMeanEyeSeq(obj)
+        % Plots mean eye speed for each sequence and target speed
+            colors = colormap('lines');
+            h = gcf;
+            speeds = unique(obj.dynamicCoh.speeds);
+            for si = 1:length(speeds)
+                sh(si) = subplot(3,1,si);
+                for seqi = 1:length(unique(obj.dynamicCoh.sequences))
+                    [~,condLogical] = dynamicCohSort(obj,0,speeds(si),NaN,seqi,NaN);
+                    dynamicCohMeanEyeSpeed(obj,condLogical,'h',h,'sh',sh(si),'color',colors(seqi,:));
+                end
             end
         end
         
