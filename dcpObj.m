@@ -693,17 +693,87 @@ classdef dcpObj
             plot(t,mE,'Color',color,'LineWidth',2)
         end
         
+        
+        function h = dynamicCohMeanEyeSpeedDiff(obj,condLogical,controlE,varargin)
+        % Plots mean eye speed for a set of trials specified in condLogical
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'condLogical')
+            addRequired(Parser,'controlE')
+            addParameter(Parser,'h',NaN)
+            addParameter(Parser,'sh',NaN)
+            addParameter(Parser,'t',NaN)
+            addParameter(Parser,'color',NaN)
+            
+            parse(Parser,obj,condLogical,controlE,varargin{:})
+            
+            obj = Parser.Results.obj;
+            condLogical = Parser.Results.condLogical;
+            controlE = Parser.Results.controlE;
+            h = Parser.Results.h;
+            sh = Parser.Results.sh;
+            t = Parser.Results.t;
+            color = Parser.Results.color;
+            
+            if ishandle(h)
+                figure(h);
+            else
+                h = figure;
+            end
+            if ishandle(sh)
+                subplot(sh)
+            end
+            E = sqrt(vertcat(obj.dynamicCoh.eye(~~condLogical).hvel).^2 + ...
+                    vertcat(obj.dynamicCoh.eye(~~condLogical).vvel).^2 );
+            mE = nanmean(E,1);
+            stvE = nanvar(E,[],1)/sum(condLogical);
+            
+            mEc = nanmean(controlE,1);
+            stvEc = nanvar(controlE,[],1)/size(controlE,1);
+            
+            mEd = mE - mEc;
+            steEd = sqrt(stvE + stvEc);
+            
+            if isnan(t)
+                t = 0:length(mEd)-1;
+            end
+            
+            patchProps.FaceAlpha = 0.3;
+            if ~any(isnan(color))
+                patchProps.FaceColor = color;
+            else
+                color = [0 0 0];
+                patchProps.FaceColor = color;
+            end
+            myPatch(t(:),mEd(:),steEd(:),'patchProperties',patchProps);
+            hold on
+            plot(t,mEd,'Color',color,'LineWidth',2)
+        end
+        
         function [h,sh,colors] = dynamicCohMeanEyeSeq(obj)
         % Plots mean eye speed for each sequence and target speed
             colors = colormap('lines');
             h = gcf;
             speeds = unique(obj.dynamicCoh.speeds);
             for si = 1:length(speeds)
-                sh(si) = subplot(3,1,si);
+                sh(si) = subplot(2,3,si);
                 for seqi = 1:length(unique(obj.dynamicCoh.sequences))
                     [~,condLogical] = dynamicCohSort(obj,0,speeds(si),NaN,seqi,NaN);
                     dynamicCohMeanEyeSpeed(obj,condLogical,'h',h,'sh',sh(si),'color',colors(seqi,:));
                 end
+                plotVertical([150 150+0:300:1500]);
+                
+                sh(si+3) = subplot(2,3,si+3);
+                [~,condLogicalC] = dynamicCohSort(obj,0,speeds(si),NaN,5,NaN);
+                controlE = sqrt(vertcat(obj.dynamicCoh.eye(~~condLogicalC).hvel).^2 + ...
+                    vertcat(obj.dynamicCoh.eye(~~condLogicalC).vvel).^2);
+                for seqi = 1:length(unique(obj.dynamicCoh.sequences))
+                    [~,condLogical] = dynamicCohSort(obj,0,speeds(si),NaN,seqi,NaN);
+                    dynamicCohMeanEyeSpeedDiff(obj,condLogical,controlE,...
+                        'h',h,'sh',sh(si+3),'color',colors(seqi,:));
+                end
+                plotVertical([150 150+0:300:1500]);
             end
         end
         
