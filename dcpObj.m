@@ -150,8 +150,12 @@ classdef dcpObj
                             obj.dirPref.eye(:,ind).saccades = sacs;
                             
                             % Add spike times
-                            obj.dirPref.spikeTimes{ind} = ...
-                                file.sortedSpikes(obj.unitIndex);                            
+                            if obj.spikesExtracted
+                                obj.dirPref.spikeTimes{ind} = ...
+                                    file.sortedSpikes(obj.unitIndex);                                
+                            else
+                                obj.dirPref.spikeTimes{ind}{1} = file.spikes;                    
+                            end
                             
                         end
                         
@@ -229,8 +233,12 @@ classdef dcpObj
                             obj.speedPref.eye(:,ind).saccades = sacs;
                             
                             % Add spike times
-                            obj.speedPref.spikeTimes{ind} = ...
-                                file.sortedSpikes(obj.unitIndex);                            
+                            if obj.spikesExtracted
+                                obj.speedPref.spikeTimes{ind} = ...
+                                    file.sortedSpikes(obj.unitIndex);                                
+                            else
+                                obj.speedPref.spikeTimes{ind}{1} = file.spikes;                    
+                            end
                             
                         end
                         
@@ -311,9 +319,13 @@ classdef dcpObj
                             obj.initiateCoh.eye(:,ind).vvel(sacs) = NaN;
                             obj.initiateCoh.eye(:,ind).saccades = sacs;
                             
-                            % Add spike times
-                            obj.initiateCoh.spikeTimes{ind} = ...
-                                file.sortedSpikes(obj.unitIndex);                            
+                            % Add spike times 
+                            if obj.spikesExtracted
+                                obj.initiateCoh.spikeTimes{ind} = ...
+                                    file.sortedSpikes(obj.unitIndex);                                
+                            else
+                                obj.initiateCoh.spikeTimes{ind}{1} = file.spikes;                    
+                            end                           
                             
                         end
                         
@@ -333,7 +345,7 @@ classdef dcpObj
                     break
                 end
             end
-            
+                
                 ind = 0;
                 for ti = trialNs
                     
@@ -398,8 +410,12 @@ classdef dcpObj
                             obj.dynamicCoh.eye(:,ind).saccades = sacs;
                             
                             % Add spike times
-                            obj.dynamicCoh.spikeTimes{ind} = ...
-                                file.sortedSpikes(obj.unitIndex);                            
+                            if obj.spikesExtracted
+                                obj.dynamicCoh.spikeTimes{ind} = ...
+                                    file.sortedSpikes(obj.unitIndex);                                
+                            else
+                                obj.dynamicCoh.spikeTimes{ind}{1} = file.spikes;                    
+                            end                           
                             
                         end
                         
@@ -485,7 +501,13 @@ classdef dcpObj
                             
                             % Add spike times
                             obj.washout.spikeTimes{ind} = ...
-                                file.sortedSpikes(obj.unitIndex);                            
+                                file.sortedSpikes(obj.unitIndex); 
+                            if obj.spikesExtracted
+                                obj.washout.spikeTimes{ind} = ...
+                                    file.sortedSpikes(obj.unitIndex);                                
+                            else
+                                obj.washout.spikeTimes{ind}{1} = file.spikes;                    
+                            end                             
                             
                         end
                         
@@ -639,12 +661,14 @@ classdef dcpObj
         %% Plotting methods
         function h = rasterPlot(obj,trials,units)
         % Raster plot
-            h = figure;
+%             h = figure;
             lineProps.Color = 'k';
             lineProps.LineStyle = '-';
-            for triali = trials
-                plotVertical(obj.dirPref.spikeTimes{triali}{units},...
-                    'MinMax',[triali,triali+1],'lineProperties',lineProps);
+            for triali = 1:length(trials)
+                if ~isempty(obj.initiateCoh.spikeTimes{trials(triali)}{units})
+                    plotVertical(obj.initiateCoh.spikeTimes{trials(triali)}{units},...
+                        'MinMax',[triali,triali+1],'lineProperties',lineProps);
+                end
                 hold on
             end
         end
