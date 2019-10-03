@@ -6,7 +6,7 @@
 %%
 
 classdef dcpObj
-    % DynamicCoherencePhysiology offline analysis class
+    % DynamicCoherencePhysiology analysis class
     properties
         sname;
         datapath;
@@ -40,6 +40,11 @@ classdef dcpObj
             obj.calib.speedGain = 0.09189;
             obj.calib.accThres = 1.1;
             obj.calib.windowSize = 40;
+            
+        end
+        
+        function out = returnDatapath(obj)
+            out = obj.datapath;
         end
         
         function obj = assertSpikesExtracted(obj,assertion)
@@ -106,7 +111,7 @@ classdef dcpObj
                             
                             % Parse trial info
                             [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.dirPref.trailtype(ind,1) = ...
+                            obj.dirPref.trialtpe(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'d\d{3}');
@@ -185,7 +190,7 @@ classdef dcpObj
                             
                             % Parse trial info
                             [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.speedPref.trailtype(ind,1) = ...
+                            obj.speedPref.trialtpe(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'d\d{3}');
@@ -264,7 +269,7 @@ classdef dcpObj
                             
                             % Parse trial info
                             [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.initiateCoh.trailtype(ind,1) = ...
+                            obj.initiateCoh.trialtpe(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'h\d{3}');
@@ -346,7 +351,7 @@ classdef dcpObj
                             
                             % Parse trial info
                             [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.dynamicCoh.trailtype(ind,1) = ...
+                            obj.dynamicCoh.trialtpe(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'q\d{3}');
@@ -432,7 +437,7 @@ classdef dcpObj
                             
                             % Parse trial info
                             [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.washout.trailtype(ind,1) = ...
+                            obj.washout.trialtpe(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'q\d{3}');
@@ -751,7 +756,7 @@ classdef dcpObj
             plot(t,mEd,'Color',color,'LineWidth',2)
         end
         
-        function [h,sh,colors] = dynamicCohMeanEyeSeq(obj)
+        function [h,sh,colors] = dynamicCohMeanEyeSeq(obj,dirs)
         % Plots mean eye speed for each sequence and target speed
             colors = colormap('lines');
             h = gcf;
@@ -759,17 +764,17 @@ classdef dcpObj
             for si = 1:length(speeds)
                 sh(si) = subplot(2,3,si);
                 for seqi = 1:length(unique(obj.dynamicCoh.sequences))
-                    [~,condLogical] = dynamicCohSort(obj,0,speeds(si),NaN,seqi,NaN);
+                    [~,condLogical] = dynamicCohSort(obj,dirs,speeds(si),NaN,seqi,NaN);
                     dynamicCohMeanEyeSpeed(obj,condLogical,'h',h,'sh',sh(si),'color',colors(seqi,:));
                 end
                 plotVertical([150 150+0:300:1500]);
                 
                 sh(si+3) = subplot(2,3,si+3);
-                [~,condLogicalC] = dynamicCohSort(obj,0,speeds(si),NaN,5,NaN);
+                [~,condLogicalC] = dynamicCohSort(obj,dirs,speeds(si),NaN,5,NaN);
                 controlE = sqrt(vertcat(obj.dynamicCoh.eye(~~condLogicalC).hvel).^2 + ...
                     vertcat(obj.dynamicCoh.eye(~~condLogicalC).vvel).^2);
                 for seqi = 1:length(unique(obj.dynamicCoh.sequences))
-                    [~,condLogical] = dynamicCohSort(obj,0,speeds(si),NaN,seqi,NaN);
+                    [~,condLogical] = dynamicCohSort(obj,dirs,speeds(si),NaN,seqi,NaN);
                     dynamicCohMeanEyeSpeedDiff(obj,condLogical,controlE,...
                         'h',h,'sh',sh(si+3),'color',colors(seqi,:));
                 end
@@ -780,3 +785,4 @@ classdef dcpObj
     end
     
 end
+
