@@ -15,15 +15,24 @@ classdef dcpObj
         calib
         unitIndex
         
-        dirPref;
+        trialNumbers;
+        trialDataFiles;
+        trialtype;
+        directions;
+        speeds;
+        locations;
+        eye;
+        spikeTimes;
         
-        speedPref;
-        
-        initiateCoh;
-        
-        washout;
-        
-        dynamicCoh;
+%         dirPref;
+%         
+%         speedPref;
+%         
+%         initiateCoh;
+%         
+%         washout;
+%         
+%         dynamicCoh;
     end
     
     methods
@@ -81,170 +90,6 @@ classdef dcpObj
             obj.unitIndex = unique(indsList);
         end
         
-        %% dirPrefTrials
-        function obj = dirPrefTrials(obj,trialNs)
-        % Add direction preference trials to data object
-            files = dir(obj.datapath);
-            
-            % Determine the index of the first data file
-            for fileInx = 1:length(files)
-                if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
-                    break
-                end
-            end
-            
-                ind = 0;
-                for ti = trialNs
-                    
-                    if length(files)-fileInx+1 > ti
-                        
-                        % Read file
-                        file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
-                        
-                        trialname = file.trialname;
-                        if strcmp(trialname(1:5),'dPref')
-                            ind = ind+1;
-                            % Update trial
-                            obj.dirPref.trialNumbers(ind,1) = ti;
-                            obj.dirPref.trialDataFiles{ind} = files(ti+fileInx-1).name;
-                            
-                            % Parse trial info
-                            [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.dirPref.trialtpe(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'d\d{3}');
-                            obj.dirPref.directions(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'s\d{3}');
-                            obj.dirPref.speeds(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'x\d{3}');
-                            obj.dirPref.locations(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            [startIndex,endIndex] = regexp(trialname,'y\d{3}');
-                            obj.dirPref.locations(ind,2) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            % Add eye information
-                            obj.dirPref.eye(:,ind).hpos = (file.data(1,:) - ...
-                                mean(file.data(1,obj.calib.t)))*obj.calib.posGain;
-                            obj.dirPref.eye(:,ind).vpos = (file.data(2,:) - ...
-                                mean(file.data(2,obj.calib.t)))*obj.calib.posGain;
-                            
-                            obj.dirPref.eye(:,ind).hvel = (file.data(3,:) - ...
-                                mean(file.data(3,obj.calib.t)))*obj.calib.speedGain;
-                            obj.dirPref.eye(:,ind).vvel = (file.data(4,:) - ...
-                                mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
-                            
-                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
-                                file.data(4,:)*obj.calib.speedGain,...
-                                'accelerationThreshold',obj.calib.accThres,...
-                                'windowSize',40);
-                            obj.dirPref.eye(:,ind).hvel(sacs) = NaN;
-                            obj.dirPref.eye(:,ind).vvel(sacs) = NaN;
-                            obj.dirPref.eye(:,ind).saccades = sacs;
-                            
-                            % Add spike times
-                            if obj.spikesExtracted
-                                obj.dirPref.spikeTimes{ind} = ...
-                                    file.sortedSpikes(obj.unitIndex);                                
-                            else
-                                obj.dirPref.spikeTimes{ind}{1} = file.spikes;                    
-                            end
-                            
-                        end
-                        
-                    end
-                end
-        end
-        
-        
-        %% speedPrefTrials
-        function obj = speedPrefTrials(obj,trialNs)
-        % Add direction preference trials to data object
-            files = dir(obj.datapath);
-            
-            % Determine the index of the first data file
-            for fileInx = 1:length(files)
-                if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
-                    break
-                end
-            end
-            
-                ind = 0;
-                for ti = trialNs
-                    
-                    if length(files)-fileInx+1 > ti
-                        
-                        % Read file
-                        file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
-                        
-                        trialname = file.trialname;
-                        if strcmp(trialname(1:5),'sPref')
-                            ind = ind+1;
-                            % Update trial
-                            obj.speedPref.trialNumbers(ind,1) = ti;
-                            obj.speedPref.trialDataFiles{ind} = files(ti+fileInx-1).name;
-                            
-                            % Parse trial info
-                            [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.speedPref.trialtpe(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'d\d{3}');
-                            obj.speedPref.directions(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'s\d{3}');
-                            obj.speedPref.speeds(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'x\d{3}');
-                            obj.speedPref.locations(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            [startIndex,endIndex] = regexp(trialname,'y\d{3}');
-                            obj.speedPref.locations(ind,2) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            % Add eye information
-                            obj.speedPref.eye(:,ind).hpos = (file.data(1,:) - ...
-                                mean(file.data(1,obj.calib.t)))*obj.calib.posGain;
-                            obj.speedPref.eye(:,ind).vpos = (file.data(2,:) - ...
-                                mean(file.data(2,obj.calib.t)))*obj.calib.posGain;
-                            
-                            obj.speedPref.eye(:,ind).hvel = (file.data(3,:) - ...
-                                mean(file.data(3,obj.calib.t)))*obj.calib.speedGain;
-                            obj.speedPref.eye(:,ind).vvel = (file.data(4,:) - ...
-                                mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
-                            
-                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
-                                file.data(4,:)*obj.calib.speedGain,...
-                                'accelerationThreshold',obj.calib.accThres,...
-                                'windowSize',40);
-                            obj.speedPref.eye(:,ind).hvel(sacs) = NaN;
-                            obj.speedPref.eye(:,ind).vvel(sacs) = NaN;
-                            obj.speedPref.eye(:,ind).saccades = sacs;
-                            
-                            % Add spike times
-                            if obj.spikesExtracted
-                                obj.speedPref.spikeTimes{ind} = ...
-                                    file.sortedSpikes(obj.unitIndex);                                
-                            else
-                                obj.speedPref.spikeTimes{ind}{1} = file.spikes;                    
-                            end
-                            
-                        end
-                        
-                    end
-                end
-        end
         
         
         %% initiateCohTrials
@@ -516,145 +361,192 @@ classdef dcpObj
         end
         
         %% Analysis methods
-        function [condInds, condLogical] = dirPrefSort(obj,directions,speeds,locations)
+        function [condInds, condLogical] = trialSort(obj,directions,speeds,locations,...
+                cohs,seqs,perts)
         % Find indices of all trials with direction  in directions, speed
         % in speeds, location in locations.
             if isnan(directions)
-                dMask = true(size(obj.dirPref.directions));
+                dMask = true(size(obj.directions));
             else
-                dMask = ismember(obj.dirPref.directions,directions);
+                dMask = ismember(obj.directions,directions);
             end
             
             if isnan(speeds)
-                sMask = true(size(obj.dirPref.speeds));
+                sMask = true(size(obj.speeds));
             else
-                sMask = ismember(obj.dirPref.speeds,speeds);
+                sMask = ismember(obj.speeds,speeds);
             end
             
-            if any(isnan(locations))
-                lMask = true(size(obj.dirPref.locations));
-            else
-                for li = 1:size(locations,2)
-                    lMask(:,li) = ismember(...
-                        obj.dirPref.locations(:,li),locations(:,li));
-                end
-            end
-            
-            condLogical = prod([dMask,sMask,lMask],2);
-            condInds = find(condLogical);
-        end
-        
-        
-        function [condInds, condLogical] = speedPrefSort(obj,directions,speeds,locations)
-        % Find indices of all trials with direction  in directions, speed
-        % in speeds, location in locations.
-            if isnan(directions)
-                dMask = true(size(obj.speedPref.directions));
-            else
-                dMask = ismember(obj.speedPref.directions,directions);
-            end
-            
-            if isnan(speeds)
-                sMask = true(size(obj.speedPref.speeds));
-            else
-                sMask = ismember(obj.speedPref.speeds,speeds);
-            end
-            
-            if isnan(cohs)
-                sMask = true(size(obj.speedPref.speeds));
-            else
-                sMask = ismember(obj.speedPref.speeds,speeds);
-            end
-            
-            if any(isnan(locations))
-                lMask = true(size(obj.speedPref.locations));
+            if ~exist('locations','var') || any(isnan(locations))
+                lMask = true(size(obj.locations));
             else
                 for li = 1:size(locations,2)
                     lMask(:,li) = ismember(...
-                        obj.speedPref.locations(:,li),locations(:,li));
+                        obj.locations(:,li),locations(:,li));
                 end
             end
             
-            condLogical = prod([dMask,sMask,lMask],2);
+            if ~exist('cohs','var') || isnan(cohs) 
+                cMask = true(size(obj.directions));
+            else
+                cMask = ismember(obj.coh,cohs);
+            end
+            
+            if ~exist('seqs','var') || isnan(seqs)
+                qMask = true(size(obj.directions));
+            else
+                qMask = ismember(obj.sequences,seqs);
+            end
+            
+            if ~exist('perts','var') || isnan(perts)
+                pMask = true(size(obj.directions));
+            else
+                pMask = ismember(obj.perturbations,perts);
+            end
+            
+            condLogical = prod([dMask,sMask,lMask,cMask,qMask,pMask],2);
             condInds = find(condLogical);
         end
         
-        
-        function [condInds, condLogical] = initiateCohSort(obj,directions,speeds,locations,cohs)
-        % Find indices of all trials with direction  in directions, speed
-        % in speeds, location in locations.
-            if isnan(directions)
-                dMask = true(size(obj.initiateCoh.directions));
-            else
-                dMask = ismember(obj.initiateCoh.directions,directions);
-            end
-            
-            if isnan(speeds)
-                sMask = true(size(obj.initiateCoh.speeds));
-            else
-                sMask = ismember(obj.initiateCoh.speeds,speeds);
-            end
-            
-            if isnan(cohs)
-                cMask = true(size(obj.initiateCoh.coh));
-            else
-                cMask = ismember(obj.initiateCoh.coh,cohs);
-            end
-            
-            if any(isnan(locations))
-                lMask = true(size(obj.initiateCoh.locations));
-            else
-                lMask = true(size(obj.initiateCoh.locations));
-                for li = 1:size(locations,2)
-                    lMask(:,li) = ismember(...
-                        obj.initiateCoh.locations(:,li),locations(:,li));
-                end
-            end
-            
-            condLogical = prod([dMask,sMask,cMask,lMask],2);
-            condInds = find(condLogical);
-        end
-        
-        function [condInds, condLogical] = dynamicCohSort(obj,directions,speeds,locations,seqs,perts)
-        % Find indices of all trials with direction  in directions, speed
-        % in speeds, location in locations.
-            if isnan(directions)
-                dMask = true(size(obj.dynamicCoh.directions));
-            else
-                dMask = ismember(obj.dynamicCoh.directions,directions);
-            end
-            
-            if isnan(speeds)
-                sMask = true(size(obj.dynamicCoh.speeds));
-            else
-                sMask = ismember(obj.dynamicCoh.speeds,speeds);
-            end
-            
-            if isnan(seqs)
-                cMask = true(size(obj.dynamicCoh.sequences));
-            else
-                cMask = ismember(obj.dynamicCoh.sequences,seqs);
-            end
-            
-            if isnan(perts)
-                pMask = true(size(obj.dynamicCoh.perturbations));
-            else
-                pMask = ismember(obj.dynamicCoh.perturbations,perts);
-            end
-            
-            if any(isnan(locations))
-                lMask = true(size(obj.dynamicCoh.locations));
-            else
-                lMask = true(size(obj.dynamicCoh.locations));
-                for li = 1:size(locations,2)
-                    lMask(:,li) = ismember(...
-                        obj.dynamicCoh.locations(:,li),locations(:,li));
-                end
-            end
-            
-            condLogical = prod([dMask,sMask,cMask,pMask,lMask],2);
-            condInds = find(condLogical);
-        end
+%         function [condInds, condLogical] = dirPrefSort(obj,directions,speeds,locations)
+%         % Find indices of all trials with direction  in directions, speed
+%         % in speeds, location in locations.
+%             if isnan(directions)
+%                 dMask = true(size(obj.dirPref.directions));
+%             else
+%                 dMask = ismember(obj.dirPref.directions,directions);
+%             end
+%             
+%             if isnan(speeds)
+%                 sMask = true(size(obj.dirPref.speeds));
+%             else
+%                 sMask = ismember(obj.dirPref.speeds,speeds);
+%             end
+%             
+%             if any(isnan(locations))
+%                 lMask = true(size(obj.dirPref.locations));
+%             else
+%                 for li = 1:size(locations,2)
+%                     lMask(:,li) = ismember(...
+%                         obj.dirPref.locations(:,li),locations(:,li));
+%                 end
+%             end
+%             
+%             condLogical = prod([dMask,sMask,lMask],2);
+%             condInds = find(condLogical);
+%         end
+%         
+%         
+%         function [condInds, condLogical] = speedPrefSort(obj,directions,speeds,locations)
+%         % Find indices of all trials with direction  in directions, speed
+%         % in speeds, location in locations.
+%             if isnan(directions)
+%                 dMask = true(size(obj.speedPref.directions));
+%             else
+%                 dMask = ismember(obj.speedPref.directions,directions);
+%             end
+%             
+%             if isnan(speeds)
+%                 sMask = true(size(obj.speedPref.speeds));
+%             else
+%                 sMask = ismember(obj.speedPref.speeds,speeds);
+%             end
+%             
+%             if isnan(cohs)
+%                 sMask = true(size(obj.speedPref.speeds));
+%             else
+%                 sMask = ismember(obj.speedPref.speeds,speeds);
+%             end
+%             
+%             if any(isnan(locations))
+%                 lMask = true(size(obj.speedPref.locations));
+%             else
+%                 for li = 1:size(locations,2)
+%                     lMask(:,li) = ismember(...
+%                         obj.speedPref.locations(:,li),locations(:,li));
+%                 end
+%             end
+%             
+%             condLogical = prod([dMask,sMask,lMask],2);
+%             condInds = find(condLogical);
+%         end
+%         
+%         
+%         function [condInds, condLogical] = initiateCohSort(obj,directions,speeds,locations,cohs)
+%         % Find indices of all trials with direction  in directions, speed
+%         % in speeds, location in locations.
+%             if isnan(directions)
+%                 dMask = true(size(obj.initiateCoh.directions));
+%             else
+%                 dMask = ismember(obj.initiateCoh.directions,directions);
+%             end
+%             
+%             if isnan(speeds)
+%                 sMask = true(size(obj.initiateCoh.speeds));
+%             else
+%                 sMask = ismember(obj.initiateCoh.speeds,speeds);
+%             end
+%             
+%             if isnan(cohs)
+%                 cMask = true(size(obj.initiateCoh.coh));
+%             else
+%                 cMask = ismember(obj.initiateCoh.coh,cohs);
+%             end
+%             
+%             if any(isnan(locations))
+%                 lMask = true(size(obj.initiateCoh.locations));
+%             else
+%                 lMask = true(size(obj.initiateCoh.locations));
+%                 for li = 1:size(locations,2)
+%                     lMask(:,li) = ismember(...
+%                         obj.initiateCoh.locations(:,li),locations(:,li));
+%                 end
+%             end
+%             
+%             condLogical = prod([dMask,sMask,cMask,lMask],2);
+%             condInds = find(condLogical);
+%         end
+%         
+%         function [condInds, condLogical] = dynamicCohSort(obj,directions,speeds,locations,seqs,perts)
+%         % Find indices of all trials with direction  in directions, speed
+%         % in speeds, location in locations.
+%             if isnan(directions)
+%                 dMask = true(size(obj.dynamicCoh.directions));
+%             else
+%                 dMask = ismember(obj.dynamicCoh.directions,directions);
+%             end
+%             
+%             if isnan(speeds)
+%                 sMask = true(size(obj.dynamicCoh.speeds));
+%             else
+%                 sMask = ismember(obj.dynamicCoh.speeds,speeds);
+%             end
+%             
+%             if isnan(seqs)
+%                 cMask = true(size(obj.dynamicCoh.sequences));
+%             else
+%                 cMask = ismember(obj.dynamicCoh.sequences,seqs);
+%             end
+%             
+%             if isnan(perts)
+%                 pMask = true(size(obj.dynamicCoh.perturbations));
+%             else
+%                 pMask = ismember(obj.dynamicCoh.perturbations,perts);
+%             end
+%             
+%             if any(isnan(locations))
+%                 lMask = true(size(obj.dynamicCoh.locations));
+%             else
+%                 lMask = true(size(obj.dynamicCoh.locations));
+%                 for li = 1:size(locations,2)
+%                     lMask(:,li) = ismember(...
+%                         obj.dynamicCoh.locations(:,li),locations(:,li));
+%                 end
+%             end
+%             
+%             condLogical = prod([dMask,sMask,cMask,pMask,lMask],2);
+%             condInds = find(condLogical);
+%         end
                 
             
         
@@ -665,12 +557,116 @@ classdef dcpObj
             lineProps.Color = 'k';
             lineProps.LineStyle = '-';
             for triali = 1:length(trials)
-                if ~isempty(obj.initiateCoh.spikeTimes{trials(triali)}{units})
-                    plotVertical(obj.initiateCoh.spikeTimes{trials(triali)}{units},...
+                if ~isempty(obj.spikeTimes{trials(triali)}{units})
+                    plotVertical(obj.spikeTimes{trials(triali)}{units},...
                         'MinMax',[triali,triali+1],'lineProperties',lineProps);
                 end
                 hold on
             end
+        end
+        
+        function h = plotMeanEyeVelocity(obj,condLogical,varargin)
+        % Plots mean eye velocity for a set of trials specified in condLogical
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'condLogical')
+            addParameter(Parser,'h',NaN)
+            addParameter(Parser,'sh',NaN)
+            addParameter(Parser,'t',NaN)
+            addParameter(Parser,'color',NaN)
+            
+            parse(Parser,obj,condLogical,varargin{:})
+            
+            obj = Parser.Results.obj;
+            condLogical = Parser.Results.condLogical;
+            h = Parser.Results.h;
+            sh = Parser.Results.sh;
+            t = Parser.Results.t;
+            color = Parser.Results.color;
+            
+            if ishandle(h)
+                figure(h);
+            else
+                h = figure;
+            end
+            if ishandle(sh)
+                subplot(sh)
+            end
+            E(:,:,1) = vertcat(obj.eye(~~condLogical).hvel);
+            E(:,:,2) = vertcat(obj.eye(~~condLogical).vvel);
+            mE = nanmean(E,1);
+            steE = sqrt(nanvar(E,[],1)/sum(condLogical));
+            
+            if isnan(t)
+                t = 0:size(mE,2)-1;
+            end
+            
+            patchProps.FaceAlpha = 0.3;
+            if ~any(isnan(color))
+                patchProps.FaceColor = color;
+            else
+                color = [0 0 0];
+                patchProps.FaceColor = color;
+            end
+            Etemp = mE(:,:,1);
+            steEtemp = steE(:,:,1);
+            myPatch(t(:),Etemp(:),steEtemp(:),'patchProperties',patchProps);
+            hold on
+            Etemp = mE(:,:,2);
+            steEtemp = steE(:,:,2);
+            myPatch(t(:),Etemp(:),steEtemp(:),'patchProperties',patchProps);
+            plot(t,mE(:,:,1),'Color',color,'LineWidth',2)
+            plot(t,mE(:,:,2),'--','Color',color,'LineWidth',2)
+        end    
+        
+        function h = plotMeanEyeSpeed(obj,condLogical,varargin)
+        % Plots mean eye speed for a set of trials specified in condLogical
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'condLogical')
+            addParameter(Parser,'h',NaN)
+            addParameter(Parser,'sh',NaN)
+            addParameter(Parser,'t',NaN)
+            addParameter(Parser,'color',NaN)
+            
+            parse(Parser,obj,condLogical,varargin{:})
+            
+            obj = Parser.Results.obj;
+            condLogical = Parser.Results.condLogical;
+            h = Parser.Results.h;
+            sh = Parser.Results.sh;
+            t = Parser.Results.t;
+            color = Parser.Results.color;
+            
+            if ishandle(h)
+                figure(h);
+            else
+                h = figure;
+            end
+            if ishandle(sh)
+                subplot(sh)
+            end
+            E = sqrt(vertcat(obj.eye(~~condLogical).hvel).^2 + ...
+                vertcat(obj.eye(~~condLogical).vvel).^2 );
+            mE = nanmean(E,1);
+            steE = sqrt(nanvar(E,[],1)/sum(condLogical));
+            
+            if isnan(t)
+                t = 0:length(mE)-1;
+            end
+            
+            patchProps.FaceAlpha = 0.3;
+            if ~any(isnan(color))
+                patchProps.FaceColor = color;
+            else
+                color = [0 0 0];
+                patchProps.FaceColor = color;
+            end
+            myPatch(t(:),mE(:),steE(:),'patchProperties',patchProps);
+            hold on
+            plot(t,mE,'Color',color,'LineWidth',2)
         end
         
         function h = dynamicCohMeanEyeSpeed(obj,condLogical,varargin)
