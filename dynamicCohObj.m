@@ -1,28 +1,27 @@
-%% initiateCohObj
+%% dynamicCohObj
 %
-%   Defines properties and methods of initiate coh trials object used for 
+%   Defines properties and methods of dynamic coh trials object used for 
 %   analysis of DynamicCoherencePhysiology data.
 %
 %   Defined as a subclass of the dcpObj
 %
 %%
 
-classdef initiateCohObj < dcpObj
+classdef dynamicCohObj < dcpObj
     properties
-        coh;
-        cohTuning;
+        sequences;
+        perturbations;
     end
     
     methods
         %% Core methods
-        function obj = initiateCohObj(sname,datapath)
+        function obj = dynamicCohObj(sname,datapath)
         %Constructor
             obj = obj@dcpObj(sname,datapath);
-            obj.cohTuning.parameters = nan(1,3);
         end 
         
-        %% initiateCohTrials
-        function obj = initiateCohTrials(obj,trialNs)
+        %% dynamicCohTrials
+        function obj = dynamicCohTrials(obj,trialNs)
         % Add direction preference trials to data object
             files = dir(obj.datapath);
             
@@ -33,7 +32,7 @@ classdef initiateCohObj < dcpObj
                     break
                 end
             end
-            
+                
                 ind = 0;
                 for ti = trialNs
                     
@@ -43,9 +42,10 @@ classdef initiateCohObj < dcpObj
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
                         
                         trialname = file.trialname;
-                        if strcmp(trialname(1:7),'initCoh')
+                        if strcmp(trialname(1:6),'dynCoh')
                             ind = ind+1;
-                            % Update triali                            obj.trialNumbers(ind,1) = ti;
+                            % Update trial
+                            obj.trialNumbers(ind,1) = ti;
                             obj.trialDataFiles{ind} = files(ti+fileInx-1).name;
                             
                             % Parse trial info
@@ -53,8 +53,12 @@ classdef initiateCohObj < dcpObj
                             obj.trialtype(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
-                            [startIndex,endIndex] = regexp(trialname,'h\d{3}');
-                            obj.coh(ind,1) = ...
+                            [startIndex,endIndex] = regexp(trialname,'q\d{3}');
+                            obj.sequences(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
+                            
+                            [startIndex,endIndex] = regexp(trialname,'p\d{3}');
+                            obj.perturbations(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'d\d{3}');
@@ -92,7 +96,7 @@ classdef initiateCohObj < dcpObj
                             obj.eye(:,ind).vvel(sacs) = NaN;
                             obj.eye(:,ind).saccades = sacs;
                             
-                            % Add spike times 
+                            % Add spike times
                             if obj.spikesExtracted
                                 obj.spikeTimes{ind} = ...
                                     file.sortedSpikes(obj.unitIndex);                                
@@ -106,6 +110,90 @@ classdef initiateCohObj < dcpObj
                 end
         end
         
+        %% Plotting methods
+                
+        function h = dynamicCohMeanEyeSpeedDiff(obj,condLogical,controlE,varargin)
+        % Plots mean eye speed for a set of trials specified in condLogical
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'condLogical')
+            addRequired(Parser,'controlE')
+            addParameter(Parser,'h',NaN)
+            addParameter(Parser,'sh',NaN)
+            addParameter(Parser,'t',NaN)
+            addParameter(Parser,'color',NaN)
+            
+            parse(Parser,obj,condLogical,controlE,varargin{:})
+            
+            obj = Parser.Results.obj;
+            condLogical = Parser.Results.condLogical;
+            controlE = Parser.Results.controlE;
+            h = Parser.Results.h;
+            sh = Parser.Results.sh;
+            t = Parser.Results.t;
+            color = Parser.Results.color;
+            
+            if ishandle(h)
+                figure(h);
+            else
+                h = figure;
+            end
+            if ishandle(sh)
+                subplot(sh)
+            end
+            E = sqrt(vertcat(obj.eye(~~condLogical).hvel).^2 + ...
+                    vertcat(obj.eye(~~condLogical).vvel).^2 );
+            mE = nanmean(E,1);
+            stvE = nanvar(E,[],1)/sum(condLogical);
+            
+            mEc = nanmean(controlE,1);
+            stvEc = nanvar(controlE,[],1)/size(controlE,1);
+            
+            mEd = mE - mEc;
+            steEd = sqrt(stvE + stvEc);
+            
+            if isnan(t)
+                t = 0:length(mEd)-1;
+            end
+            
+            patchProps.FaceAlpha = 0.3;
+            if ~any(isnan(color))
+                patchProps.FaceColor = color;
+            else
+                color = [0 0 0];
+                patchProps.FaceColor = color;
+            end
+            myPatch(t(:),mEd(:),steEd(:),'patchProperties',patchProps);
+            hold on
+            plot(t,mEd,'Color',color,'LineWidth',2)
+        end
+        
+        function [h,sh,colors] = dynamicCohMeanEyeSeq(obj,dirs)
+        % Plots mean eye speed for each sequence and target speed
+            colors = colormap('lines');
+            h = gcf;
+            speeds = unique(obj.speeds);
+            for si = 1:length(speeds)
+                sh(si) = subplot(2,3,si);
+                for seqi = 1:length(unique(obj.sequences))
+                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,NaN,seqi,NaN);
+                    plotMeanEyeSpeed(obj,condLogical,'h',h,'sh',sh(si),'color',colors(seqi,:));
+                end
+                plotVertical([150 150+0:300:1500]);
+                
+                sh(si+3) = subplot(2,3,si+3);
+                [~,condLogicalC] = trialSort(obj,dirs,speeds(si),NaN,NaN,5,NaN);
+                controlE = sqrt(vertcat(obj.eye(~~condLogicalC).hvel).^2 + ...
+                    vertcat(obj.eye(~~condLogicalC).vvel).^2);
+                for seqi = 1:length(unique(obj.sequences))
+                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,NaN,seqi,NaN);
+                    dynamicCohMeanEyeSpeedDiff(obj,condLogical,controlE,...
+                        'h',h,'sh',sh(si+3),'color',colors(seqi,:));
+                end
+                plotVertical([150 150+0:300:1500]);
+            end
+        end
         
     end
 end
