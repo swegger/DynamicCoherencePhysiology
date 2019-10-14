@@ -316,6 +316,7 @@ classdef dcpObj
             addParameter(Parser,'sh',NaN)
             addParameter(Parser,'t',NaN)
             addParameter(Parser,'color',NaN)
+            addParameter(Parser,'normalizer',1)
             
             parse(Parser,obj,condLogical,varargin{:})
             
@@ -325,6 +326,7 @@ classdef dcpObj
             sh = Parser.Results.sh;
             t = Parser.Results.t;
             color = Parser.Results.color;
+            normalizer = Parser.Results.normalizer;
             
             if ishandle(h)
                 figure(h);
@@ -334,8 +336,8 @@ classdef dcpObj
             if ishandle(sh)
                 subplot(sh)
             end
-            E = sqrt(vertcat(obj.eye(~~condLogical).hvel).^2 + ...
-                vertcat(obj.eye(~~condLogical).vvel).^2 );
+            E = (sqrt(vertcat(obj.eye(~~condLogical).hvel).^2 + ...
+                vertcat(obj.eye(~~condLogical).vvel).^2 ))/normalizer;
             mE = nanmean(E,1);
             steE = sqrt(nanvar(E,[],1)/sum(condLogical));
             

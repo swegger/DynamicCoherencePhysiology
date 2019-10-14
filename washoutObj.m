@@ -1,28 +1,26 @@
-%% initiateCohObj
+%% washoutObj
 %
-%   Defines properties and methods of initiate coh trials object used for 
-%   analysis of DynamicCoherencePhysiology data.
+%   Defines properties and methods of dynamic coh washout trials object 
+%   used for analysis of DynamicCoherencePhysiology data.
 %
 %   Defined as a subclass of the dcpObj
 %
 %%
 
-classdef initiateCohObj < dcpObj
+classdef washoutObj < dynamicCohObj
     properties
-        coh;
-        cohTuning;
+
     end
     
     methods
         %% Core methods
-        function obj = initiateCohObj(sname,datapath)
+        function obj = washoutObj(sname,datapath)
         %Constructor
-            obj = obj@dcpObj(sname,datapath);
-            obj.cohTuning.parameters = nan(1,3);
+            obj = obj@dynamicCohObj(sname,datapath);
         end 
         
-        %% initiateCohTrials
-        function obj = initiateCohTrials(obj,trialNs)
+        %% washoutTrials
+        function obj = washoutTrials(obj,trialNs)
         % Add direction preference trials to data object
             files = dir(obj.datapath);
             
@@ -33,7 +31,7 @@ classdef initiateCohObj < dcpObj
                     break
                 end
             end
-            
+                
                 ind = 0;
                 for ti = trialNs
                     
@@ -43,9 +41,10 @@ classdef initiateCohObj < dcpObj
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
                         
                         trialname = file.trialname;
-                        if strcmp(trialname(1:7),'initCoh')
+                        if strcmp(trialname(1:4),'wash')
                             ind = ind+1;
-                            % Update triali                            obj.trialNumbers(ind,1) = ti;
+                            % Update trial
+                            obj.trialNumbers(ind,1) = ti;
                             obj.trialDataFiles{ind} = files(ti+fileInx-1).name;
                             
                             % Parse trial info
@@ -53,8 +52,12 @@ classdef initiateCohObj < dcpObj
                             obj.trialtype(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
-                            [startIndex,endIndex] = regexp(trialname,'h\d{3}');
-                            obj.coh(ind,1) = ...
+                            [startIndex,endIndex] = regexp(trialname,'q\d{3}');
+                            obj.sequences(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
+                            
+                            [startIndex,endIndex] = regexp(trialname,'p\d{3}');
+                            obj.perturbations(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'d\d{3}');
@@ -92,7 +95,7 @@ classdef initiateCohObj < dcpObj
                             obj.eye(:,ind).vvel(sacs) = NaN;
                             obj.eye(:,ind).saccades = sacs;
                             
-                            % Add spike times 
+                            % Add spike times
                             if obj.spikesExtracted
                                 obj.spikeTimes{ind} = ...
                                     file.sortedSpikes(obj.unitIndex);                                
@@ -106,42 +109,7 @@ classdef initiateCohObj < dcpObj
                 end
         end
         
-        %% Plotting methods
-        function [h,sh,colors] = initiateCohMeanEye(obj,dirs)
-        % Plots mean eye speed for each sequence and target speed
-            colors = colormap('lines');
-            h = gcf;
-            set(h,'Position',[345 557 1965 420]);
-            speeds = unique(obj.speeds);
-            cohs = unique(obj.coh);
-            for hi = 1:length(cohs)
-                sh(hi) = subplot(1,length(cohs),hi);
-                for si = 1:length(speeds)
-                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(hi));
-                    plotMeanEyeSpeed(obj,condLogical,'normalizer',speeds(si),...
-                        'h',h,'sh',sh(hi),'color',colors(si,:));
-                end
-                axis tight
-                ax(hi,:) = axis;
-            end
-            for hi = 1:length(cohs)
-                subplot(sh(hi))
-                axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
-                plotHorizontal(1);
-                plotVertical(150);
-                xlabel('Time from motion onset (ms)')
-                ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
-                mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
-                    'interpreter','latex','yticks',[0.1 1])
-            end
-            
-            for li = 1:(2*length(speeds)+2)
-                leg{li} = '';
-            end
-            for si = 1:length(speeds)
-                leg{2*si} = [num2str(speeds(si)) ' deg/s'];
-            end
-            legend(leg)
-        end
+        
+        
     end
 end

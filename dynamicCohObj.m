@@ -174,22 +174,23 @@ classdef dynamicCohObj < dcpObj
             colors = colormap('lines');
             h = gcf;
             speeds = unique(obj.speeds);
+            seqs = unique(obj.sequences);
             for si = 1:length(speeds)
-                sh(si) = subplot(2,3,si);
-                for seqi = 1:length(unique(obj.sequences))
-                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,NaN,seqi,NaN);
-                    plotMeanEyeSpeed(obj,condLogical,'h',h,'sh',sh(si),'color',colors(seqi,:));
+                sh(si) = subplot(2,length(speeds),si);
+                for seqi = 1:length(seqs)
+                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,NaN,seqs(seqi),NaN);
+                    plotMeanEyeSpeed(obj,condLogical,'h',h,'sh',sh(si),'color',colors(seqs(seqi),:));
                 end
                 plotVertical([150 150+0:300:1500]);
                 
-                sh(si+3) = subplot(2,3,si+3);
+                sh(si+3) = subplot(2,length(speeds),si+length(speeds));
                 [~,condLogicalC] = trialSort(obj,dirs,speeds(si),NaN,NaN,5,NaN);
                 controlE = sqrt(vertcat(obj.eye(~~condLogicalC).hvel).^2 + ...
                     vertcat(obj.eye(~~condLogicalC).vvel).^2);
-                for seqi = 1:length(unique(obj.sequences))
-                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,NaN,seqi,NaN);
+                for seqi = 1:length(seqs)
+                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,NaN,seqs(seqi),NaN);
                     dynamicCohMeanEyeSpeedDiff(obj,condLogical,controlE,...
-                        'h',h,'sh',sh(si+3),'color',colors(seqi,:));
+                        'h',h,'sh',sh(si+3),'color',colors(seqs(seqi),:));
                 end
                 plotVertical([150 150+0:300:1500]);
             end
