@@ -104,5 +104,52 @@ classdef dirPrefObj < dcpObj
                     end
                 end
         end
+        
+        function dirPrefRaster(obj,dirs,units)
+            figure('Name','Direction responses','Position',[559 92 1699 1205]);
+            si = 0;
+            r = 1;
+            xlocs = -r:r;
+            ylocs = fliplr(-r:r);
+            for xloci = 1:3
+                for yloci = 1:3
+                    si = si + 1;
+                    h(si) = subplot(3,3,si);
+                    set(h(si),'visible','off')
+                    xy(si,:) = [ylocs(xloci),xlocs(yloci)];
+                end
+            end
+            for di = 1:length(dirs)
+                [condInds,condLogical] = trialSort(obj,dirs(di),NaN,NaN,NaN);
+                xloc = r*round(cosd(dirs(di)));
+                yloc = r*round(sind(dirs(di)));
+                si = find(xy(:,1) == yloc & xy(:,2) == xloc);
+                set(h(si),'visible','on')
+                subplot(h(si))
+                rasterPlot(obj,condLogical,units)
+                axis tight
+                
+                ax(di,:) = axis;
+                trialN(di) = sum(condLogical);
+                count(di) = 0;
+                for triali = 1:length(condInds)
+                    count(di) = count(di) + numel(obj.spikeTimes{condInds(triali)}{units});
+                end
+            end
+            for di = 1:length(dirs)
+                xloc = r*round(cosd(dirs(di)));
+                yloc = r*round(sind(dirs(di)));
+                si = find(xy(:,1) == yloc & xy(:,2) == xloc);
+                subplot(h(si))
+                axis([min(ax(:,1)) max(ax(:,2)) min(0) max(trialN)])
+                plotVertical(0);
+                xlabel('Time since motion onset (ms)')
+                ylabel('Trial #')
+                mymakeaxis(gca,'xytitle',num2str(dirs(di)))
+            end
+            si = find(xy(:,1) == 0 & xy(:,2) == 0);
+            subplot(h(si))
+            polar((pi/180)*([dirs dirs(1)]),([count count(1)])./([trialN trialN(1)]))
+        end
     end
 end

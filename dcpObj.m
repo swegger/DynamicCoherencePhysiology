@@ -77,110 +77,62 @@ classdef dcpObj
             % Determine the index of the first data file
             for fileInx = 1:length(files)
                 if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:4),obj.sname)
+                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
                     break
                 end
             end
             
             indsList = [];
             for ti = fileInx:length(files)
-                file = readcxdata([obj.datapath '/' files(fileInx).name]);
+                file = readcxdata([obj.datapath '/' files(ti).name]);
                 indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
             end
             obj.unitIndex = unique(indsList);
         end
         
+        function out = myBoxCar(obj,diffs,width)
+            out = nan(size(diffs));
+            out(abs(diffs) <= width) = 1;
+            out(abs(diffs) > width) = 0;
+        end
         
-        %% washoutTrials
-        function obj = washoutTrials(obj,trialNs)
-        % Add direction preference trials to data object
-            files = dir(obj.datapath);
+        function r = calcRates(obj,width,varargin)
+        % Calculate trial by trial rates using box car
             
-            % Determine the index of the first data file
-            for fileInx = 1:length(files)
-                if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
-                    break
-                end
+            % Parse inputs
+            Parser = inputParser;
+            
+            addRequired(Parser,'obj')
+            addRequired(Parser,'width')
+            addParameter(Parser,'units',NaN)
+            addParameter(Parser,'t',-100:1600)
+            addParameter(Parser,'trialN',NaN)
+            
+            parse(Parser,obj,width,varargin{:})
+            
+            obj = Parser.Results.obj;
+            width = Parser.Results.width;
+            units = Parser.Results.units;
+            t = Parser.Results.t;
+            trialN = Parser.Results.trialN;            
+            
+            if any(isnan(units))
+                units = 1:numel(obj.unitIndex);
             end
+            if any(isnan(trialN))
+                trialN = 1:numel(obj.spikeTimes);
+            end
+            t = t(:); 
             
-                ind = 0;
-                for ti = trialNs
-                    
-                    if length(files)-fileInx+1 >= ti
-                        
-                        % Read file
-                        file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
-                        
-                        trialname = file.trialname;
-                        if strcmp(trialname(1:4),'wash')
-                            ind = ind+1;
-                            % Update trial
-                            obj.washout.trialNumbers(ind,1) = ti;
-                            obj.washout.trialDataFiles{ind} = files(ti+fileInx-1).name;
-                            
-                            % Parse trial info
-                            [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.washout.trialtpe(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'q\d{3}');
-                            obj.washout.sequences(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'p\d{3}');
-                            obj.washout.perturbations(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'d\d{3}');
-                            obj.washout.directions(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'s\d{3}');
-                            obj.washout.speeds(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'x\d{3}');
-                            obj.washout.locations(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            [startIndex,endIndex] = regexp(trialname,'y\d{3}');
-                            obj.washout.locations(ind,2) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            % Add eye information
-                            obj.washout.eye(:,ind).hpos = (file.data(1,:) - ...
-                                mean(file.data(1,obj.calib.t)))*obj.calib.posGain;
-                            obj.washout.eye(:,ind).vpos = (file.data(2,:) - ...
-                                mean(file.data(2,obj.calib.t)))*obj.calib.posGain;
-                            
-                            obj.washout.eye(:,ind).hvel = (file.data(3,:) - ...
-                                mean(file.data(3,obj.calib.t)))*obj.calib.speedGain;
-                            obj.washout.eye(:,ind).vvel = (file.data(4,:) - ...
-                                mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
-                            
-                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
-                                file.data(4,:)*obj.calib.speedGain,...
-                                'accelerationThreshold',obj.calib.accThres,...
-                                'windowSize',40);
-                            obj.washout.eye(:,ind).hvel(sacs) = NaN;
-                            obj.washout.eye(:,ind).vvel(sacs) = NaN;
-                            obj.washout.eye(:,ind).saccades = sacs;
-                            
-                            % Add spike times
-                            obj.washout.spikeTimes{ind} = ...
-                                file.sortedSpikes(obj.unitIndex); 
-                            if obj.spikesExtracted
-                                obj.washout.spikeTimes{ind} = ...
-                                    file.sortedSpikes(obj.unitIndex);                                
-                            else
-                                obj.washout.spikeTimes{ind}{1} = file.spikes;                    
-                            end                             
-                            
-                        end
-                        
-                    end
-                end
+            % Find smoothed rates
+            f = @(diffs)obj.myBoxCar(diffs,width);
+            r = nan(length(t),numel(trialN),numel(units));
+            for triali = trialN
+                [~, ~, ~, rTemp] = spikeTimes2Rate(obj.spikeTimes{triali}(units),...
+                    'time',t,'resolution',1,'Filter',f,...
+                    'ComputeVariance','Yes');
+                r(:,triali,:) = rTemp/width;
+            end
         end
         
         %% Analysis methods
