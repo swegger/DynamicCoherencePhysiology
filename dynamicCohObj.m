@@ -110,6 +110,61 @@ classdef dynamicCohObj < dcpObj
                 end
         end
         
+        %% Neural analysis methods
+        function [r,rste] = conditionalRates(obj,width,directions,speeds,...
+                sequences,perturbations)
+            rAll = obj.calcRates(width);
+            [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
+                sequences,perturbations);
+           r = mean(rAll(:,condLogical),2);
+           rste = sqrt(var(r,[],2)/sum(condLogical));
+        end
+        
+        function [R,Rste] = dynamicCohSeqConditionedRates(obj,varargin)
+            
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addParameter(Parser,'width',50)
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'speeds',NaN)
+            addParameter(Parser,'locs',NaN)
+            addParameter(Parser,'seqs',NaN)
+            addParameter(Parser,'perts',NaN)
+            
+            parse(Parser,obj,varargin{:})
+            obj = Parser.Results.obj;
+            width = Parser.Results.width;
+            dirs = Parser.Results.dirs;
+            speeds = Parser.Results.speeds;
+            locs = Parser.Results.locs;
+            seqs = Parser.Results.seqs;
+            perts = Parser.Results.perts;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(speeds)
+                speeds = unique(obj.speeds);
+            end            
+%             if any(isnan(locs))
+%                 locs = unique(obj.locations,'rows');
+%             end            
+            if isnan(seqs)
+                seqs = unique(obj.sequences);
+            end
+            if isnan(perts)
+                perts = unique(obj.perturbations);
+            end
+            
+            % Condition on sequences
+            for seqi = 1:length(seqs)
+                [R(:,seqi),Rste(:,seqi)] = conditionalRates(obj,width,...
+                    dirs,speeds,seqs(seqi),perts);
+            end
+            
+        end
+        
         %% Plotting methods
                 
         function h = dynamicCohMeanEyeSpeedDiff(obj,condLogical,controlE,varargin)

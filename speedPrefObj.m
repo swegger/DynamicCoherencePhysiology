@@ -103,5 +103,50 @@ classdef speedPrefObj < dcpObj
                 end
         end
         
+        function speedPrefRaster(obj,directions,speeds,units)
+            figure('Name','Speed responses','Position',[559 1011 1699 500]);
+            spi = 0;
+            for di = 1:length(directions)
+                for si = 1:length(speeds)+1
+                    spi = spi + 1;
+                    h(spi) = subplot(length(directions),length(speeds)+1,spi);
+                    spInd(di,si) = spi;
+                end
+            end
+            for di = 1:length(directions)
+                for si = 1:length(speeds)
+                    [condInds,condLogical] = trialSort(obj,directions(di),speeds(si),NaN,NaN);
+                    subplot(h(spInd(di,si)))
+                    rasterPlot(obj,condLogical,units)
+                    axis tight
+                    
+                    ax(si,:) = axis;
+                    trialN(si) = sum(condLogical);
+                    count(di,si) = 0;
+                    for triali = 1:length(condInds)
+                        count(di,si) = count(si) + numel(obj.spikeTimes{condInds(triali)}{units});
+                    end
+                end
+            end
+            lineProps.color = [1 0 0];
+            for di = 1:length(directions)
+                for si = 1:length(speeds)
+                    subplot(h(spInd(di,si)))
+                    axis([min(ax(:,1)) max(ax(:,2)) min(0) max(trialN)])
+                    plotVertical(0,'lineProperties',lineProps);
+                    xlabel('Time since motion onset (ms)')
+                    ylabel('Trial #')
+                    mymakeaxis(gca,'xytitle',num2str(speeds(si)))
+                end
+            end
+            for di = 1:length(directions)
+                subplot(h(spInd(di,length(speeds)+1)))
+                plot(speeds,count(di,:),'-o')
+                xlabel('Speed (deg/s)')
+                ylabel('Count (spikes)')
+                mymakeaxis(gca,'xytitle',['Dir = ' num2str(directions(di))])
+            end
+        end
+        
     end
 end

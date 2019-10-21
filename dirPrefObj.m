@@ -136,13 +136,14 @@ classdef dirPrefObj < dcpObj
                     count(di) = count(di) + numel(obj.spikeTimes{condInds(triali)}{units});
                 end
             end
+            lineProps.color = [1 0 0];
             for di = 1:length(dirs)
                 xloc = r*round(cosd(dirs(di)));
                 yloc = r*round(sind(dirs(di)));
                 si = find(xy(:,1) == yloc & xy(:,2) == xloc);
                 subplot(h(si))
                 axis([min(ax(:,1)) max(ax(:,2)) min(0) max(trialN)])
-                plotVertical(0);
+                plotVertical(0,'lineProperties',lineProps);
                 xlabel('Time since motion onset (ms)')
                 ylabel('Trial #')
                 mymakeaxis(gca,'xytitle',num2str(dirs(di)))

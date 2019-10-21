@@ -135,6 +135,14 @@ classdef dcpObj
             end
         end
         
+        function [r,rste] = conditionalRates(obj,width,directions,speeds)
+            rAll = obj.calcRates(width);
+            [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
+                sequences,NaN);
+           r = rAll(:,condLocial);
+           rste = sqrt(var(r,[],2)/sum(condLogical));
+        end
+        
         %% Analysis methods
         function [condInds, condLogical] = trialSort(obj,directions,speeds,locations,...
                 cohs,seqs,perts)
@@ -173,7 +181,7 @@ classdef dcpObj
                 qMask = ismember(obj.sequences,seqs);
             end
             
-            if ~exist('perts','var') || isnan(perts)
+            if ~exist('perts','var') || any(isnan(perts))
                 pMask = true(size(obj.directions));
             else
                 pMask = ismember(obj.perturbations,perts);
