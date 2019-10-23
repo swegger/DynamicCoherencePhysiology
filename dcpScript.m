@@ -1,18 +1,21 @@
 
 subject = 'ar';
-dataShort = '191018b';
-data = '20191018b';
+dataShort = '191018a';
+data = '20191018a';
+extractSpikes = true;
 
 datapath = ['/home/seth/Projects/DynamicCoherencePhysiology/' subject '/' data];
 plxfile = [subject dataShort '.plx'];
 plxpath = [datapath(1:end-1) 'plx'];
 
 dcp = dcpObj(subject,datapath);
-dcp = extractSpikingData(dcp,plxfile,plxpath,dcp.datapath);
+if extractSpikes
+    dcp = extractSpikingData(dcp,plxfile,plxpath,dcp.datapath);
+end
 
 %% Direction preference
 dirPref = dirPrefObj(subject,datapath);         % Builds direction preference object
-dirPref = assertSpikesExtracted(dirPref,true);  % Asserts that spiking data has been extracted already
+dirPref = assertSpikesExtracted(dirPref,extractSpikes);  % Asserts that spiking data has (not) been extracted already
 dirPref = unitsIndex(dirPref);                  % Finds the indices to the units
 dirPref = dirPrefTrials(dirPref,1:2500);        % Finds dirPref trial data
 
@@ -31,7 +34,7 @@ mymakeaxis(gca);
 
 %% Speed preference
 speedPref = speedPrefObj(subject,datapath);
-speedPref = assertSpikesExtracted(speedPref,true);
+speedPref = assertSpikesExtracted(speedPref,extractSpikes);
 speedPref = unitsIndex(speedPref);
 speedPref = speedPrefTrials(speedPref,1:2500);
 
@@ -50,7 +53,7 @@ speedPrefRaster(speedPref,unique(speedPref.directions),unique(speedPref.speeds),
 
 %% Dynamic Coherence
 dynamicCoh = dynamicCohObj(subject,datapath);
-dynamicCoh = assertSpikesExtracted(dynamicCoh,true);
+dynamicCoh = assertSpikesExtracted(dynamicCoh,extractSpikes);
 dynamicCoh = unitsIndex(dynamicCoh);
 dynamicCoh = dynamicCohTrials(dynamicCoh,1:2500);
 

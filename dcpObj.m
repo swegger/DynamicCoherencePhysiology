@@ -71,23 +71,27 @@ classdef dcpObj
         end
         
         function obj = unitsIndex(obj)
-        % Find indices in Maestro files that have spike times
-            files = dir(obj.datapath);
-            
-            % Determine the index of the first data file
-            for fileInx = 1:length(files)
-                if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
-                    break
+            % Find indices in Maestro files that have spike times
+            if obj.spikesExtracted
+                files = dir(obj.datapath);
+                
+                % Determine the index of the first data file
+                for fileInx = 1:length(files)
+                    if length(files(fileInx).name) >= length(obj.sname) && ...
+                            strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
+                        break
+                    end
                 end
+                
+                indsList = [];
+                for ti = fileInx:length(files)
+                    file = readcxdata([obj.datapath '/' files(ti).name]);
+                    indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
+                end
+                obj.unitIndex = unique(indsList);
+            else
+                obj.unitIndex = 1;
             end
-            
-            indsList = [];
-            for ti = fileInx:length(files)
-                file = readcxdata([obj.datapath '/' files(ti).name]);
-                indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
-            end
-            obj.unitIndex = unique(indsList);
         end
         
         function out = myBoxCar(obj,diffs,width)
