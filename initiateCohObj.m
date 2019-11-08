@@ -106,19 +106,78 @@ classdef initiateCohObj < dcpObj
                 end
         end
         
+        %% Neural analysis methods
+        function [r,rste] = conditionalRates(obj,width,directions,speeds,...
+                cohs)
+            rAll = obj.calcRates(width);
+            [~,condLogical] = trialSort(obj,directions,speeds,NaN,cohs);
+            r = mean(rAll(:,condLogical,:),2);
+            rste = sqrt(var(r,[],2)/sum(condLogical));
+        end
+        
+        function [R,Rste] = cohConditionedRates(obj,varargin)
+            
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addParameter(Parser,'width',50)
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'speeds',NaN)
+            addParameter(Parser,'locs',NaN)
+            addParameter(Parser,'cohs',NaN)
+            
+            parse(Parser,obj,varargin{:})
+            obj = Parser.Results.obj;
+            width = Parser.Results.width;
+            dirs = Parser.Results.dirs;
+            speeds = Parser.Results.speeds;
+            locs = Parser.Results.locs;
+            cohs = Parser.Results.cohs;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(speeds)
+                speeds = unique(obj.speeds);
+            end            
+%             if any(isnan(locs))
+%                 locs = unique(obj.locations,'rows');
+%             end            
+            if isnan(cohs)
+                cohs = unique(obj.coh);
+            end
+            
+            % Condition on sequences
+            for speedi = 1:length(speeds)
+                for cohi = 1:length(cohs)
+                    [R(:,speedi,cohi,:),Rste(:,speedi,cohi,:)] = ...
+                        conditionalRates(obj,width,...
+                        dirs,speeds(speedi),cohs(cohi));
+                end
+            end
+        end
+        
         %% Plotting methods
-        function [h,sh,colors] = initiateCohMeanEye(obj,dirs)
+        function [h,sh,colors] = initiateCohMeanEye(obj,dirs,normalize)
         % Plots mean eye speed for each sequence and target speed
+            if ~exist('normalize','var')
+                normalize = true;
+            end
+            h = figure;
             colors = colormap('lines');
-            h = gcf;
             set(h,'Position',[345 557 1965 420]);
             speeds = unique(obj.speeds);
             cohs = unique(obj.coh);
             for hi = 1:length(cohs)
                 sh(hi) = subplot(1,length(cohs),hi);
                 for si = 1:length(speeds)
+                    if normalize
+                        nrm = speeds(si);
+                    else
+                        nrm = 1;
+                    end
                     [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(hi));
-                    plotMeanEyeSpeed(obj,condLogical,'normalizer',speeds(si),...
+                    plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
                         'h',h,'sh',sh(hi),'color',colors(si,:));
                 end
                 axis tight

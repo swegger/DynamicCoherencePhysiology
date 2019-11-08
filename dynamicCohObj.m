@@ -112,12 +112,15 @@ classdef dynamicCohObj < dcpObj
         
         %% Neural analysis methods
         function [r,rste] = conditionalRates(obj,width,directions,speeds,...
-                sequences,perturbations)
-            rAll = obj.calcRates(width);
+                sequences,perturbations,t)
+            if ~exist('t','var')
+                t = -100:1600;
+            end
+            rAll = obj.calcRates(width,'t',t);
             [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
                 sequences,perturbations);
-           r = mean(rAll(:,condLogical),2);
-           rste = sqrt(var(r,[],2)/sum(condLogical));
+            r = mean(rAll(:,condLogical,:),2);
+            rste = sqrt(var(r,[],2)/sum(condLogical));
         end
         
         function [R,Rste] = dynamicCohSeqConditionedRates(obj,varargin)
@@ -131,6 +134,7 @@ classdef dynamicCohObj < dcpObj
             addParameter(Parser,'locs',NaN)
             addParameter(Parser,'seqs',NaN)
             addParameter(Parser,'perts',NaN)
+            addParameter(Parser,'t',-100:1600)
             
             parse(Parser,obj,varargin{:})
             obj = Parser.Results.obj;
@@ -140,6 +144,7 @@ classdef dynamicCohObj < dcpObj
             locs = Parser.Results.locs;
             seqs = Parser.Results.seqs;
             perts = Parser.Results.perts;
+            t = Parser.Results.t;
             
             if isnan(dirs)
                 dirs = unique(obj.directions);
@@ -159,7 +164,7 @@ classdef dynamicCohObj < dcpObj
             
             % Condition on sequences
             for seqi = 1:length(seqs)
-                [R(:,seqi),Rste(:,seqi)] = conditionalRates(obj,width,...
+                [R(:,seqi,:),Rste(:,seqi,:)] = conditionalRates(obj,width,...
                     dirs,speeds,seqs(seqi),perts);
             end
             
@@ -226,8 +231,8 @@ classdef dynamicCohObj < dcpObj
         
         function [h,sh,colors] = dynamicCohMeanEyeSeq(obj,dirs)
         % Plots mean eye speed for each sequence and target speed
+            h = figure;
             colors = colormap('lines');
-            h = gcf;
             speeds = unique(obj.speeds);
             seqs = unique(obj.sequences);
             for si = 1:length(speeds)

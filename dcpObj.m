@@ -23,6 +23,7 @@ classdef dcpObj
         locations;
         eye;
         spikeTimes;
+        location;
         
 %         dirPref;
 %         
@@ -70,15 +71,20 @@ classdef dcpObj
             end
         end
         
-        function obj = unitsIndex(obj)
+        function obj = unitsIndex(obj,altName)
+            % Allow for different base name
+            if ~exist('altName','var')
+                altName = obj.sname;
+            end
+            
             % Find indices in Maestro files that have spike times
             if obj.spikesExtracted
                 files = dir(obj.datapath);
                 
                 % Determine the index of the first data file
                 for fileInx = 1:length(files)
-                    if length(files(fileInx).name) >= length(obj.sname) && ...
-                            strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
+                    if length(files(fileInx).name) >= length(altName) && ...
+                            strcmp(files(fileInx).name(1:length(altName)),altName)
                         break
                     end
                 end
@@ -86,7 +92,9 @@ classdef dcpObj
                 indsList = [];
                 for ti = fileInx:length(files)
                     file = readcxdata([obj.datapath '/' files(ti).name]);
-                    indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
+                    if iscell(file.sortedSpikes)
+                        indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
+                    end
                 end
                 obj.unitIndex = unique(indsList);
             else
@@ -139,12 +147,28 @@ classdef dcpObj
             end
         end
         
-        function [r,rste] = conditionalRates(obj,width,directions,speeds)
-            rAll = obj.calcRates(width);
+        function [r,rste] = conditionalRates(obj,width,directions,speeds,t)
+            if ~exist('t','var')
+                t = -100:1600;
+            end
+            rAll = obj.calcRates(width,'t',t);
             [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
                 sequences,NaN);
-           r = rAll(:,condLocial);
-           rste = sqrt(var(r,[],2)/sum(condLogical));
+            r = rAll(:,condLocial);
+            rste = sqrt(var(r,[],2)/sum(condLogical));
+        end
+        
+        function obj = tableImport(obj)
+            fileName = [obj.sname obj.datapath(end-6:end)];
+            tableFile = [obj.datapath(1:end-9) ...
+                'tables/' obj.sname obj.datapath(end-6:end-1) '.xlsx'];
+            T = readtable(tableFile);
+            indx = find(strcmp(fileName,T.Date));
+            obj.location.x = str2num(T.Location_x_y_z_{1}(1:4));
+            obj.location.y = str2num(T.Location_x_y_z_{1}(6:9));
+            obj.location.z = str2num(T.Location_x_y_z_{1}(11:14));
+            obj.location.depth = str2num(T.Location_x_y_z_{indx-1})-...
+                str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth'))+1});
         end
         
         %% Analysis methods
@@ -195,7 +219,44 @@ classdef dcpObj
             condInds = find(condLogical);
         end
                 
+        function obj = dcpTrials(obj,trialNs,altName)
+        % Add spike times from each data file
+            if ~exist('altName','var')
+                altName = obj.sname;
+            end
+        
+            datapath = obj.returnDatapath;
+            files = dir(datapath);
             
+            % Determine the index of the first data file
+            for fileInx = 1:length(files)
+                if length(files(fileInx).name) >= length(altName) && ...
+                        strcmp(files(fileInx).name(1:length(altName)),altName)
+                    break
+                end
+            end
+            
+                ind = 0;
+                for ti = trialNs
+                    
+                    if length(files)-fileInx+1 > ti
+                        
+                        % Read file
+                        file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
+                        
+                        ind = ind+1;
+                        % Add spike times
+                        if obj.spikesExtracted
+                            obj.spikeTimes{ind} = ...
+                                file.sortedSpikes(obj.unitIndex);
+                        else
+                            obj.spikeTimes{ind}{1} = file.spikes;
+                        end
+                        
+                        
+                    end
+                end
+        end
         
         %% Plotting methods
         function h = rasterPlot(obj,trials,units)
