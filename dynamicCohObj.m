@@ -11,6 +11,8 @@ classdef dynamicCohObj < dcpObj
     properties
         sequences;
         perturbations;
+        
+        Epoch;
     end
     
     methods
@@ -109,6 +111,80 @@ classdef dynamicCohObj < dcpObj
                     end
                 end
         end
+        
+        %% Behavior analysis methods
+        function meanEyeSpeeds = dynamicCohMeanEyeBoot(obj,dirs,bootN,sampN)
+        % Mean eye speed for each sequence and target speed
+            speeds = unique(obj.speeds);
+            seqs = unique(obj.sequences);
+            for si = 1:length(speeds)
+                for seqi = 1:length(seqs)
+                    condInds = trialSort(obj,dirs,speeds(si),NaN,NaN,seqs(seqi),NaN);
+                    for booti = 1:bootN
+                        condIndstemp = randsample(condInds,sampN);
+                        meanEyeSpeeds(:,seqi,si,booti) = MeanEyeSpeed(obj,condIndstemp);
+                    end
+                end
+            end
+        end
+        
+        function obj = addBehavioralEpochs(obj,varargin)
+            
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addParameter(Parser,'dirs',[0,180])
+            addParameter(Parser,'seqs',1:5)
+            addParameter(Parser,'t',0:(1600-1))
+            addParameter(Parser,'EpochT',[0 150; 150 450; 450 750; 750 1050])
+            
+            parse(Parser,obj,varargin{:})
+            
+            obj = Parser.Results.obj;
+            dirs = Parser.Results.dirs;
+            seqs = Parser.Results.seqs;
+            EpochT = Parser.Results.EpochT;
+            t = Parser.Results.t;
+            
+            % Find mean eye speeds for each sequence
+            for di = 1:length(dirs)
+                for seqi = 1:length(seqs)
+                    condInds = trialSort(obj,dirs(di),NaN,NaN,NaN,seqs(seqi),NaN);
+                    meanEyeSpeeds(:,seqi,di) = MeanEyeSpeed(obj,condInds);
+                end
+            end
+            
+            obj.Epoch.eye = nan(max(diff(EpochT,1,2)),length(seqs),4,length(seqs)+1,length(dirs));
+            for epochi = 1:4
+                ttemp = 0:(EpochT(epochi,2)-EpochT(epochi,1));
+                for controli = 1:(length(seqs)+1)
+                    for seqi = 1:length(seqs)
+                        for di = 1:length(dirs)
+                            if controli-1 == 0
+                                obj.Epoch.eye(1:length(ttemp),seqi,epochi,controli,di) = ...
+                                    meanEyeSpeeds(t>=EpochT(epochi,1) & t<= EpochT(epochi,2),seqi,di);
+                                
+                                obj.Epoch.p(seqi,epochi,controli,di).eye = ...
+                                    pieceWiseExpRiseFitter(ttemp(:),...
+                                        obj.Epoch.eye(1:length(ttemp),seqi,epochi,controli,di),...
+                                        [0,10,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,30]);
+                            elseif controli-1 ~= seqi
+                                obj.Epoch.eye(1:length(ttemp),seqi,epochi,controli,di) = ...
+                                    meanEyeSpeeds(t>=EpochT(epochi,1) & t<= EpochT(epochi,2),seqi,di) -... 
+                                    meanEyeSpeeds(t>=EpochT(epochi,1) & t<= EpochT(epochi,2),controli-1,di);
+                                
+                                obj.Epoch.p(seqi,epochi,controli,di).eye = ...
+                                    pieceWiseExpRiseFitter(ttemp(:),...
+                                        obj.Epoch.eye(1:length(ttemp),seqi,epochi,controli,di),...
+                                        [0,3,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,30]);
+                            else
+                                obj.Epoch.p(seqi,epochi,controli,di).eye = nan(1,4);
+                            end
+                        end
+                    end
+                end
+            end
+        end   
         
         %% Neural analysis methods
         function [r,rste] = conditionalRates(obj,width,directions,speeds,...

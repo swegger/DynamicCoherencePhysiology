@@ -61,12 +61,21 @@ classdef dcpObj
             obj.spikesExtracted = assertion;
         end
         
-        function obj = extractSpikingData(obj,plxname,plxdir,maestrodir)
+        function obj = extractSpikingData(obj,plxname,plxdir,maestrodir,addSpike)
         % Add spiking data to Maestro data files
+            if ~exist('addSpike','var')
+                addSpike = false;
+            end
             if obj.spikesExtracted
                 disp('Spikes already extracted and inserted into Maestro files.')
             else
-                extractPlxSpikes(plxname,plxdir,maestrodir);
+                if strcmp(plxname(end-2:end),'plx')
+                    extractPlxSpikes(plxname,plxdir,maestrodir);
+                elseif strcmp(plxname(end-2:end),'pl2')
+                    extractPL2Spikes(plxname,plxdir,maestrodir,'addSpike',addSpike);
+                else
+                    error(['Extraction format ' plxname(end-2:end) ' not recognized!'])
+                end
                 obj.spikesExtracted = true;
             end
         end
@@ -256,6 +265,30 @@ classdef dcpObj
                         
                     end
                 end
+        end
+        
+        
+        function [mE,steE,E] = MeanEyeSpeed(obj,condInds,varargin)
+        % Plots mean eye speed for a set of trials specified in condLogical
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'condInds')
+            addParameter(Parser,'t',NaN)
+            addParameter(Parser,'normalizer',1)
+            
+            parse(Parser,obj,condInds,varargin{:})
+            
+            obj = Parser.Results.obj;
+            condInds = Parser.Results.condInds;
+            t = Parser.Results.t;
+            normalizer = Parser.Results.normalizer;
+            
+            E = (sqrt(vertcat(obj.eye(condInds).hvel).^2 + ...
+                vertcat(obj.eye(condInds).vvel).^2 ))/normalizer;
+            mE = nanmean(E,1);
+            steE = sqrt(nanvar(E,[],1)/length(condInds));
+            
         end
         
         %% Plotting methods

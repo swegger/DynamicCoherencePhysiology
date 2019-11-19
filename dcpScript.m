@@ -1,19 +1,24 @@
 
 subject = 'ar';
-dataShort = '191108a';
-data = '20191108a';
+dataShort = '191118t';
+data = '20191118t';
 extractSpikes = true;
-trials = 1:2500;
+addSpike = true;
+trials = 1:3000;
 unit = 1;
 boxCarWidth = 30;
 
 datapath = ['/home/seth/Projects/DynamicCoherencePhysiology/' subject '/' data];
-plxfile = [subject dataShort '.plx'];
+if str2num(dataShort(1:end-1)) > 191114
+    plxfile = [subject dataShort '.pl2'];
+else
+    plxfile = [subject dataShort '.plx'];
+end
 plxpath = [datapath(1:end-1) 'plx'];
 
 dcp = dcpObj(subject,datapath);
 if extractSpikes
-    dcp = extractSpikingData(dcp,plxfile,plxpath,dcp.datapath);
+    dcp = extractSpikingData(dcp,plxfile,plxpath,dcp.datapath,addSpike);
 end
 
 dcp = tableImport(dcp);
