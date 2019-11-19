@@ -3,8 +3,8 @@ subject = 'ar';
 dataShort = '191118t';
 data = '20191118t';
 extractSpikes = true;
-addSpike = true;
-trials = 1:3000;
+addSpike = false;
+trials = 1:2100;
 unit = 1;
 boxCarWidth = 30;
 
