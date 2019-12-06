@@ -11,14 +11,22 @@ for listi = 1:length(FileList)
     datapath = ['/home/seth/Projects/DynamicCoherencePhysiology/' subject '/' data];
     if str2num(dataShort(1:end-1)) > 191114
         plxfile = [subject dataShort '.pl2'];
+        kkfile = [subject dataShort '.kwik'];
+        kkpath = [datapath(1:end-1) 'kk'];
+        kkflg = exist([kkpath '/' kkfile],'file');
     else
+        kkflg = false;
         plxfile = [subject dataShort '.plx'];
     end
     plxpath = [datapath(1:end-1) 'plx'];
 
     dcp{listi} = dcpObj(subject,datapath);
     if extractSpikes && ~strcmp(FileList{listi},'20191021a') && ~strcmp(FileList{listi},'20191022a') && ~strcmp(FileList{listi},'20191022b')
-        dcp{listi} = extractSpikingData(dcp{listi},plxfile,plxpath,dcp{listi}.datapath);
+        if kkflg
+            dcp{listi} = extractKKData(dcp{listi},kkfile,kkpath,plxfile,plxpath,dcp{listi}.datapath);
+        else
+            dcp{listi} = extractSpikingData(dcp{listi},plxfile,plxpath,dcp{listi}.datapath);
+        end
     end
     dcp{listi} = tableImport(dcp{listi});
     dcp{listi} = unitsIndex(dcp{listi});                  % Finds the indices to the units

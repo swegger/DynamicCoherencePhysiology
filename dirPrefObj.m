@@ -94,7 +94,9 @@ classdef dirPrefObj < dcpObj
                             % Add spike times
                             if obj.spikesExtracted
                                 obj.spikeTimes{ind} = ...
-                                    file.sortedSpikes(obj.unitIndex);                                
+                                    file.sortedSpikes;  
+%                                 obj.spikeTimes{ind} = ...
+%                                     file.sortedSpikes(obj.unitIndex);                                
                             else
                                 obj.spikeTimes{ind}{1} = file.spikes;                    
                             end                         
@@ -133,7 +135,9 @@ classdef dirPrefObj < dcpObj
                 trialN(di) = sum(condLogical);
                 count(di) = 0;
                 for triali = 1:length(condInds)
-                    count(di) = count(di) + numel(obj.spikeTimes{condInds(triali)}{units});
+                    spikeTimes = obj.spikeTimes{condInds(triali)}{1};
+                    spikeTimes = spikeTimes(ismember(obj.spikeTimes{condInds(triali)}{2},units));
+                    count(di) = count(di) + numel(spikeTimes);
                 end
             end
             lineProps.color = [1 0 0];

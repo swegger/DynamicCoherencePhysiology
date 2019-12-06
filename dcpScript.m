@@ -1,12 +1,14 @@
 
 subject = 'ar';
-dataShort = '191118t';
-data = '20191118t';
+dataShort = '191014a';
+data = '20191014a';
 extractSpikes = true;
+extractSpikesKK = false;
 addSpike = false;
-trials = 1:2100;
+trials = 1:2500;
 unit = 1;
 boxCarWidth = 30;
+overwrite = true;
 
 datapath = ['/home/seth/Projects/DynamicCoherencePhysiology/' subject '/' data];
 if str2num(dataShort(1:end-1)) > 191114
@@ -15,22 +17,37 @@ else
     plxfile = [subject dataShort '.plx'];
 end
 plxpath = [datapath(1:end-1) 'plx'];
+kkfile = [subject dataShort '.kwik'];
+kkpath = [datapath(1:end-1) 'kk'];
 
 dcp = dcpObj(subject,datapath);
 if extractSpikes
     dcp = extractSpikingData(dcp,plxfile,plxpath,dcp.datapath,addSpike);
+elseif extractSpikesKK
+    dcp = extractKKData(dcp,kkfile,kkpath,plxfile,plxpath,dcp.datapath,addSpike);
 end
 
 dcp = tableImport(dcp);
 
 %% Direction preference
 dirPref = dirPrefObj(subject,datapath);         % Builds direction preference object
-dirPref = assertSpikesExtracted(dirPref,extractSpikes);  % Asserts that spiking data has (not) been extracted already
+if extractSpikes
+    dirPref = assertSpikesExtracted(dirPref,extractSpikes);  % Asserts that spiking data has (not) been extracted already
+elseif extractSpikesKK
+    dirPref = assertSpikesExtracted(dirPref,extractSpikesKK);  % Asserts that spiking data has (not) been extracted already
+end
 dirPref = unitsIndex(dirPref);                  % Finds the indices to the units
 dirPref = dirPrefTrials(dirPref,trials);        % Finds dirPref trial data
 
+units = [];
+for i = 1:length(dirPref.spikeTimes)
+    units = [units, dirPref.spikeTimes{i}{2}];
+end
+units = unique(units);
+dirPref.klustaID = units;
+
 % Sort by direction and plot rasters
-dirPrefRaster(dirPref,0:45:315,unit);
+dirPrefRaster(dirPref,0:45:315,units(unit));
 
 % Plot grand average PSTH across all trials
 figure;
@@ -44,12 +61,22 @@ mymakeaxis(gca);
 
 %% Speed preference
 speedPref = speedPrefObj(subject,datapath);
-speedPref = assertSpikesExtracted(speedPref,extractSpikes);
+if extractSpikes
+    speedPref = assertSpikesExtracted(speedPref,extractSpikes);
+elseif extractSpikesKK
+    speedPref = assertSpikesExtracted(speedPref,extractSpikesKK);
+end
 speedPref = unitsIndex(speedPref);
 speedPref = speedPrefTrials(speedPref,trials);
+units = [];
+for i = 1:length(speedPref.spikeTimes)
+    units = [units, speedPref.spikeTimes{i}{2}];
+end
+units = unique(units);
+speedPref.klustaID = units;
 
 % Sort by speed and plot rasters
-speedPrefRaster(speedPref,unique(speedPref.directions),unique(speedPref.speeds),unit)
+speedPrefRaster(speedPref,unique(speedPref.directions),unique(speedPref.speeds),units(unit))
 
 % Plot grand average PSTH across all trials
 figure;
@@ -63,7 +90,11 @@ mymakeaxis(gca);
 
 %% Dynamic Coherence
 dynamicCoh = dynamicCohObj(subject,datapath);
-dynamicCoh = assertSpikesExtracted(dynamicCoh,extractSpikes);
+if extractSpikes
+    dynamicCoh = assertSpikesExtracted(dynamicCoh,extractSpikes);
+elseif extractSpikesKK
+    dynamicCoh = assertSpikesExtracted(dynamicCoh,extractSpikesKK);
+end
 dynamicCoh = unitsIndex(dynamicCoh);
 dynamicCoh = dynamicCohTrials(dynamicCoh,trials);
 dirs = [0];
@@ -92,7 +123,11 @@ xlim(ax(1:2))
 
 %% Initiate Coherence
 initCoh = initiateCohObj(subject,datapath);
-initCoh = assertSpikesExtracted(initCoh,extractSpikes);
+if extractSpikes
+    initCoh = assertSpikesExtracted(initCoh,extractSpikes);
+elseif extractSpikesKK
+    initCoh = assertSpikesExtracted(initCoh,extractSpikesKK);
+end
 initCoh = unitsIndex(initCoh);
 initCoh = initiateCohTrials(initCoh,trials);
 dirs = [0];

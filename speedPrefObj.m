@@ -92,7 +92,9 @@ classdef speedPrefObj < dcpObj
                             % Add spike times
                             if obj.spikesExtracted
                                 obj.spikeTimes{ind} = ...
-                                    file.sortedSpikes(obj.unitIndex);                                
+                                    file.sortedSpikes;  
+%                                 obj.spikeTimes{ind} = ...
+%                                     file.sortedSpikes(obj.unitIndex);                                
                             else
                                 obj.spikeTimes{ind}{1} = file.spikes;                    
                             end
@@ -124,7 +126,9 @@ classdef speedPrefObj < dcpObj
                     trialN(si) = sum(condLogical);
                     count(di,si) = 0;
                     for triali = 1:length(condInds)
-                        count(di,si) = count(si) + numel(obj.spikeTimes{condInds(triali)}{units});
+                        spikeTimes = obj.spikeTimes{condInds(triali)}{1};
+                        spikeTimes = spikeTimes(ismember(obj.spikeTimes{condInds(triali)}{2},units));
+                        count(di,si) = count(si) + numel(spikeTimes);
                     end
                 end
             end

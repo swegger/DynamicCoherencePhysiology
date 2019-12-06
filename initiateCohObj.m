@@ -95,7 +95,9 @@ classdef initiateCohObj < dcpObj
                             % Add spike times 
                             if obj.spikesExtracted
                                 obj.spikeTimes{ind} = ...
-                                    file.sortedSpikes(obj.unitIndex);                                
+                                    file.sortedSpikes;  
+%                                 obj.spikeTimes{ind} = ...
+%                                     file.sortedSpikes(obj.unitIndex);                                
                             else
                                 obj.spikeTimes{ind}{1} = file.spikes;                    
                             end                           

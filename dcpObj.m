@@ -14,6 +14,7 @@ classdef dcpObj
         trials = 0;
         calib
         unitIndex
+        klustaID
         
         trialNumbers;
         trialDataFiles;
@@ -80,6 +81,25 @@ classdef dcpObj
             end
         end
         
+        function obj = extractKKData(obj,kkname,kkdir,plxname,plxdir,maestrodir,addSpike)
+        % Add spiking data to Maestro data files
+            if ~exist('addSpike','var')
+                addSpike = false;
+            end
+            if obj.spikesExtracted
+                disp('Spikes already extracted and inserted into Maestro files.')
+            else
+                if strcmp(plxname(end-2:end),'pl2')
+                    [~, ~, ~, ~, unitsIndex] = ...
+                        extractKKSpikes(kkname,kkdir,plxname,plxdir,maestrodir,'addSpike',addSpike);
+                    obj.klustaID = unitsIndex;
+                else
+                    error(['Extraction format ' plxname(end-2:end) ' not recognized!'])
+                end
+                obj.spikesExtracted = true;
+            end
+        end
+        
         function obj = unitsIndex(obj,altName)
             % Allow for different base name
             if ~exist('altName','var')
@@ -102,7 +122,8 @@ classdef dcpObj
                 for ti = fileInx:length(files)
                     file = readcxdata([obj.datapath '/' files(ti).name]);
                     if iscell(file.sortedSpikes)
-                        indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
+                        indsList = [indsList file.sortedSpikes{2}];
+%                         indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
                     end
                 end
                 obj.unitIndex = unique(indsList);
@@ -137,11 +158,20 @@ classdef dcpObj
             t = Parser.Results.t;
             trialN = Parser.Results.trialN;            
             
-            if any(isnan(units))
-                units = 1:numel(obj.unitIndex);
-            end
             if any(isnan(trialN))
                 trialN = 1:numel(obj.spikeTimes);
+            end
+            if any(isnan(units))
+                if ~isempty(obj.klustaID)
+                    units = obj.klustaID;
+                else
+                    units = [];
+                    for triali = trialN
+                        units = [units obj.spikeTimes{triali}{2}];
+                    end
+                    units = unique(units);
+%                     units = 1:numel(obj.unitIndex);
+                end
             end
             t = t(:); 
             
@@ -149,10 +179,17 @@ classdef dcpObj
             f = @(diffs)obj.myBoxCar(diffs,width);
             r = nan(length(t),numel(trialN),numel(units));
             for triali = trialN
-                [~, ~, ~, rTemp] = spikeTimes2Rate(obj.spikeTimes{triali}(units),...
+                spikeTimes = obj.spikeTimes{triali}(1:2);
+                spikeTimes{1} = spikeTimes{1}(ismember(spikeTimes{2},units));
+                spikeTimes{2} = spikeTimes{2}(ismember(spikeTimes{2},units));
+                [~, ~, ~, rTemp] = spikeTimes2Rate(spikeTimes,...
                     'time',t,'resolution',1,'Filter',f,...
-                    'ComputeVariance','Yes');
+                    'ComputeVariance','Yes','mixedUnits',true,'units',units);
                 r(:,triali,:) = rTemp/width;
+%                 [~, ~, ~, rTemp] = spikeTimes2Rate(obj.spikeTimes{triali}(units),...
+%                     'time',t,'resolution',1,'Filter',f,...
+%                     'ComputeVariance','Yes');
+%                 r(:,triali,:) = rTemp/width;
             end
         end
         
@@ -301,8 +338,10 @@ classdef dcpObj
             lineProps.Color = 'k';
             lineProps.LineStyle = '-';
             for triali = 1:length(trials)
-                if ~isempty(obj.spikeTimes{trials(triali)}{units})
-                    plotVertical(obj.spikeTimes{trials(triali)}{units},...
+                spikeTimes = obj.spikeTimes{trials(triali)}{1};
+                spikeTimes = spikeTimes(ismember(obj.spikeTimes{trials(triali)}{2},units));
+                if ~isempty(spikeTimes)
+                    plotVertical(spikeTimes,...
                         'MinMax',[triali,triali+1],'lineProperties',lineProps);
                 end
                 hold on
