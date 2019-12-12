@@ -8,7 +8,7 @@ function dcp = generateObjectFile(sname,baseDir,saveName,varargin)
 %%
 
 %% Defaults
-excludeList_default = {'20191111a','20191115a','20191118t','20191119a'};
+excludeList_default = {'20191021a','20191022a','20191022b','20191111a','20191115a','20191118t','20191119a'};
 
 %% Parse inputs
 Parser = inputParser;

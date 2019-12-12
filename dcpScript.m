@@ -1,7 +1,7 @@
 
 subject = 'ar';
-dataShort = '191014a';
-data = '20191014a';
+dataShort = '191021a';
+data = '20191021a';
 extractSpikes = true;
 extractSpikesKK = false;
 addSpike = false;
