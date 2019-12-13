@@ -187,7 +187,8 @@ classdef initiateCohObj < dcpObj
             end
             for hi = 1:length(cohs)
                 subplot(sh(hi))
-                axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+%                 axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+                axis([0 300 min(ax(:,3)) max(ax(:,4))])
                 plotHorizontal(1);
                 plotVertical(150);
                 xlabel('Time from motion onset (ms)')

@@ -1,12 +1,12 @@
 
 subject = 'ar';
-dataShort = '191021a';
-data = '20191021a';
-extractSpikes = true;
+dataShort = '191106a';
+data = '20191106a';
+extractSpikes = false;
 extractSpikesKK = false;
 addSpike = false;
-trials = 1:2500;
-unit = 1;
+trials = 1:3500;
+unit = 2;
 boxCarWidth = 30;
 overwrite = true;
 

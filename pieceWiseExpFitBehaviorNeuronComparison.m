@@ -37,30 +37,35 @@ for sitei = 1:length(dynamicCoh)
     end
 end
 for uniti = 1:size(unitMap,1)
-    figure(uniti)
+    figure('Name',num2str(uniti),'Position',[599 365 1378 420])
     colors = colormap('lines');
     for epochi = 1:epochN
-        subplot(3,epochN,epochi)
+        subplot(2,epochN,epochi)
         for seqi = 1:seqN
-            plot(t,nanmean(response.behavior(:,:,seqi,epochi),2),'-','Color',colors(seqi,:))
+%             plot(t,nanmean(response.behavior(:,:,seqi,epochi),2),'-','Color',colors(seqi,:))
+            
+            if epochi < 3
+                tempCont = 1;
+            else
+                tempCont = 6;
+            end
+            plot(t,dynamicCoh{unitMap(uniti,1)}.Epoch.eye(:,seqi,epochi,tempCont,1),'-','Color',colors(seqi,:))
             hold on
+            plot(t,nanmean(response.behavior(:,unitMap(uniti,1),seqi,epochi),2),'--','Color',colors(seqi,:))
         end
                 
-        subplot(3,epochN,epochN+epochi)
+        subplot(2,epochN,epochN+epochi)
         for seqi = 1:seqN
             
             plot(t,1000*nanmean(responseReal.neuron(:,unitMap(uniti,1),seqi,epochi,unitMap(uniti,2)),2),'-','Color',colors(seqi,:))
             hold on
-        end
-        
-        subplot(3,epochN,2*epochN+epochi)
-        for seqi = 1:seqN
-            
-            plot(t,1000*nanmean(response.neuron(:,unitMap(uniti,1),seqi,epochi,unitMap(uniti,2)),2),'-','Color',colors(seqi,:))
-            hold on
+            plot(t,1000*nanmean(response.neuron(:,unitMap(uniti,1),seqi,epochi,unitMap(uniti,2)),2),'--','Color',colors(seqi,:))
         end
     end
-    title(num2str(unitMap(uniti,:)))
+%     title(num2str(unitMap(uniti,:)))
+    subplot(2,epochN,3)
+    title([dynamicCoh{unitMap(uniti,1)}.datapath(end-11:end) ', Unit '...
+        num2str(dynamicCoh{unitMap(uniti,1)}.unitIndex(unitMap(uniti,2)))])
 end
 
 %%
@@ -87,7 +92,7 @@ for epochi = 1:epochN
 end
 
 
-figure('Name','R_f - R_0')
+figure('Name','R_f - R_0','Position',[599 365 1378 420])
 for epochi = 1:epochN
     subplot(2,epochN,epochi)
     for seqi = 1:seqN
@@ -118,7 +123,7 @@ for epochi = 1:epochN
 %     plot(1:seqN,tempparam2,'.-','Color',colors(seqi,:))
 end
 
-figure('Name','\tau')
+figure('Name','\tau','Position',[599 365 1378 420])
 for epochi = 1:epochN
     subplot(2,epochN,epochi)
     for seqi = 1:seqN
@@ -143,7 +148,7 @@ for epochi = 1:epochN
     end
 end
 
-figure('Name','t_0')
+figure('Name','t_0','Position',[599 365 1378 420])
 for epochi = 1:epochN
     subplot(2,epochN,epochi)
     for seqi = 1:seqN
@@ -169,7 +174,7 @@ for epochi = 1:epochN
 end
 
 %%
-figure
+figure('Position',[599 365 1378 420])
 ind = 0;
 for parami = 3:4
     ind = ind+1;
@@ -187,6 +192,11 @@ for parami = 3:4
         end
         if parami == 3
             axis([0 500 0 500])
+            xlabel('Behavioral \tau')
+            ylabel('Neural \tau')
+        elseif parami == 4
+            xlabel('Behavioral t_0')
+            ylabel('Neural t_0')            
         end
         plotUnity;
         axis square
