@@ -128,7 +128,7 @@ classdef speedPrefObj < dcpObj
                     for triali = 1:length(condInds)
                         spikeTimes = obj.spikeTimes{condInds(triali)}{1};
                         spikeTimes = spikeTimes(ismember(obj.spikeTimes{condInds(triali)}{2},units));
-                        count(di,si) = count(si) + numel(spikeTimes);
+                        count(di,si) = count(di,si) + numel(spikeTimes);
                     end
                 end
             end

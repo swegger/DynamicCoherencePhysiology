@@ -16,7 +16,7 @@ ChamberDimensions_default.x = 0;
 ChamberDimensions_default.y = 0;
 ChamberDimensions_default.Properties.Color = [0 0 0];
 ChamberDimensions_default.Properties.LineWidth = 2;
-excludeList_default = {'20191111a','20191115a','20191118t','20191119a'};
+excludeList_default = {'20191111a','20191115a','20191118t','20191119a','20200210a','20200213a'};
 
 % Parse input
 Parser = inputParser;
@@ -122,17 +122,19 @@ selectAnalysis = uicontrol('Parent',analysisSelectionBox,'Style', 'listbox',...
 axes(ChamberAx)
 % plot(0,0,'k.','MarkerSize',10)
 hold on
+xhandle = plot3(NaN,NaN,NaN,'x');
+xhandle.Visible = 'off';
 for i = 1:length(dcp)
     if isempty(dcp{i}.location)
         siteHandles(i) = plot3(NaN,NaN,NaN,'k.');
         ringHandles(i) = plot3(NaN,NaN,NaN,'ko');
         set(ringHandles(i),'Visible','off');
-        sites(i,:) = [NaN,NaN,NaN];
+        %sites(i,:) = [NaN,NaN,NaN];
     else
         siteHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'k.');
         ringHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'ko');
         set(ringHandles(i),'Visible','off');
-        sites(i,:) = [dcp{i}.location.x,dcp{i}.location.y,dcp{i}.location.depth];
+        %sites(i,:) = [dcp{i}.location.x,dcp{i}.location.y,dcp{i}.location.depth];
     end
     figsOpen(i) = 0;
     
@@ -191,7 +193,7 @@ disp('')
                 ringHandles(i).Color = [0 0 0];
             end
         end
-        
+        xhandle.Visible = 'off';
         fileSelected = FileList{selectFile.Value};
         
         % Generate unit selection callback
@@ -213,6 +215,19 @@ disp('')
     function unitSelected = unitSelectionCallback(gcbo,eventdata)
         
         unitSelected = UnitsString{selectUnit.Value};
+        index = selectFile.Value;
+        
+        if length(dcp{index}.location.x) > 1
+            siteIndex = mod(dcp{index}.chansIndex(selectUnit.Value)+1,4);
+            
+            % Place x on correct location based on siteIndex
+            tempIndex = find(~isnan(siteHandles(index).XData));
+            xhandle.XData = siteHandles(index).XData(tempIndex(siteIndex));
+            xhandle.YData = siteHandles(index).YData(tempIndex(siteIndex));            
+            xhandle.ZData = siteHandles(index).ZData(tempIndex(siteIndex));
+            xhandle.Color = siteHandles(index).Color;     
+            xhandle.Visible = 'on';
+        end
         
         % Generate list of analyses
         selectAnalysis.String = {'dirPref','speedPref','initiateCoh','dynamicCoh'};

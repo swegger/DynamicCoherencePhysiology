@@ -14,6 +14,7 @@ classdef dcpObj
         trials = 0;
         calib
         unitIndex
+        chansIndex
         klustaID
         
         trialNumbers;
@@ -119,14 +120,17 @@ classdef dcpObj
                 end
                 
                 indsList = [];
+                chansList = [];
                 for ti = fileInx:length(files)
                     file = readcxdata([obj.datapath '/' files(ti).name]);
                     if iscell(file.sortedSpikes)
                         indsList = [indsList file.sortedSpikes{2}];
+                        chansList = [chansList file.sortedSpikes{3}];
 %                         indsList = [indsList find(~cellfun(@isempty,file.sortedSpikes))];
                     end
                 end
-                obj.unitIndex = unique(indsList);
+                [obj.unitIndex, tempIndx] = unique(indsList);
+                obj.chansIndex = chansList(tempIndx);
             else
                 obj.unitIndex = 1;
             end
@@ -209,12 +213,170 @@ classdef dcpObj
             tableFile = [obj.datapath(1:end-9) ...
                 'tables/' obj.sname obj.datapath(end-6:end-1) '.xlsx'];
             T = readtable(tableFile);
-            indx = find(strcmp(fileName,T.Date));
-            obj.location.x = str2num(T.Location_x_y_z_{1}(1:4));
-            obj.location.y = str2num(T.Location_x_y_z_{1}(6:9));
-            obj.location.z = str2num(T.Location_x_y_z_{1}(11:14));
-            obj.location.depth = str2num(T.Location_x_y_z_{indx-1})-...
-                str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth'))+1});
+            if str2num(fileName(3:end-1)) > 200101
+                % Determine number of electrodes/channels
+                if iscell(T.x1_1)
+                    if isempty(T.x1_1{1})
+                        liveContact(1,1) = false;
+                    else
+                        liveContact(1,1) = true;
+                    end
+                else
+                    liveContact(1,1) = false;
+                end
+                if iscell(T.x1_2)
+                    if isempty(T.x1_2{1})
+                        liveContact(1,2) = false;
+                    else
+                        liveContact(1,2) = true;
+                    end
+                else
+                    liveContact(1,2) = false;
+                end
+                if iscell(T.x1_3)
+                    if isempty(T.x1_3{1})
+                        liveContact(1,3) = false;
+                    else
+                        liveContact(1,3) = true;
+                    end
+                else
+                    liveContact(1,3) = false;
+                end
+                if iscell(T.x1_4)
+                    if isempty(T.x1_4{1})
+                        liveContact(1,4) = false;
+                    else
+                        liveContact(1,4) = true;
+                    end
+                else
+                    liveContact(1,4) = false;
+                end
+                if iscell(T.x2_1)
+                    if isempty(T.x2_1{1})
+                        liveContact(2,1) = false;
+                    else
+                        liveContact(2,1) = true;
+                    end
+                else
+                    liveContact(2,1) = false;
+                end
+                if iscell(T.x2_2)
+                    if isempty(T.x2_2{1})
+                        liveContact(2,2) = false;
+                    else
+                        liveContact(2,2) = true;
+                    end
+                else
+                    liveContact(2,2) = false;
+                end
+                if iscell(T.x2_3)
+                    if isempty(T.x2_3{1})
+                        liveContact(2,3) = false;
+                    else
+                        liveContact(2,3) = true;
+                    end
+                else
+                    liveContact(2,3) = false;
+                end
+                if iscell(T.x2_4)
+                    if isempty(T.x2_4{1})
+                        liveContact(2,4) = false;
+                    else
+                        liveContact(2,4) = true;
+                    end
+                else
+                    liveContact(2,4) = false;
+                end
+                if iscell(T.x3_1)
+                    if isempty(T.x3_1{1})
+                        liveContact(3,1) = false;
+                    else
+                        liveContact(3,1) = true;
+                    end
+                else
+                    liveContact(3,1) = false;
+                end
+                if iscell(T.x3_2)
+                    if isempty(T.x3_2{1})
+                        liveContact(3,2) = false;
+                    else
+                        liveContact(3,2) = true;
+                    end
+                else
+                    liveContact(3,2) = false;
+                end
+                if iscell(T.x3_3)
+                    if isempty(T.x3_3{1})
+                        liveContact(3,3) = false;
+                    else
+                        liveContact(3,3) = true;
+                    end
+                else
+                    liveContact(3,3) = false;
+                end
+                if iscell(T.x3_4)
+                    if isempty(T.x3_4{1})
+                        liveContact(3,4) = false;
+                    else
+                        liveContact(3,4) = true;
+                    end
+                else
+                    liveContact(3,4) = false;
+                end
+                liveTrode = sum(liveContact,2)>1;
+                
+                delims = regexpi(T.Location_x_y_z_{1},',');
+                if liveTrode(1)
+                    indx = find(strcmp(fileName,T.Date));
+                    obj.location.x(1) = str2num(T.Location_x_y_z_{1}(1:delims(1)-1));
+                    obj.location.y(1) = str2num(T.Location_x_y_z_{1}(delims(1)+1:delims(2)-1))-0.305;
+                    obj.location.z(1) = str2num(T.Location_x_y_z_{1}(delims(2)+1:end));
+                    obj.location.depth(1) = str2num(T.Location_x_y_z_{indx-1})-...
+                        str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth 1'))+1});
+                else
+                    obj.location.x(1) = NaN;
+                    obj.location.y(1) = NaN;
+                    obj.location.z(1) = NaN;
+                    obj.location.depth(1) = NaN;
+                end
+                
+                if liveTrode(2)
+                    indx = find(strcmp(fileName,T.x1_2));
+                    obj.location.x(2) = str2num(T.Location_x_y_z_{1}(1:delims(1)-1));
+                    obj.location.y(2) = str2num(T.Location_x_y_z_{1}(delims(1)+1:delims(2)-1));
+                    obj.location.z(2) = str2num(T.Location_x_y_z_{1}(delims(2)+1:end));
+                    obj.location.depth(2) = str2num(T.x1_3{indx-1})-...
+                        str2num(T.x1_3{find(strcmp(T.x1_3,'Depth 2'))+1});
+                else
+                    obj.location.x(2) = NaN;
+                    obj.location.y(2) = NaN;
+                    obj.location.z(2) = NaN;
+                    obj.location.depth(2) = NaN;
+                end
+                
+                if liveTrode(3)
+                    indx = find(strcmp(fileName,T.x2_3));
+                    obj.location.x(3) = str2num(T.Location_x_y_z_{1}(1:delims(1)-1));
+                    obj.location.y(3) = str2num(T.Location_x_y_z_{1}(delims(1)+1:delims(2)-1))+0.305;
+                    obj.location.z(3) = str2num(T.Location_x_y_z_{1}(delims(2)+1:end));
+                    obj.location.depth(3) = str2num(T.x2_4{indx-1})-...
+                        str2num(T.x2_4{find(strcmp(T.x2_4,'Depth 3'))+1});
+                else
+                    obj.location.x(3) = NaN;
+                    obj.location.y(3) = NaN;
+                    obj.location.z(3) = NaN;
+                    obj.location.depth(3) = NaN;
+                end
+                
+            else
+                indx = find(strcmp(fileName,T.Date));
+                obj.location.x = str2num(T.Location_x_y_z_{1}(1:4));
+                obj.location.y = str2num(T.Location_x_y_z_{1}(6:9));
+                obj.location.z = str2num(T.Location_x_y_z_{1}(11:14));
+                obj.location.depth = str2num(T.Location_x_y_z_{indx-1})-...
+                    str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth'))+1});
+            end
+            
         end
         
         %% Analysis methods
