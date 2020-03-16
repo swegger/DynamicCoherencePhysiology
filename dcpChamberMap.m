@@ -16,7 +16,8 @@ ChamberDimensions_default.x = 0;
 ChamberDimensions_default.y = 0;
 ChamberDimensions_default.Properties.Color = [0 0 0];
 ChamberDimensions_default.Properties.LineWidth = 2;
-excludeList_default = {'20191111a','20191115a','20191118t','20191119a','20200210a','20200213a'};
+excludeList_default = {'20191111a','20191115a','20191118t','20191119a',...
+    '20200210a','20200213a','20200218a','20200221a','20200309b'};
 
 % Parse input
 Parser = inputParser;
@@ -218,7 +219,7 @@ disp('')
         index = selectFile.Value;
         
         if length(dcp{index}.location.x) > 1
-            siteIndex = mod(dcp{index}.chansIndex(selectUnit.Value)+1,4);
+            siteIndex = floor(dcp{index}.chansIndex(selectUnit.Value)/4)+1;
             
             % Place x on correct location based on siteIndex
             tempIndex = find(~isnan(siteHandles(index).XData));
