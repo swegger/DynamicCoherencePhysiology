@@ -9,6 +9,9 @@ function dcp = appendObjectFile(datafile,varargin)
 %%
 
 %% Defaults
+excludeList_default = {'20191021a','20191022a','20191022b','20191111a',...
+    '20191115a','20191118t','20191119a','20200210a','20200213a','20200218a',...
+    '20200221a','20200309b'};
 
 %% Parse inputs
 Parser = inputParser;
@@ -19,6 +22,7 @@ addParameter(Parser,'saveFlg',true)
 addParameter(Parser,'saveDir',[])
 addParameter(Parser,'addFile',[])
 addParameter(Parser,'extractSpikes',true)
+addParameter(Parser,'excludeList',excludeList_default)
 
 parse(Parser,datafile,varargin{:})
 
@@ -28,6 +32,7 @@ saveFlg = Parser.Results.saveFlg;
 saveDir = Parser.Results.saveDir;
 addFile = Parser.Results.addFile;
 extractSpikes = Parser.Results.extractSpikes;
+excludeList = Parser.Results.excludeList;
 
 %% Load dcp object
 load(datafile)
@@ -48,7 +53,7 @@ if isempty(addFile)
     regOut = regexpi({dirOut.name},'[0-9]{8}[a-z]{1,3}','match');
     ind = 0;
     for listi = 1:length(regOut)
-        if ~isempty(regOut{listi}) && ~strcmp(regOut{listi}{1}(end-2:end),'plx')
+        if ~isempty(regOut{listi}) && ~strcmp(regOut{listi}{1}(end-2:end),'plx') && ~strcmp(regOut{listi}{1}(end-1:end),'kk')
             ind = ind+1;
             potentialFiles{ind} = regOut{listi}{1};
         end
@@ -56,7 +61,7 @@ if isempty(addFile)
         
     ind = 0;
     for filei = 1:length(potentialFiles)
-        if ~any(strcmp(potentialFiles{filei},nameList))
+        if ~any(strcmp(potentialFiles{filei},nameList)) && ~any(strcmp(potentialFiles{filei},excludeList))
             ind = ind+1;
             FileList{ind} = potentialFiles{filei};
         end

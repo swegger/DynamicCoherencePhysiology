@@ -16,6 +16,8 @@ ChamberDimensions_default.x = 0;
 ChamberDimensions_default.y = 0;
 ChamberDimensions_default.Properties.Color = [0 0 0];
 ChamberDimensions_default.Properties.LineWidth = 2;
+excludeList_default = {'20191111a','20191115a','20191118t','20191119a',...
+    '20200210a','20200213a','20200218a','20200221a','20200309b'};
 
 % Parse input
 Parser = inputParser;
@@ -30,6 +32,7 @@ addParameter(Parser,'SaveLocation','default');
 addParameter(Parser,'extractSpikes',true)
 addParameter(Parser,'trList',1:5000)
 addParameter(Parser,'boxCarWidth',30)
+addParameter(Parser,'excludeList',excludeList_default)
 
 parse(Parser,subject,varargin{:})
 
@@ -43,6 +46,7 @@ SaveLocation = Parser.Results.SaveLocation;
 extractSpikes = Parser.Results.extractSpikes;
 trList = Parser.Results.trList;
 boxCarWidth = Parser.Results.boxCarWidth;
+excludeList = Parser.Results.excludeList;
 
 % Validate inputs
 if strcmp('Custom',PlotType)
@@ -71,7 +75,9 @@ potentialFiles = dir(['~/Projects/DynamicCoherencePhysiology/' subject]);
 regOut = regexpi({potentialFiles.name},'[0-9]{8}[a-z]{1,3}','match');
 ind = 0;
 for listi = 1:length(regOut)
-    if ~isempty(regOut{listi}) && ~strcmp(regOut{listi}{1}(end-2:end),'plx')
+    if ~isempty(regOut{listi}) && ~strcmp(regOut{listi}{1}(end-2:end),'plx') ...
+            && ~strcmp(regOut{listi}{1}(end-1:end),'kk') ...
+            && ~any(strcmp(regOut{listi}{1},excludeList))
         ind = ind+1;
         FileList{ind} = regOut{listi}{1};
     end
@@ -117,11 +123,20 @@ selectAnalysis = uicontrol('Parent',analysisSelectionBox,'Style', 'listbox',...
 axes(ChamberAx)
 % plot(0,0,'k.','MarkerSize',10)
 hold on
-for i = 1:length(dcp) 
-    siteHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'k.');
-    ringHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'ko');
-    set(ringHandles(i),'Visible','off');
-    sites(i,:) = [dcp{i}.location.x,dcp{i}.location.y,dcp{i}.location.depth];
+xhandle = plot3(NaN,NaN,NaN,'x');
+xhandle.Visible = 'off';
+for i = 1:length(dcp)
+    if isempty(dcp{i}.location)
+        siteHandles(i) = plot3(NaN,NaN,NaN,'k.');
+        ringHandles(i) = plot3(NaN,NaN,NaN,'ko');
+        set(ringHandles(i),'Visible','off');
+        %sites(i,:) = [NaN,NaN,NaN];
+    else
+        siteHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'k.');
+        ringHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'ko');
+        set(ringHandles(i),'Visible','off');
+        %sites(i,:) = [dcp{i}.location.x,dcp{i}.location.y,dcp{i}.location.depth];
+    end
     figsOpen(i) = 0;
     
     % Plot the Chamber, if provided
@@ -179,7 +194,7 @@ disp('')
                 ringHandles(i).Color = [0 0 0];
             end
         end
-        
+        xhandle.Visible = 'off';
         fileSelected = FileList{selectFile.Value};
         
         % Generate unit selection callback
@@ -189,10 +204,11 @@ disp('')
         else
             totalunits = length(dcp{selectFile.Value}.unitIndex);
             for i = 1:totalunits
-                UnitsString{i} = num2str(i);
+                UnitsString{i} = num2str(dcp{selectFile.Value}.unitIndex(i));
             end
         end
         selectUnit.String = UnitsString;
+        selectUnit.Value = 1;
         
     end
 
@@ -200,6 +216,19 @@ disp('')
     function unitSelected = unitSelectionCallback(gcbo,eventdata)
         
         unitSelected = UnitsString{selectUnit.Value};
+        index = selectFile.Value;
+        
+        if length(dcp{index}.location.x) > 1
+            siteIndex = floor(dcp{index}.chansIndex(selectUnit.Value)/4)+1;
+            
+            % Place x on correct location based on siteIndex
+            tempIndex = find(~isnan(siteHandles(index).XData));
+            xhandle.XData = siteHandles(index).XData(tempIndex(siteIndex));
+            xhandle.YData = siteHandles(index).YData(tempIndex(siteIndex));            
+            xhandle.ZData = siteHandles(index).ZData(tempIndex(siteIndex));
+            xhandle.Color = siteHandles(index).Color;     
+            xhandle.Visible = 'on';
+        end
         
         % Generate list of analyses
         selectAnalysis.String = {'dirPref','speedPref','initiateCoh','dynamicCoh'};
@@ -221,7 +250,8 @@ disp('')
                 dirPref = dirPrefTrials(dirPref,trList);        % Finds dirPref trial data
                 
                 % Sort by direction and plot rasters
-                dirPrefRaster(dirPref,0:45:315,selectUnit.Value);
+                unitSelected= str2double(UnitsString{selectUnit.Value});
+                dirPrefRaster(dirPref,0:45:315,unitSelected);
                 
                 % Plot grand average PSTH across all trials
                 figure;
@@ -242,8 +272,9 @@ disp('')
                 speedPref = speedPrefTrials(speedPref,trList);
                 
                 % Sort by speed and plot rasters
+                unitSelected= str2double(UnitsString{selectUnit.Value});
                 speedPrefRaster(speedPref,unique(speedPref.directions),...
-                    unique(speedPref.speeds),selectUnit.Value)
+                    unique(speedPref.speeds),unitSelected)
                 
                 % Plot grand average PSTH across all trials
                 figure;

@@ -101,7 +101,9 @@ classdef dynamicCohObj < dcpObj
                             % Add spike times
                             if obj.spikesExtracted
                                 obj.spikeTimes{ind} = ...
-                                    file.sortedSpikes(obj.unitIndex);                                
+                                    file.sortedSpikes;    
+%                                 obj.spikeTimes{ind} = ...
+%                                     file.sortedSpikes(obj.unitIndex);                             
                             else
                                 obj.spikeTimes{ind}{1} = file.spikes;                    
                             end                           
@@ -136,7 +138,7 @@ classdef dynamicCohObj < dcpObj
             addParameter(Parser,'dirs',[0,180])
             addParameter(Parser,'seqs',1:5)
             addParameter(Parser,'t',0:(1600-1))
-            addParameter(Parser,'EpochT',[0 150; 150 450; 450 750; 750 1050])
+            addParameter(Parser,'EpochT',[0 150; 150 450; 450 750; 750 1050; 1050 1350])
             
             parse(Parser,obj,varargin{:})
             
@@ -155,7 +157,7 @@ classdef dynamicCohObj < dcpObj
             end
             
             obj.Epoch.eye = nan(max(diff(EpochT,1,2)),length(seqs),4,length(seqs)+1,length(dirs));
-            for epochi = 1:4
+            for epochi = 1:size(EpochT,1)
                 ttemp = 0:(EpochT(epochi,2)-EpochT(epochi,1));
                 for controli = 1:(length(seqs)+1)
                     for seqi = 1:length(seqs)
@@ -167,7 +169,7 @@ classdef dynamicCohObj < dcpObj
                                 obj.Epoch.p(seqi,epochi,controli,di).eye = ...
                                     pieceWiseExpRiseFitter(ttemp(:),...
                                         obj.Epoch.eye(1:length(ttemp),seqi,epochi,controli,di),...
-                                        [0,10,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,30]);
+                                        [0,10,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,0]);
                             elseif controli-1 ~= seqi
                                 obj.Epoch.eye(1:length(ttemp),seqi,epochi,controli,di) = ...
                                     meanEyeSpeeds(t>=EpochT(epochi,1) & t<= EpochT(epochi,2),seqi,di) -... 
@@ -176,7 +178,7 @@ classdef dynamicCohObj < dcpObj
                                 obj.Epoch.p(seqi,epochi,controli,di).eye = ...
                                     pieceWiseExpRiseFitter(ttemp(:),...
                                         obj.Epoch.eye(1:length(ttemp),seqi,epochi,controli,di),...
-                                        [0,3,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,30]);
+                                        [0,3,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,0]);
                             else
                                 obj.Epoch.p(seqi,epochi,controli,di).eye = nan(1,4);
                             end
@@ -253,8 +255,9 @@ classdef dynamicCohObj < dcpObj
             addRequired(Parser,'obj')
             addParameter(Parser,'dirs',[0,180])
             addParameter(Parser,'seqs',1:5)
-            addParameter(Parser,'t',0:(1600-1))
-            addParameter(Parser,'EpochT',[0 150; 150 450; 450 750; 750 1050])
+            addParameter(Parser,'t',-100:1600)
+            addParameter(Parser,'EpochT',[0 150; 150 450; 450 750; 750 1050; 1050 1350])
+            addParameter(Parser,'width',50)
             
             parse(Parser,obj,varargin{:})
             
@@ -263,27 +266,28 @@ classdef dynamicCohObj < dcpObj
             seqs = Parser.Results.seqs;
             EpochT = Parser.Results.EpochT;
             t = Parser.Results.t;
+            width = Parser.Results.width;
             
             % Find mean eye speeds for each sequence
             for di = 1:length(dirs)
                 R(:,:,:,di) = dynamicCohSeqConditionedRates(obj,...
-                    'dirs',dirs(di));
+                    'dirs',dirs(di),'width',width);
             end
             
             obj.Epoch.neurons = nan(max(diff(EpochT,1,2)),length(seqs),4,length(seqs)+1,length(dirs));
-            for epochi = 1:4
+            for epochi = 1:size(EpochT,1)
                 ttemp = 0:(EpochT(epochi,2)-EpochT(epochi,1));
                 for controli = 1:(length(seqs)+1)
                     for seqi = 1:length(seqs)
                         for di = 1:length(dirs)
                             if controli-1 == 0
-                                obj.Epoch.neurons(1:length(ttemp),seqi,epochi,controli,di,:) = ...
-                                    R(t>=EpochT(epochi,1) & t<= EpochT(epochi,2),seqi,:,di);
                                 for uniti = 1:size(R,3)
+                                    obj.Epoch.neurons(1:length(ttemp),seqi,epochi,controli,di,uniti) = ...
+                                        R(t>=EpochT(epochi,1) & t<= EpochT(epochi,2),seqi,uniti,di);
                                     obj.Epoch.p(seqi,epochi,controli,di,uniti).neurons = ...
                                         pieceWiseExpRiseFitter(ttemp(:),...
                                             obj.Epoch.neurons(1:length(ttemp),seqi,epochi,controli,di,uniti),...
-                                            [0,10,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,30]);
+                                            [0,10,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,0]);
                                 end
                             elseif controli-1 ~= seqi
                                 obj.Epoch.neurons(1:length(ttemp),seqi,epochi,controli,di,:) = ...
@@ -294,7 +298,7 @@ classdef dynamicCohObj < dcpObj
                                     obj.Epoch.p(seqi,epochi,controli,di,uniti).neurons = ...
                                         pieceWiseExpRiseFitter(ttemp(:),...
                                             obj.Epoch.neurons(1:length(ttemp),seqi,epochi,controli,di,uniti),...
-                                            [0,3,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,30]);
+                                            [0,3,200,50],[Inf,Inf,Inf,200],[-Inf,-Inf,0,0]);
                                 end
                             else
                                 for uniti = 1:size(R,3)
