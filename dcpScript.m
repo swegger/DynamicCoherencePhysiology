@@ -1,14 +1,14 @@
 
-subject = 'ar';
-dataShort = '191118t';
-data = '20191118t';
+subject = 'test';
+dataShort = '191202a';
+data = '20191202a';
 extractSpikes = true;
-addSpike = true;
+addSpike = false;
 trials = 1:3000;
 unit = 1;
 boxCarWidth = 30;
 
-datapath = ['/home/seth/Projects/DynamicCoherencePhysiology/' subject '/' data];
+datapath = ['~/Projects/DynamicCoherencePhysiology/' subject '/' data];
 if str2num(dataShort(1:end-1)) > 191114
     plxfile = [subject dataShort '.pl2'];
 else
