@@ -70,24 +70,28 @@ colors = [     0    0.4470    0.7410;...
           0.3010    0.7450    0.9330;...
           0.6350    0.0780    0.1840];
       
-% Build FileList
-potentialFiles = dir(['~/Projects/DynamicCoherencePhysiology/' subject]);
-regOut = regexpi({potentialFiles.name},'[0-9]{8}[a-z]{1,3}','match');
-ind = 0;
-for listi = 1:length(regOut)
-    if ~isempty(regOut{listi}) && ~strcmp(regOut{listi}{1}(end-2:end),'plx') ...
-            && ~strcmp(regOut{listi}{1}(end-1:end),'kk') ...
-            && ~any(strcmp(regOut{listi}{1},excludeList))
-        ind = ind+1;
-        FileList{ind} = regOut{listi}{1};
-    end
-end
+
 
 %% Run preliminary analyses
 if isempty(dcpObjectsFile)
+    % Build FileList
+    potentialFiles = dir(['~/Projects/DynamicCoherencePhysiology/' subject]);
+    regOut = regexpi({potentialFiles.name},'[0-9]{8}[a-z]{1,3}','match');
+    ind = 0;
+    for listi = 1:length(regOut)
+        if ~isempty(regOut{listi}) && ~strcmp(regOut{listi}{1}(end-2:end),'plx') ...
+                && ~strcmp(regOut{listi}{1}(end-1:end),'kk') ...
+                && ~any(strcmp(regOut{listi}{1},excludeList))
+            ind = ind+1;
+            FileList{ind} = regOut{listi}{1};
+        end
+    end
     dcp = dcpPrelim(subject,FileList,extractSpikes);
 else
     load(dcpObjectsFile,'dcp')
+    for listi = 1:length(dcp)
+        FileList{listi} = dcp{listi}.datapath(end-8:end);
+    end
 end
 
 %% Generate GUI
@@ -219,10 +223,17 @@ disp('')
         index = selectFile.Value;
         
         if length(dcp{index}.location.x) > 1
-            siteIndex = floor(dcp{index}.chansIndex(selectUnit.Value)/4)+1;
+            if length(dcp{index}.location.x) == 24
+                chanMap = [7 1; 6 2; 5 3; 4 4; 3 5; 2 6; 1 7; 0 8; 23 9; 22 10; 21 11; 20 12; 19 13; 18 14; 17 15; 16 16; 15 17; 14 18; 13 19; 12 20; 11 21; 10 22; 9 23; 8 24];                
+                siteIndex = chanMap(dcp{index}.chansIndex(selectUnit.Value) == chanMap(:,1),2);
+                tempIndex = 1:24;
+            else
+                siteIndex = floor(dcp{index}.chansIndex(selectUnit.Value)/4)+1;
+                
+                tempIndex = find(~isnan(siteHandles(index).XData));
+            end
             
             % Place x on correct location based on siteIndex
-            tempIndex = find(~isnan(siteHandles(index).XData));
             xhandle.XData = siteHandles(index).XData(tempIndex(siteIndex));
             xhandle.YData = siteHandles(index).YData(tempIndex(siteIndex));            
             xhandle.ZData = siteHandles(index).ZData(tempIndex(siteIndex));
@@ -239,144 +250,147 @@ disp('')
         % Generate temporary vboxes
         
         analysisType = selectAnalysis.String{selectAnalysis.Value};
-        
-        switch analysisType
-            case 'dirPref'
-                dirPref = dirPrefObj(subject,...
-                    dcp{selectFile.Value}.datapath);         % Builds direction preference object
-                dirPref = assertSpikesExtracted(dirPref,...
-                    dcp{selectFile.Value}.spikesExtracted);  % Asserts that spiking data has (not) been extracted already
-                dirPref = unitsIndex(dirPref);                  % Finds the indices to the units
-                dirPref = dirPrefTrials(dirPref,trList);        % Finds dirPref trial data
-                
-                % Sort by direction and plot rasters
-                unitSelected= str2double(UnitsString{selectUnit.Value});
-                dirPrefRaster(dirPref,0:45:315,unitSelected);
-                
-                % Plot grand average PSTH across all trials
-                figure;
-                r = dirPref.calcRates(boxCarWidth);                      % Calculates rates based with 50 ms boxcar
-                plot(-100:1600,mean(r(:,:,selectUnit.Value)*1000,2));
-                hold on
-                plotVertical(0);
-                xlabel('Time since motion onset (ms)')
-                ylabel('Sp/s')
-                mymakeaxis(gca);
-                
-            case 'speedPref'
-                speedPref = speedPrefObj(subject,...
-                    dcp{selectFile.Value}.datapath);
-                speedPref = assertSpikesExtracted(speedPref,...
-                    dcp{selectFile.Value}.spikesExtracted);
-                speedPref = unitsIndex(speedPref);
-                speedPref = speedPrefTrials(speedPref,trList);
-                
-                % Sort by speed and plot rasters
-                unitSelected= str2double(UnitsString{selectUnit.Value});
-                speedPrefRaster(speedPref,unique(speedPref.directions),...
-                    unique(speedPref.speeds),unitSelected)
-                
-                % Plot grand average PSTH across all trials
-                figure;
-                r = speedPref.calcRates(boxCarWidth);                      % Calculates rates based with 50 ms boxcar
-                plot(-100:1600,mean(r(:,:,selectUnit.Value)*1000,2));
-                hold on
-                plotVertical(0);
-                xlabel('Time since motion onset (ms)')
-                ylabel('Sp/s')
-                mymakeaxis(gca);
-                
-            case 'initiateCoh'
-                initCoh = initiateCohObj(subject,...
-                    dcp{selectFile.Value}.datapath);
-                initCoh = assertSpikesExtracted(initCoh,...
-                    dcp{selectFile.Value}.spikesExtracted);
-                initCoh = unitsIndex(initCoh);
-                initCoh = initiateCohTrials(initCoh,trList);
-                dirs = [0];
-                
-                % Plot behavioral data
-                initiateCohMeanEye(initCoh,dirs);
-                
-                % Sort by coherence and plot rates
-                if ~isempty(initCoh.coh)
-                    [R,Rste] = cohConditionedRates(initCoh,'width',boxCarWidth,'dirs',dirs);
+        try
+            switch analysisType
+                case 'dirPref'
+                    dirPref = dirPrefObj(subject,...
+                        dcp{selectFile.Value}.datapath);         % Builds direction preference object
+                    dirPref = assertSpikesExtracted(dirPref,...
+                        dcp{selectFile.Value}.spikesExtracted);  % Asserts that spiking data has (not) been extracted already
+                    dirPref = unitsIndex(dirPref);                  % Finds the indices to the units
+                    dirPref = dirPrefTrials(dirPref,trList);        % Finds dirPref trial data
                     
-                    figure('Name','Speed/coherence conditioned rates','Position',[342 449 1972 420])
-                    t = -100:1600;
-                    for cohi = 1:length(unique(initCoh.coh))
-                        subplot(1,length(unique(initCoh.coh)),cohi)
-                        %     for speedi = 1:length(unique(initCoh.speeds))
-                        plot(t(t<300),R(t<300,:,cohi,selectUnit.Value)*1000)
-                        %     end
-                        hold on
-                        axis tight
-                        ax(cohi,:) = axis;
-                    end
+                    % Sort by direction and plot rasters
+                    unitSelected= str2double(UnitsString{selectUnit.Value});
+                    dirPrefRaster(dirPref,0:45:315,unitSelected);
                     
-                    for cohi = 1:length(unique(initCoh.coh))
-                        subplot(1,length(unique(initCoh.coh)),cohi)
-                        axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
-                        plotVertical(0);
-                        xlabel('Time (ms)')
-                        ylabel('sp/s')
-                        mymakeaxis(gca)
-                    end
-                    
-                    figure('Name','Speed/coherence conditioned rates 2','Position',[342 449 1972 420])
-                    t = -100:1600;
-                    for speedi = 1:length(unique(initCoh.speeds))
-                        subplot(1,length(unique(initCoh.speeds)),speedi)
-                        %     for speedi = 1:length(unique(initCoh.speeds))
-                        plot(t(t<300),squeeze(R(t<300,speedi,:,selectUnit.Value)*1000))
-                        %     end
-                        hold on
-                        axis tight
-                        ax(speedi,:) = axis;
-                    end
-                    
-                    for speedi = 1:length(unique(initCoh.speeds))
-                        subplot(1,length(unique(initCoh.speeds)),speedi)
-                        axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
-                        plotVertical(0);
-                        xlabel('Time (ms)')
-                        ylabel('sp/s')
-                        mymakeaxis(gca)
-                    end
-                end
-                
-            case 'dynamicCoh'
-                dynamicCoh = dynamicCohObj(subject,...
-                    dcp{selectFile.Value}.datapath);
-                dynamicCoh = assertSpikesExtracted(dynamicCoh,...
-                    dcp{selectFile.Value}.spikesExtracted);
-                dynamicCoh = unitsIndex(dynamicCoh);
-                dynamicCoh = dynamicCohTrials(dynamicCoh,trList);
-                dirs = [0];
-                
-                % Plot behavioral data
-                dynamicCohMeanEyeSeq(dynamicCoh,dirs);
-                ax = axis;
-                
-                % Sort by speed and plot rates
-                t = -100:1600;
-                if ~isempty(dynamicCoh.sequences)
-                    [R,Rste] = dynamicCohSeqConditionedRates(dynamicCoh,'width',boxCarWidth,...
-                        'dirs',dirs,'t',t);
-                    
-                    controlInd = 5;
+                    % Plot grand average PSTH across all trials
                     figure;
-                    subplot(2,1,1)
-                    plot(t,R(:,:,selectUnit.Value))
+                    r = dirPref.calcRates(boxCarWidth);                      % Calculates rates based with 50 ms boxcar
+                    plot(-100:1600,mean(r(:,:,selectUnit.Value)*1000,2));
                     hold on
-                    plotVertical([150 150+0:300:1500]);
-                    xlim(ax(1:2))
-                    subplot(2,1,2)
-                    plot(t,R(:,:,selectUnit.Value) - repmat(R(:,controlInd,selectUnit.Value),[1,size(R,2)]))
+                    plotVertical(0);
+                    xlabel('Time since motion onset (ms)')
+                    ylabel('Sp/s')
+                    mymakeaxis(gca);
+                    
+                case 'speedPref'
+                    speedPref = speedPrefObj(subject,...
+                        dcp{selectFile.Value}.datapath);
+                    speedPref = assertSpikesExtracted(speedPref,...
+                        dcp{selectFile.Value}.spikesExtracted);
+                    speedPref = unitsIndex(speedPref);
+                    speedPref = speedPrefTrials(speedPref,trList);
+                    
+                    % Sort by speed and plot rasters
+                    unitSelected= str2double(UnitsString{selectUnit.Value});
+                    speedPrefRaster(speedPref,unique(speedPref.directions),...
+                        unique(speedPref.speeds),unitSelected)
+                    
+                    % Plot grand average PSTH across all trials
+                    figure;
+                    r = speedPref.calcRates(boxCarWidth);                      % Calculates rates based with 50 ms boxcar
+                    plot(-100:1600,mean(r(:,:,selectUnit.Value)*1000,2));
                     hold on
-                    plotVertical([150 150+0:300:1500]);
-                    xlim(ax(1:2))
-                end
+                    plotVertical(0);
+                    xlabel('Time since motion onset (ms)')
+                    ylabel('Sp/s')
+                    mymakeaxis(gca);
+                    
+                case 'initiateCoh'
+                    initCoh = initiateCohObj(subject,...
+                        dcp{selectFile.Value}.datapath);
+                    initCoh = assertSpikesExtracted(initCoh,...
+                        dcp{selectFile.Value}.spikesExtracted);
+                    initCoh = unitsIndex(initCoh);
+                    initCoh = initiateCohTrials(initCoh,trList);
+                    dirs = [0];
+                    
+                    % Plot behavioral data
+                    initiateCohMeanEye(initCoh,dirs);
+                    
+                    % Sort by coherence and plot rates
+                    if ~isempty(initCoh.coh)
+                        [R,Rste] = cohConditionedRates(initCoh,'width',boxCarWidth,'dirs',dirs);
+                        
+                        figure('Name','Speed/coherence conditioned rates','Position',[342 449 1972 420])
+                        t = -100:1600;
+                        for cohi = 1:length(unique(initCoh.coh))
+                            subplot(1,length(unique(initCoh.coh)),cohi)
+                            %     for speedi = 1:length(unique(initCoh.speeds))
+                            plot(t(t<300),R(t<300,:,cohi,selectUnit.Value)*1000)
+                            %     end
+                            hold on
+                            axis tight
+                            ax(cohi,:) = axis;
+                        end
+                        
+                        for cohi = 1:length(unique(initCoh.coh))
+                            subplot(1,length(unique(initCoh.coh)),cohi)
+                            axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+                            plotVertical(0);
+                            xlabel('Time (ms)')
+                            ylabel('sp/s')
+                            mymakeaxis(gca)
+                        end
+                        
+                        figure('Name','Speed/coherence conditioned rates 2','Position',[342 449 1972 420])
+                        t = -100:1600;
+                        for speedi = 1:length(unique(initCoh.speeds))
+                            subplot(1,length(unique(initCoh.speeds)),speedi)
+                            %     for speedi = 1:length(unique(initCoh.speeds))
+                            plot(t(t<300),squeeze(R(t<300,speedi,:,selectUnit.Value)*1000))
+                            %     end
+                            hold on
+                            axis tight
+                            ax(speedi,:) = axis;
+                        end
+                        
+                        for speedi = 1:length(unique(initCoh.speeds))
+                            subplot(1,length(unique(initCoh.speeds)),speedi)
+                            axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+                            plotVertical(0);
+                            xlabel('Time (ms)')
+                            ylabel('sp/s')
+                            mymakeaxis(gca)
+                        end
+                    end
+                    
+                case 'dynamicCoh'
+                    dynamicCoh = dynamicCohObj(subject,...
+                        dcp{selectFile.Value}.datapath);
+                    dynamicCoh = assertSpikesExtracted(dynamicCoh,...
+                        dcp{selectFile.Value}.spikesExtracted);
+                    dynamicCoh = unitsIndex(dynamicCoh);
+                    dynamicCoh = dynamicCohTrials(dynamicCoh,trList);
+                    dirs = [0];
+                    
+                    % Plot behavioral data
+                    dynamicCohMeanEyeSeq(dynamicCoh,dirs);
+                    ax = axis;
+                    
+                    % Sort by speed and plot rates
+                    t = -100:1600;
+                    if ~isempty(dynamicCoh.sequences)
+                        [R,Rste] = dynamicCohSeqConditionedRates(dynamicCoh,'width',boxCarWidth,...
+                            'dirs',dirs,'t',t);
+                        
+                        controlInd = 5;
+                        figure;
+                        subplot(2,1,1)
+                        plot(t,R(:,:,selectUnit.Value))
+                        hold on
+                        plotVertical([150 150+0:300:1500]);
+                        xlim(ax(1:2))
+                        subplot(2,1,2)
+                        plot(t,R(:,:,selectUnit.Value) - repmat(R(:,controlInd,selectUnit.Value),[1,size(R,2)]))
+                        hold on
+                        plotVertical([150 150+0:300:1500]);
+                        xlim(ax(1:2))
+                    end
+            end
+        catch
+            warning(['Analysis of ' analysisType ' failed.'])
         end
     end
 

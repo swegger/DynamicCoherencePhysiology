@@ -212,8 +212,8 @@ classdef dcpObj
             fileName = [obj.sname obj.datapath(end-6:end)];
             tableFile = [obj.datapath(1:end-9) ...
                 'tables/' obj.sname obj.datapath(end-6:end-1) '.xlsx'];
-            T = readtable(tableFile);
-            if str2num(fileName(3:end-1)) > 200101
+            T = readtable(tableFile,'Format','auto');
+            if str2num(fileName(3:end-1)) > 200101 && str2num(fileName(3:end-1)) < 210000
                 % Determine number of electrodes/channels
                 if iscell(T.x1_1)
                     if isempty(T.x1_1{1})
@@ -368,6 +368,26 @@ classdef dcpObj
                     obj.location.depth(3) = NaN;
                 end
                 
+            elseif str2num(fileName(3:end-1)) >= 210000
+                if strcmp(T.Probe{1},'24V')
+                    chanMap = [7 0; 6 1; 5 2; 4 3; 3 4; 2 5; 1 6; 0 7; 23 8; 22 9; 21 10; 20 11; 19 12; 18 13; 17 14; 16 15; 15 16; 14 17; 13 18; 12 19; 11 20; 10 21; 9 22; 8 23];
+                    indx = find(strcmp(fileName,T.Date));
+                    tempLoc = regexp(T.Location_x_y_z_{1},',','split');
+                    obj.location.x = repmat(str2num(tempLoc{1}),[1,24]);
+                    obj.location.y = repmat(str2num(tempLoc{2}),[1,24]);
+                    obj.location.z = repmat(str2num(tempLoc{3}),[1,24]);
+%                     obj.location.x = repmat(str2num(T.Location_x_y_z_{1}(1:4)),[1,24]);
+%                     obj.location.y = repmat(str2num(T.Location_x_y_z_{1}(6:9)),[1,24]);
+%                     obj.location.z = repmat(str2num(T.Location_x_y_z_{1}(11:14)),[1,24]);
+                    obj.location.depth = nan(1,24);
+                    refDepth = str2num(T.Location_x_y_z_{indx-1})-...
+                        str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth'))+1});
+                    chans = unique(obj.chansIndex);
+                    for chani = 1:length(chans)
+                        chanLoc = chanMap(chanMap(:,1) == chans(chani),2);
+                        obj.location.depth(chanLoc+1) = refDepth-150*chanLoc;
+                    end
+                end
             else
                 indx = find(strcmp(fileName,T.Date));
                 obj.location.x = str2num(T.Location_x_y_z_{1}(1:4));

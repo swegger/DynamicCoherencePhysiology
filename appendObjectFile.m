@@ -11,7 +11,8 @@ function dcp = appendObjectFile(datafile,varargin)
 %% Defaults
 excludeList_default = {'20191021a','20191022a','20191022b','20191111a',...
     '20191115a','20191118t','20191119a','20200210a','20200213a','20200218a',...
-    '20200221a','20200309b'};
+    '20200221a','20200309b','20200316a','20210205a','20200214a','20200214b',...
+    '20210203a','20210308a'};
 
 %% Parse inputs
 Parser = inputParser;
@@ -23,6 +24,7 @@ addParameter(Parser,'saveDir',[])
 addParameter(Parser,'addFile',[])
 addParameter(Parser,'extractSpikes',true)
 addParameter(Parser,'excludeList',excludeList_default)
+addParameter(Parser,'assertkk',false)
 
 parse(Parser,datafile,varargin{:})
 
@@ -33,13 +35,14 @@ saveDir = Parser.Results.saveDir;
 addFile = Parser.Results.addFile;
 extractSpikes = Parser.Results.extractSpikes;
 excludeList = Parser.Results.excludeList;
+assertkk = Parser.Results.assertkk;
 
 %% Load dcp object
 load(datafile)
 
 %% Add files
 sname = dcp{1}.sname;
-baseDir = dcp{1}.datapath(1:end-9);
+baseDir = [dcp{1}.datapath(1:end-12) sname '/'];
 if isempty(addFile)
     disp('No file specified, looking for files to add...')
     
@@ -67,38 +70,77 @@ if isempty(addFile)
         end
     end
     
+    % Check for kwik files if assertkk
+    if assertkk
+        for filei = 1:length(FileList)
+            data = FileList{filei};
+            dataShort = data(3:end);
+            if strcmp(sname,'ar')
+                datapath2 = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/' data];
+            end
+            kkfile = [sname dataShort '.kwik'];
+            kkpath = [datapath2(1:end-1) 'kk'];
+            kkflg(filei) = exist([kkpath '/' kkfile],'file');
+        end
+        FileList = FileList(kkflg);
+    end
+    
     % Extract data from new files
     if exist('FileList','var')
-        dcpNew = dcpPrelim(sname,FileList,extractSpikes);
+        ind = length(dcp);
+        for filei = 1:length(FileList)
+            disp(['Working on ' FileList{filei} ', file ' num2str(filei) ' of ' num2str(length(FileList)) '.'])
+            dcpNew = dcpPrelim(sname,FileList(filei),extractSpikes);
+            dcp{ind+filei} = dcpNew{1};
+            
+            % Saving
+            if saveFlg
+                if isempty(saveName)
+                    saveName = datafile;
+                end
+                
+                if isempty(saveDir)
+                    saveDir = ['~/Projects/DynamicCoherencePhysiology/' dcp{1}.sname '/dcpObjects/'];
+                end
+                
+                save([saveDir saveName],'dcp')
+                disp(['File ' FileList{filei} ' added and saved to ' [saveDir saveName] ' object list.'])
+            else
+                disp('dcp object not saved')
+            end
+        end
     else
         disp('No new files found.')
     end
 else
     % Extract data from desired file
     dcpNew = dcpPrelim(sname,addFile,extractSpikes);
-end
-
-% Add to dcpObject cell
-if exist('dcpNew','var')
-    ind = length(dcp);
-    for i = 1:length(dcpNew)
-        dcp{ind+i} = dcpNew{i};
-    end
-else
-    saveFlg = false; % If no new files, no reason to save output
-end
-
-%% Saving
-if saveFlg
-    if isempty(saveName)
-        saveName = datafile;
+    
+    
+    % Add to dcpObject cell
+    if exist('dcpNew','var')
+        ind = length(dcp);
+        for i = 1:length(dcpNew)
+            dcp{ind+i} = dcpNew{i};
+        end
+    else
+        saveFlg = false; % If no new files, no reason to save output
     end
     
-    if isempty(saveDir)
-        saveDir = ['~/Projects/DynamicCoherencePhysiology/' dcp{1}.sname '/dcpObjects/'];
+    % Saving
+    if saveFlg
+        if isempty(saveName)
+            saveName = datafile;
+        end
+        
+        if isempty(saveDir)
+            saveDir = ['~/Projects/DynamicCoherencePhysiology/' dcp{1}.sname '/dcpObjects/'];
+        end
+        
+        save([saveDir saveName],'dcp')
+    else
+        disp('dcp object not saved')
     end
-    
-    save([saveDir saveName],'dcp')
-else
-    disp('dcp object not saved')
 end
+
+
