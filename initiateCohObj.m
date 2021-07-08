@@ -11,6 +11,8 @@ classdef initiateCohObj < dcpObj
     properties
         coh;
         cohTuning;
+        R;
+        Rste;
     end
     
     methods
@@ -117,7 +119,7 @@ classdef initiateCohObj < dcpObj
             rste = sqrt(var(r,[],2)/sum(condLogical));
         end
         
-        function [R,Rste] = cohConditionedRates(obj,varargin)
+        function obj = cohConditionedRates(obj,varargin)
             
             % Parse inputs
             Parser = inputParser;
@@ -157,6 +159,8 @@ classdef initiateCohObj < dcpObj
                         dirs,speeds(speedi),cohs(cohi));
                 end
             end
+            obj.R = R;
+            obj.Rste = Rste;
         end
         
         %% Plotting methods

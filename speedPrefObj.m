@@ -10,6 +10,7 @@
 classdef speedPrefObj < dcpObj
     properties
         speedTuning;
+        r;
     end
     
     methods
@@ -103,6 +104,10 @@ classdef speedPrefObj < dcpObj
                         
                     end
                 end
+        end
+        
+        function obj = speedRates(obj,boxCarWidth)
+            obj.r = obj.calcRates(boxCarWidth);
         end
         
         function speedPrefRaster(obj,directions,speeds,units)

@@ -11,6 +11,8 @@ classdef dynamicCohObj < dcpObj
     properties
         sequences;
         perturbations;
+        R;
+        Rste;
         
         Epoch;
     end
@@ -201,7 +203,7 @@ classdef dynamicCohObj < dcpObj
             rste = sqrt(var(r,[],2)/sum(condLogical));
         end
         
-        function [R,Rste] = dynamicCohSeqConditionedRates(obj,varargin)
+        function obj = dynamicCohSeqConditionedRates(obj,varargin)
             
             % Parse inputs
             Parser = inputParser;
@@ -245,6 +247,8 @@ classdef dynamicCohObj < dcpObj
                 [R(:,seqi,:),Rste(:,seqi,:)] = conditionalRates(obj,width,...
                     dirs,speeds,seqs(seqi),perts);
             end
+            obj.R = R;
+            obj.Rste = Rste;
             
         end
         

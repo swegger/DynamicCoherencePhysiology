@@ -10,6 +10,7 @@
 classdef dirPrefObj < dcpObj
     properties
         directionTuning;
+        r;
     end
     
     methods
@@ -105,6 +106,11 @@ classdef dirPrefObj < dcpObj
                         
                     end
                 end
+        end
+
+        function obj = dirRates(obj,boxCarWidth)
+            r = obj.calcRates(boxCarWidth);
+            obj.r = r;
         end
         
         function dirPrefRaster(obj,dirs,units)
