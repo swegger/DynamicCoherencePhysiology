@@ -9,6 +9,7 @@
 
 classdef dirPrefObj < dcpObj
     properties
+        objType = 'dirPrefObj';
         directionTuning;
         r;
     end

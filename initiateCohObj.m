@@ -9,10 +9,23 @@
 
 classdef initiateCohObj < dcpObj
     properties
+        objType = 'initiateCohObj';
         coh;
         cohTuning;
+        r;
         R;
         Rste;
+        
+        preferredDirection;
+        preferredDirectionRelative;
+        rateCutoff;
+        passCutoff;
+        
+        saveLocation;
+    end
+    
+    properties (SetAccess = private)
+        filterWidth;
     end
     
     methods
@@ -116,7 +129,7 @@ classdef initiateCohObj < dcpObj
             rAll = obj.calcRates(width);
             [~,condLogical] = trialSort(obj,directions,speeds,NaN,cohs);
             r = mean(rAll(:,condLogical,:),2);
-            rste = sqrt(var(r,[],2)/sum(condLogical));
+            rste = sqrt(var(rAll(:,condLogical,:),[],2)/sum(condLogical));
         end
         
         function obj = cohConditionedRates(obj,varargin)
@@ -129,10 +142,77 @@ classdef initiateCohObj < dcpObj
             addParameter(Parser,'speeds',NaN)
             addParameter(Parser,'locs',NaN)
             addParameter(Parser,'cohs',NaN)
+            addParameter(Parser,'marginalizeDirection',true)
             
             parse(Parser,obj,varargin{:})
             obj = Parser.Results.obj;
             width = Parser.Results.width;
+            dirs = Parser.Results.dirs;
+            speeds = Parser.Results.speeds;
+            locs = Parser.Results.locs;
+            cohs = Parser.Results.cohs;
+            marginalizeDirection = Parser.Results.marginalizeDirection;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(speeds)
+                speeds = unique(obj.speeds);
+            end            
+%             if any(isnan(locs))
+%                 locs = unique(obj.locations,'rows');
+%             end            
+            if isnan(cohs)
+                cohs = unique(obj.coh);
+            end
+            
+            % Condition on sequences
+            for speedi = 1:length(speeds)
+                for cohi = 1:length(cohs)
+                    if marginalizeDirection
+                        [R(:,speedi,cohi,:),Rste(:,speedi,cohi,:)] = ...
+                            conditionalRates(obj,width,...
+                            dirs,speeds(speedi),cohs(cohi));
+                    else
+                        for di = 1:length(dirs)
+                            [R(:,speedi,cohi,:,di),Rste(:,speedi,cohi,:,di)] = ...
+                                conditionalRates(obj,width,...
+                                dirs(di),speeds(speedi),cohs(cohi));
+                        end
+                    end
+                end
+            end
+            obj.R = R;
+            obj.Rste = Rste;
+            obj.filterWidth = width;
+        end
+        
+        function counts = conditionalCounts(obj,win,directions,speeds,...
+                cohs)
+            countsAll = obj.countSpikes(win);
+            if exist('countsAll','var')
+                [~,condLogical] = trialSort(obj,directions,speeds,NaN,cohs);
+                counts = countsAll(:,condLogical);
+            else
+                [~,condLogical] = trialSort(obj,directions,speeds,NaN,cohs);
+                counts = zeros(1,sum(condLogical));
+            end
+        end
+        
+        function counts = cohConditionedCounts(obj,varargin)
+            
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addParameter(Parser,'win',[176,225])
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'speeds',NaN)
+            addParameter(Parser,'locs',NaN)
+            addParameter(Parser,'cohs',NaN)
+            
+            parse(Parser,obj,varargin{:})
+            obj = Parser.Results.obj;
+            win = Parser.Results.win;
             dirs = Parser.Results.dirs;
             speeds = Parser.Results.speeds;
             locs = Parser.Results.locs;
@@ -152,17 +232,33 @@ classdef initiateCohObj < dcpObj
             end
             
             % Condition on sequences
+            counts = nan([1000,length(speeds),length(cohs),length(obj.unitIndex)]);
+            maxtrials = 0;
             for speedi = 1:length(speeds)
                 for cohi = 1:length(cohs)
-                    [R(:,speedi,cohi,:),Rste(:,speedi,cohi,:)] = ...
-                        conditionalRates(obj,width,...
-                        dirs,speeds(speedi),cohs(cohi));
+                    countsTemp = permute(conditionalCounts(obj,win,...
+                        dirs,speeds(speedi),cohs(cohi)),[4,2,3,1]);
+                    if size(countsTemp,1) > 1
+                        counts(1:size(countsTemp,1),speedi,cohi,:) = countsTemp;
+                        maxtrials = max([maxtrials size(countsTemp,1)]);
+                    else
+                        counts(1:length(countsTemp),speedi,cohi,:) = countsTemp;
+                        maxtrials = max([maxtrials length(countsTemp)]);
+                    end
                 end
             end
-            obj.R = R;
-            obj.Rste = Rste;
+            counts = counts(1:maxtrials,:,:,:);
         end
         
+        function obj = findActive(obj)
+            obj.passCutoff = permute(max(obj.R,[],[1,2,3,5])*1000,[4,1,2,3])>obj.rateCutoff;
+        end
+        
+        function obj = set.rateCutoff(obj,rateCutoff)
+            obj.rateCutoff = rateCutoff;
+            obj = findActive(obj);
+        end
+                
         %% Plotting methods
         function [h,sh,colors] = initiateCohMeanEye(obj,dirs,normalize)
         % Plots mean eye speed for each sequence and target speed

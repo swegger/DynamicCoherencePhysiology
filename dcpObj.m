@@ -166,16 +166,17 @@ classdef dcpObj
                 trialN = 1:numel(obj.spikeTimes);
             end
             if any(isnan(units))
-                if ~isempty(obj.klustaID)
-                    units = obj.klustaID;
-                else
-                    units = [];
-                    for triali = trialN
-                        units = [units obj.spikeTimes{triali}{2}];
-                    end
-                    units = unique(units);
-%                     units = 1:numel(obj.unitIndex);
-                end
+                units = obj.unitIndex;
+%                 if ~isempty(obj.klustaID)
+%                     units = obj.klustaID;
+%                 else
+%                     units = [];
+%                     for triali = trialN
+%                         units = [units obj.spikeTimes{triali}{2}];
+%                     end
+%                     units = unique(units);
+% %                     units = 1:numel(obj.unitIndex);
+%                 end
             end
             t = t(:); 
             
@@ -189,11 +190,73 @@ classdef dcpObj
                 [~, ~, ~, rTemp] = spikeTimes2Rate(spikeTimes,...
                     'time',t,'resolution',1,'Filter',f,...
                     'ComputeVariance','Yes','mixedUnits',true,'units',units);
-                r(:,triali,:) = rTemp/width;
+                r(:,triali,:) = rTemp/(2*width);
 %                 [~, ~, ~, rTemp] = spikeTimes2Rate(obj.spikeTimes{triali}(units),...
 %                     'time',t,'resolution',1,'Filter',f,...
 %                     'ComputeVariance','Yes');
 %                 r(:,triali,:) = rTemp/width;
+            end
+        end
+        
+        function counts = countSpikes(obj,win,varargin)
+        % Calculate trial by trial counts in time window win
+            
+            % Parse inputs
+            Parser = inputParser;
+            
+            addRequired(Parser,'obj')
+            addRequired(Parser,'win')
+            addParameter(Parser,'units',NaN)
+            addParameter(Parser,'t',-100:1600)
+            addParameter(Parser,'trialN',NaN)
+            
+            parse(Parser,obj,win,varargin{:})
+            
+            obj = Parser.Results.obj;
+            win = Parser.Results.win;
+            units = Parser.Results.units;
+            t = Parser.Results.t;
+            trialN = Parser.Results.trialN;            
+            
+            if any(isnan(trialN))
+                trialN = 1:numel(obj.spikeTimes);
+            end
+            if any(isnan(units))
+                units = obj.unitIndex;
+%                 if ~isempty(obj.klustaID)
+%                     units = obj.klustaID;
+%                 else
+%                     units = [];
+%                     for triali = trialN
+%                         units = [units obj.spikeTimes{triali}{2}];
+%                     end
+%                     units = unique(units);
+% %                     units = 1:numel(obj.unitIndex);
+%                 end
+            end 
+            
+            % Find spikeCounts
+            for triali = trialN
+                spikeTimes = obj.spikeTimes{triali}(1:2);
+                spikeTimes{1} = spikeTimes{1}(ismember(spikeTimes{2},units));
+                spikeTimes{2} = spikeTimes{2}(ismember(spikeTimes{2},units));
+                for uniti = 1:length(units)
+                    timeTemp = spikeTimes{1}(spikeTimes{2} == units(uniti));
+                    counts(uniti,triali) = sum(timeTemp >= win(1) & timeTemp <= win(2));
+                end
+            end
+        end
+        
+        function counts = conditionalCounts(obj,win,directions,speeds)
+            countsAll = obj.countSpikes(win);
+            if exist('countsAll','var')
+                [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
+                    NaN,NaN);
+                counts = countsAll(:,condLogical);
+            else
+                [~,condLogical] = trialSort(obj,directions,speeds,NaN,...
+                    NaN,NaN);
+                counts = zeros(1,sum(condLogical));
             end
         end
         
@@ -203,9 +266,9 @@ classdef dcpObj
             end
             rAll = obj.calcRates(width,'t',t);
             [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
-                sequences,NaN);
-            r = rAll(:,condLocial);
-            rste = sqrt(var(r,[],2)/sum(condLogical));
+                NaN,NaN);
+            r = mean(rAll(:,condLogical,:),2);
+            rste = sqrt(var(rAll(:,condLogical,:),[],2)/sum(condLogical));
         end
         
         function obj = tableImport(obj)
@@ -398,6 +461,25 @@ classdef dcpObj
             end
             
         end
+        
+        function GetSize(this)
+            props = properties(this);
+            totSize = 0;
+            
+            for ii=1:length(props)
+                currentProperty = getfield(this, char(props(ii)));
+                s = whos('currentProperty');
+                totSize = totSize + s.bytes;
+            end
+            
+            fprintf(1, '%d bytes\n', totSize);
+        end
+        
+        function mysaveobj(obj,destination)
+            s = struct(obj);
+            save(destination,'-struct','s')
+        end
+        
         
         %% Analysis methods
         function [condInds, condLogical] = trialSort(obj,directions,speeds,locations,...
@@ -635,6 +717,8 @@ classdef dcpObj
             hold on
             plot(t,mE,'Color',color,'LineWidth',2)
         end
+        
+        
         
         
     end

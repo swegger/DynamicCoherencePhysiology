@@ -9,6 +9,7 @@
 
 classdef speedPrefObj < dcpObj
     properties
+        objType = 'speedPrefObj';
         speedTuning;
         r;
     end
