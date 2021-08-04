@@ -11,6 +11,8 @@ for listi = 1:length(FileList)
     datapath = ['/home/seth/Projects/DynamicCoherencePhysiology/' subject '/' data];
     if strcmp(subject,'ar')
         datapath2 = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/' data];
+    elseif strcmp(subject,'re')
+        datapath2 = data;
     end
     if str2num(dataShort(1:end-1)) > 191114
         plxfile = [subject dataShort '.pl2'];
@@ -33,7 +35,7 @@ for listi = 1:length(FileList)
         else
             dcp{listi} = extractSpikingData(dcp{listi},plxfile,plxpath,dcp{listi}.datapath);
         end
+        dcp{listi} = unitsIndex(dcp{listi});                  % Finds the indices to the units
+        dcp{listi} = tableImport(dcp{listi});
     end
-    dcp{listi} = unitsIndex(dcp{listi});                  % Finds the indices to the units
-    dcp{listi} = tableImport(dcp{listi});
 end

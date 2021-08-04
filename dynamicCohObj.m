@@ -19,8 +19,6 @@ classdef dynamicCohObj < dcpObj
         
         preferredDirection;
         preferredDirectionRelative;
-        rateCutoff;
-        passCutoff;
         
         Epoch;
         
@@ -29,6 +27,13 @@ classdef dynamicCohObj < dcpObj
     
     properties (SetAccess = private)
         filterWidth;
+        preferredDirectionWin;
+        rateCutoff;
+        cutWindow;
+        passCutoff;
+        
+        eye_t;
+        neuron_t;
     end
     
     methods
@@ -39,7 +44,10 @@ classdef dynamicCohObj < dcpObj
         end 
         
         %% dynamicCohTrials
-        function obj = dynamicCohTrials(obj,trialNs)
+        function obj = dynamicCohTrials(obj,trialNs,forceRead)
+            if ~exist('forceRead','var')
+                forceRead = false;
+            end
         % Add direction preference trials to data object
             files = dir(obj.datapath);
             
@@ -124,15 +132,94 @@ classdef dynamicCohObj < dcpObj
                                 obj.spikeTimes{ind}{1} = file.spikes;                    
                             end                           
                             
+                            onTemp = [file.targets.on{2:end}];
+                            t_temp = min(onTemp):(max(onTemp)-1);
+                            
+                            
+                        elseif forceRead
+                            ind = ind+1;
+                            % Update trial
+                            obj.trialNumbers(ind,1) = ti;
+                            obj.trialDataFiles{ind} = files(ti+fileInx-1).name;
+                            
+                            % Parse trial info
+                            [startIndex,endIndex] = regexp(trialname,'t\d{3}');
+                            obj.trialtype(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
+                            
+                            [startIndex,endIndex] = regexp(trialname,'q\d{3}');
+                            obj.sequences(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
+                            
+                            [startIndex,endIndex] = regexp(trialname,'p\d{3}');
+                            obj.perturbations(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
+                            
+                            [startIndex,endIndex] = regexp(trialname,'d\d{3}');
+                            obj.directions(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
+                            
+                            [startIndex,endIndex] = regexp(trialname,'s\d{3}');
+                            obj.speeds(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
+                            
+                            [startIndex,endIndex] = regexp(trialname,'x\d{3}');
+                            obj.locations(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex))-100;
+                            
+                            [startIndex,endIndex] = regexp(trialname,'y\d{3}');
+                            obj.locations(ind,2) = ...
+                                str2double(trialname(startIndex+1:endIndex))-100;
+                            
+                            % Add eye information
+                            obj.eye(:,ind).hpos = (file.data(1,:) - ...
+                                mean(file.data(1,obj.calib.t)))*obj.calib.posGain;
+                            obj.eye(:,ind).vpos = (file.data(2,:) - ...
+                                mean(file.data(2,obj.calib.t)))*obj.calib.posGain;
+                            
+                            obj.eye(:,ind).hvel = (file.data(3,:) - ...
+                                mean(file.data(3,obj.calib.t)))*obj.calib.speedGain;
+                            obj.eye(:,ind).vvel = (file.data(4,:) - ...
+                                mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
+                            
+                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
+                                file.data(4,:)*obj.calib.speedGain,...
+                                'accelerationThreshold',obj.calib.accThres,...
+                                'windowSize',40);
+                            obj.eye(:,ind).hvel(sacs) = NaN;
+                            obj.eye(:,ind).vvel(sacs) = NaN;
+                            obj.eye(:,ind).saccades = sacs;
+                            
+                            % Add spike times
+                            if obj.spikesExtracted
+                                obj.spikeTimes{ind} = ...
+                                    file.sortedSpikes;    
+%                                 obj.spikeTimes{ind} = ...
+%                                     file.sortedSpikes(obj.unitIndex);                             
+                            else
+                                obj.spikeTimes{ind}{1} = file.spikes;                    
+                            end                           
+                            
+                            onTemp = [file.targets.on{2:end}];
+                            t_temp = min(onTemp):(max(onTemp)-1);
                         end
                         
                     end
+                end
+                if exist('t_temp','var')
+                    obj.eye_t = t_temp;
+                else
+                    obj.eye_t = [];
                 end
         end
         
         %% addCoh
         function obj = addCoh(obj)
-            t = -100:1600;
+            if isempty(obj.eye_t)
+                t = -100:1600;
+            else
+                t = obj.eye_t;
+            end
             obj.coh = nan(size(t,2),5);
             
             % Initial
@@ -301,17 +388,18 @@ classdef dynamicCohObj < dcpObj
             for seqi = 1:length(seqs)
                 if marginalizeDirection
                     [R(:,seqi,:),Rste(:,seqi,:)] = conditionalRates(obj,width,...
-                        dirs,speeds,seqs(seqi),perts);
+                        dirs,speeds,seqs(seqi),perts,t);
                 else
                     for di = 1:length(dirs)
                         [R(:,seqi,:,di),Rste(:,seqi,:,di)] = conditionalRates(obj,width,...
-                            dirs(di),speeds,seqs(seqi),perts);                    
+                            dirs(di),speeds,seqs(seqi),perts,t);                    
                     end
                 end
             end
             obj.R = R;
             obj.Rste = Rste;
             obj.filterWidth = width;
+            obj.neuron_t = t;
             
         end
         
@@ -374,6 +462,7 @@ classdef dynamicCohObj < dcpObj
                     maxcounts = max([maxcounts length(countsTemp)]);
                 end
             end
+            counts = counts(1:maxcounts,:,:);
         end
         
         function obj = addNeuralEpochs(obj,varargin)
@@ -439,13 +528,36 @@ classdef dynamicCohObj < dcpObj
             end
         end
         
-        function obj = findActive(obj)
-            obj.passCutoff = permute(max(obj.R,[],[1,2,4])*1000,[3,1,2])>obj.rateCutoff;
+        function obj = findActive(obj,rateCutoff,cutWindow)
+            obj.passCutoff = (permute(max(obj.R(cutWindow(1):cutWindow(2),:,:,:),[],[1,2,4])*1000,[3,1,2]) - ...
+                permute(min(obj.R(cutWindow(1):cutWindow(2),:,:,:),[],[1,2,4])*1000,[3,1,2])) > rateCutoff;
+            obj.rateCutoff = rateCutoff;
+            obj.cutWindow = cutWindow;
         end
         
-        function obj = set.rateCutoff(obj,rateCutoff)
-            obj.rateCutoff = rateCutoff;
-            obj = findActive(obj);
+        function obj = evaluatePreferredDirection(obj,win,varargin)
+            % Parse inputs
+            Parser = inputParser;
+            
+            addRequired(Parser,'obj')
+            addRequired(Parser,'win')
+            addParameter(Parser,'speeds',NaN)
+            
+            parse(Parser,obj,win,varargin{:})
+            
+            obj = Parser.Results.obj;
+            win = Parser.Results.win;
+            speeds = Parser.Results.speeds;
+            
+            % Find counts for each direction in window, marginalize speeds, coherences
+            directions = unique(obj.directions);
+            for di = 1:length(directions)
+                counts = seqConditionedCounts(obj,'dirs',directions(di),'speeds',speeds,'win',win);
+                countsTotal(:,di) = permute(nansum(counts,[1,2]),[3,1,2]);
+            end
+            [~,maxInds] = max(countsTotal,[],2);
+            obj.preferredDirectionRelative = directions(maxInds);
+            obj.preferredDirectionWin = win;
         end
         
         %% Plotting methods
