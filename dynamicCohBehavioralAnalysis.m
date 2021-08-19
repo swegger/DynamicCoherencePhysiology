@@ -175,6 +175,15 @@ end
 % [gain.B(:,seqi), gain.BINT(:,seqi), ~, ~, gain.STATS(seqi)] = ...
 %         regress(horzcat(dyn.eye.init{:,seqi})',[stemp ones(size(stemp))]);
 
+%% Measure gain
+for seqi = 1:length(seqs)
+    for perti = 2:length(perts)
+        temp = (dyn.eye.pert.m(dyn.eye.pert.t(seqi,perti):dyn.eye.pert.t(seqi,perti)+300,seqi,perti) - ...
+            dyn.eye.pert.m(dyn.eye.pert.t(seqi,perti):dyn.eye.pert.t(seqi,perti)+300,seqi,1));
+        gain(seqi,perti) = sum( abs(temp-mean(temp) ))/8;                   % 8 is the integral of the absolute value of a full cycle perturbation with amplitude 2 deg/s
+    end
+end
+
 %% Plotting
 
 %% Mean dynamicCoh response
@@ -238,7 +247,9 @@ end
 
 figure('Name','Feedforward gain estimate')
 for seqi = 1:length(seqs)
-    plot(dyn.eye.pert.coh(seqi,:)',dyn.eye.pert.res(seqi,:)'/2,...
+%     plot(dyn.eye.pert.coh(seqi,:)',dyn.eye.pert.res(seqi,:)'/0.2/2,...
+%         'o-','Color',colors(seqi,:))
+    plot(dyn.eye.pert.coh(seqi,:)',gain(seqi,:)',...
         'o-','Color',colors(seqi,:))
     hold on
 end

@@ -318,6 +318,51 @@ classdef dynamicCohObj < dcpObj
             end
         end   
         
+        function [C, res] = findCovarianceBehavior(obj,sequences,perturbations,dirs,win,interpolationMethod)
+            if ~exist('interpolationMethod','var')
+                interpolationMethod = 'Linear';
+            end
+            res = nan(1000,length(obj.eye_t(obj.eye_t>=win(1) & obj.eye_t<= win(2))));
+            ind = 1;
+            for di = 1:length(dirs)
+                for seqi = 1:length(sequences)
+                    [~,condLogical] = trialSort(obj,dirs(di),speeds(seqi),NaN,NaN,...
+                        sequences(seqi),perturbations);
+                    eh = vertcat(obj.eye(:).hvel);
+                    ev = vertcat(obj.eye(:).vvel);
+                    eSpeed = sqrt(eh(condLogical,:).^2 + ...
+                        ev(condLogical,:).^2);
+                    
+                    % interpolate during sacceades
+                    switch interpolationMethod
+                        
+                        case {'linear','Linear'}
+                            % Linearly interpolate between points
+                            for triali = 1:size(eSpeed,1)
+                                Vq = interp1(obj.eye_t(~isnan(eSpeed(triali,:))),...
+                                    eSpeed(triali,~isnan(eSpeed(triali,:))),...
+                                    obj.eye_t(isnan(eSpeed(triali,:))));
+                                eSpeed(triali,isnan(eSpeed(triali,:))) = Vq;
+                            end
+                            
+                        case {'GP','GaussianProcess','gaussianProcess','gaussianprocess'}
+                            % TO DO
+                            
+                    end
+                    
+                    res(ind:ind+sum(condLogical)-1,:) = ...
+                        eSpeed(:,obj.eye_t>=win(1) & obj.eye_t<= win(2)) - ...
+                        mean(eSpeed(:,obj.eye_t>=win(1) & obj.eye_t<= win(2)),1);
+                    ind = ind+sum(condLogical);
+                end
+            end
+            res = res(1:ind-1,:);
+            stdRes = std(res(:));
+            res = res(~any(abs(res) > 1.5*stdRes,2),:);
+            C = cov(res);
+            
+        end
+        
         %% Neural analysis methods
         function [r,rste] = conditionalRates(obj,width,directions,speeds,...
                 sequences,perturbations,t)
@@ -328,14 +373,16 @@ classdef dynamicCohObj < dcpObj
             % Determine if any spikies were recorded
             units = [];
             for triali = 1:length(obj.spikeTimes)
-                units = [units obj.spikeTimes{triali}{2}];
+                if length(obj.spikeTimes{triali}) > 1
+                    units = [units obj.spikeTimes{triali}{2}];
+                end
             end
             [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
                 sequences,perturbations);
             if isempty(units)
                 warning(['No spike times recorded for dynamicCohObj associated with ' obj.datapath(end-8:end)])
-                r = nan(length(t),sum(condLogical));
-                rste = nan(length(t),sum(condLogical));
+                r = nan(length(t),1,length(obj.unitIndex));
+                rste = nan(length(t),1,length(obj.unitIndex));
             else
                 rAll = obj.calcRates(width,'t',t);
                 r = mean(rAll(:,condLogical,:),2);
@@ -396,8 +443,13 @@ classdef dynamicCohObj < dcpObj
                     end
                 end
             end
-            obj.R = R;
-            obj.Rste = Rste;
+            if exist('R','var')
+                obj.R = R;
+                obj.Rste = Rste;
+            else
+                obj.R = [];
+                obj.Rste = [];
+            end
             obj.filterWidth = width;
             obj.neuron_t = t;
             
@@ -405,10 +457,20 @@ classdef dynamicCohObj < dcpObj
         
         function counts = conditionalCounts(obj,win,directions,speeds,...
                 sequences,perturbations)
-            countsAll = obj.countSpikes(win);
-            [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
-                sequences,perturbations);
-            counts = countsAll(:,condLogical);
+            if length(obj.spikeTimes{1}) < 2
+                warning(['No spike times recorded for dynamicCohObj associated with ' obj.datapath(end-8:end)])
+            else
+                countsAll = obj.countSpikes(win);
+            end
+            if exist('countsAll','var')
+                [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
+                    sequences,perturbations);
+                counts = countsAll(:,condLogical);
+            else
+                [~,condLogical] = trialSort(obj,directions,speeds,NaN,NaN,...
+                    sequences,perturbations);
+                counts = zeros(1,sum(condLogical));
+            end
         end
         
         function counts = seqConditionedCounts(obj,varargin)
@@ -529,8 +591,12 @@ classdef dynamicCohObj < dcpObj
         end
         
         function obj = findActive(obj,rateCutoff,cutWindow)
-            obj.passCutoff = (permute(max(obj.R(cutWindow(1):cutWindow(2),:,:,:),[],[1,2,4])*1000,[3,1,2]) - ...
-                permute(min(obj.R(cutWindow(1):cutWindow(2),:,:,:),[],[1,2,4])*1000,[3,1,2])) > rateCutoff;
+            if isempty(obj.R)
+                obj.passCutoff = false(length(obj.unitIndex));
+            else
+                obj.passCutoff = (permute(max(obj.R(cutWindow(1):cutWindow(2),:,:,:),[],[1,2,4])*1000,[3,1,2]) - ...
+                    permute(min(obj.R(cutWindow(1):cutWindow(2),:,:,:),[],[1,2,4])*1000,[3,1,2])) > rateCutoff;
+            end
             obj.rateCutoff = rateCutoff;
             obj.cutWindow = cutWindow;
         end
@@ -551,13 +617,66 @@ classdef dynamicCohObj < dcpObj
             
             % Find counts for each direction in window, marginalize speeds, coherences
             directions = unique(obj.directions);
-            for di = 1:length(directions)
-                counts = seqConditionedCounts(obj,'dirs',directions(di),'speeds',speeds,'win',win);
-                countsTotal(:,di) = permute(nansum(counts,[1,2]),[3,1,2]);
+            if isempty(directions)
+                countsTotal = [];
+            else
+                for di = 1:length(directions)
+                    counts = seqConditionedCounts(obj,'dirs',directions(di),'speeds',speeds,'win',win);
+                    countsTotal(:,di) = permute(nansum(counts,[1,2]),[3,1,2]);
+                end
             end
             [~,maxInds] = max(countsTotal,[],2);
             obj.preferredDirectionRelative = directions(maxInds);
             obj.preferredDirectionWin = win;
+        end
+        
+        
+        function C = findCovariance(obj,binT,speeds,dirs,...
+                sequences,perturbations)
+            res = nan(length(binT),1000,length(obj.unitIndex));
+            ind = 1;
+            for di = 1:length(dirs)
+                for si = 1:length(speeds)
+                    for seqi = 1:length(sequences)
+                        [~,condLogical] = trialSort(obj,dirs(di),speeds(si),NaN,NaN,sequences(seqi),perturbations);
+                        for bi = 1:length(binT)
+                            counts = obj.r(binT(bi) == obj.neuron_t,condLogical,:);
+                            res(bi,ind:ind+sum(condLogical)-1,:) = counts*obj.filterWidth*2 - mean(counts*obj.filterWidth*2);
+                        end
+                        ind = ind+sum(condLogical);
+                    end
+                end
+            end
+            res = res(:,1:ind-1,:);
+            for uniti = 1:length(obj.unitIndex)
+                C(:,:,uniti) = cov(res(:,:,uniti)');
+            end
+            
+        end
+        
+        function varCE = findVarCE(obj,speeds,dirs,sequences,perturbations)
+            rtemp = obj.r*obj.filterWidth*2;
+            res = nan(size(rtemp));
+            res = permute(res,[1,3,2]);
+            ind = 1;
+            for di = 1:length(dirs)
+                for si = 1:length(speeds)
+                    for seqi = 1:length(sequences)
+                        [~,condLogical] = trialSort(obj,dirs(di),speeds(si),NaN,sequences(seqi),perturbations);
+                        m(:,:,di,si,seqi) = mean(rtemp(:,condLogical,:),2);
+                        res(:,:,ind:ind+sum(condLogical)-1) = permute(rtemp(:,condLogical,:),[1,3,2]) - ...
+                            repmat(m(:,:,di,si,seqi),[1,1,sum(condLogical)]);
+                        n(1,1,di,si,seqi) = sum(condLogical);
+                        ind = ind+sum(condLogical);
+                    end
+                end
+            end
+            res = res(:,:,1:ind-1);
+            M = sum(repmat(n,[size(m,1),size(m,2),1,1,1]).*m/sum(n(:)),[3,4,5]);
+            V = var(res,[],3);
+            FF = V./M;
+            phi = min(FF,[],1);
+            varCE = V - repmat(phi,[size(M,1),1]).*M;
         end
         
         %% Plotting methods

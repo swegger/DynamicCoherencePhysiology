@@ -37,6 +37,7 @@ dynCoh = dynamicCohObj(dcp.sname,dcp.datapath);
 dynCoh = assertSpikesExtracted(dynCoh,dcp.spikesExtracted);
 dynCoh = unitsIndex(dynCoh);
 dynCoh = dynamicCohTrials(dynCoh,trialList);
+dynCoh = addCoh(dynCoh);
 
 %% Evaluate preferred direction for each neuron
 % dirPref = dirPrefObj(dcp.sname,dcp.datapath);
@@ -53,23 +54,29 @@ dynCoh = dynamicCohTrials(dynCoh,trialList);
 % [~,maxInds] = max(countsTotal,[],2);
 % dynCoh.preferredDirection = directions(maxInds);
 
-dynCoh = evaluatePreferredDirection(dynCoh,win,'speeds',speeds);
-
-%% Find rates
-if isnan(speeds)
-    spds = unique(dynCoh.speeds);
-else
-    spds = speeds;
+if ~isempty(dynCoh.unitIndex)
+    dynCoh = evaluatePreferredDirection(dynCoh,win,'speeds',speeds);
+    
+    % Find rates
+    if isnan(speeds)
+        spds = unique(dynCoh.speeds);
+    else
+        spds = speeds;
+    end
+    dynCoh = dynamicCohSeqConditionedRates(dynCoh,'width',width,...
+        'dirs',NaN,'speeds',spds,...
+        'marginalizeDirection',false,'t',t);
+    
+    if isempty(dynCoh.sequences) || length(dynCoh.spikeTimes{1}) < 2
+        dynCoh.r = nan(length(dynCoh.neuron_t),length(dynCoh.sequences),length(dynCoh.unitIndex));
+    else
+        dynCoh.r = calcRates(dynCoh,width,'t',t);
+    end
+    
+    dynCoh.location = dcp.location;
+    
+    dynCoh = findActive(dynCoh,rateCutoff,cutWindow);
 end
-dynCoh = dynamicCohSeqConditionedRates(dynCoh,'width',width,...
-    'dirs',NaN,'speeds',spds,...
-    'marginalizeDirection',false,'t',t);
-
-dynCoh.r = calcRates(dynCoh,width,'t',t);
-
-dynCoh.location = dcp.location;
-
-dynCoh = findActive(dynCoh,rateCutoff,cutWindow);
 
 %% Save object to file
 if strcmp(dynCoh.sname,'ar')

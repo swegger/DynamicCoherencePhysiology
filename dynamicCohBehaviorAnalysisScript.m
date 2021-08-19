@@ -12,7 +12,7 @@ dynamicCohBehavioralAnalysis('re','dcpObjectsFile','dcpObjects20190923.mat',...
     'forceRead',forceRead,'dcpAccept',dcpAccept,'pertMap',pertMap,'speeds',[8,12,16]);
 
 %% Moneky ar
-dyn = dynamicCohBehavioralAnalysis('ar','dcpObjectsFile','dcpObjects20210406.mat');
+[dyn gainDyn] = dynamicCohBehavioralAnalysis('ar','dcpObjectsFile','dcpObjects20210406.mat');
 
 %% Monkey ar, initiateCoh
-[init, gain] = initialCohBehavioralAnalysis('ar','dcpObjectsFile','dcpObjects20210406.mat');
+[init, gainInit] = initialCohBehavioralAnalysis('ar','dcpObjectsFile','dcpObjects20210406.mat');

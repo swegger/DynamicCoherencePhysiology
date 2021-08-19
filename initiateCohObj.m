@@ -135,6 +135,54 @@ classdef initiateCohObj < dcpObj
                 end
         end
         
+        %% Behavioral analysis methods
+        
+        function [C, res] = findCovarianceBehavior(obj,speeds,cohs,dirs,win,interpolationMethod)
+            if ~exist('interpolationMethod','var')
+                interpolationMethod = 'Linear';
+            end
+            res = nan(1000,length(obj.eye_t(obj.eye_t>=win(1) & obj.eye_t<= win(2))));
+            ind = 1;
+            for di = 1:length(dirs)
+                for si = 1:length(speeds)
+                    for ci = 1:length(cohs)
+                        [~,condLogical] = trialSort(obj,dirs(di),speeds(si),NaN,cohs(ci));
+                        eh = vertcat(obj.eye(:).hvel);
+                        ev = vertcat(obj.eye(:).vvel);
+                        eSpeed = sqrt(eh(condLogical,:).^2 + ...
+                            ev(condLogical,:).^2);
+                        
+                        % interpolate during sacceades
+                        switch interpolationMethod
+                        
+                            case {'linear','Linear'}
+                                % Linearly interpolate between points
+                                for triali = 1:size(eSpeed,1)
+                                    Vq = interp1(obj.eye_t(~isnan(eSpeed(triali,:))),...
+                                        eSpeed(triali,~isnan(eSpeed(triali,:))),...
+                                        obj.eye_t(isnan(eSpeed(triali,:))));
+                                    eSpeed(triali,isnan(eSpeed(triali,:))) = Vq;
+                                end
+                        
+                            case {'GP','GaussianProcess','gaussianProcess','gaussianprocess'}
+                                % TO DO
+                                
+                        end
+                        
+                        res(ind:ind+sum(condLogical)-1,:) = ...
+                            eSpeed(:,obj.eye_t>=win(1) & obj.eye_t<= win(2)) - ...
+                            mean(eSpeed(:,obj.eye_t>=win(1) & obj.eye_t<= win(2)),1);
+                        ind = ind+sum(condLogical);
+                    end
+                end
+            end
+            res = res(1:ind-1,:);
+            stdRes = std(res(:));
+            res = res(~any(abs(res) > 1.5*stdRes,2),:);
+            C = cov(res);
+            
+        end
+        
         %% Neural analysis methods
         function [r,rste] = conditionalRates(obj,width,directions,speeds,...
                 cohs,t)

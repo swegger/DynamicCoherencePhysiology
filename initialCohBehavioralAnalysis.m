@@ -87,6 +87,8 @@ for si = 1:length(speeds)
 end
 
 %% Find initiation response
+fitvec = [];
+testvec = [];
 for ci = 1:length(cohs)
     stemp = [];
     for si = 1:length(speeds)
@@ -103,11 +105,47 @@ for ci = 1:length(cohs)
         stemp = [stemp; speeds(si)*ones(numel(init.eye.init{si,ci}),1)];
     end
     
+    htemp = horzcat(init.eye.init{:,ci})';
+    fitvecTemp = false(size(htemp));
+    fitInds = randsample(length(htemp),ceil(length(htemp)*0.8));
+    fitvecTemp(fitInds) = true;
     [gain(ci).B, gain(ci).BINT, ~, ~, gain(ci).STATS] = ...
-        regress(horzcat(init.eye.init{:,ci})',[stemp ones(size(stemp))]);
+        regress(htemp(fitvecTemp),[stemp(fitvecTemp) ones(size(stemp(fitvecTemp)))]);
     
+    fitvec = [fitvec; fitvecTemp];
+    testvec = [testvec; ~fitvecTemp];
 end
 gain(1).win = win;
+
+%% Compare regression models of pursuit initiation
+res = [];
+ss = [];
+cs = [];
+g = [];
+off = [];
+fitvec = logical(fitvec);
+testvec = logical(testvec);
+for si = 1:length(speeds)
+    for ci = 1:length(cohs)
+        res = [res; init.eye.init{si,ci}'];
+        ss = [ss; speeds(si)*ones(size(init.eye.init{si,ci}'))];
+        cs = [cs; cohs(ci)*ones(size(init.eye.init{si,ci}'))];
+        g = [g; gain(ci).B(1)*ones(size(init.eye.init{si,ci}'))];
+        off = [off; gain(ci).B(2)*ones(size(init.eye.init{si,ci}'))];
+    end
+end
+% fitvec = false(size(res));
+% fitInds = randsample(length(res),ceil(length(res)*0.8));
+% fitvec(fitInds) = true;
+% testvec = ~fitvec;
+[full.B, full.BINT, ~,~, full.STATS] = regress(res(fitvec),[ss(fitvec) cs(fitvec) ss(fitvec).*cs(fitvec) ones(size(ss(fitvec)))]);
+[lin.B, lin.BINT, ~,~, lin.STATS] = regress(res(fitvec),[ss(fitvec) cs(fitvec) ones(size(ss(fitvec)))]);
+[interaction.B, interaction.BINT, ~,~, interaction.STATS] = regress(res(fitvec),[ss(fitvec).*cs(fitvec) ones(size(ss(fitvec)))]);
+
+full.rmse = sqrt(mean( (res(testvec) - (full.B'*[ss(testvec) cs(testvec) ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
+lin.rmse = sqrt(mean( (res(testvec) - (lin.B'*[ss(testvec) cs(testvec) ones(size(ss(testvec)))]')').^2 ));
+interaction.rmse = sqrt(mean( (res(testvec) - (interaction.B'*[ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
+gain(1).rmse = sqrt(mean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec))).^2 ));
 
 %% Plotting
 
