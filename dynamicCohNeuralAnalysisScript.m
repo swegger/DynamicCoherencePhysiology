@@ -103,6 +103,24 @@ for ri = 1:reconstructionN
     ylabel(['PC ' num2str(ri)])
 end
 
+figure
+pcdisp = [1 2 3];
+subplot(1,2,1)
+plot3(RlowD(:,:,pcdisp(1)),RlowD(:,:,pcdisp(2)),RlowD(:,:,pcdisp(3)),'o')
+xlabel(['PC ' num2str(pcdisp(1))])
+ylabel(['PC ' num2str(pcdisp(2))])
+zlabel(['PC ' num2str(pcdisp(3))])
+grid on
+
+subplot(1,2,2)
+plot3(RlowD(:,:,pcdisp(1))-RlowD(:,5,pcdisp(1)),...
+    RlowD(:,:,pcdisp(2))-RlowD(:,5,pcdisp(2)),...
+    RlowD(:,:,pcdisp(3))-RlowD(:,5,pcdisp(3)),'o')
+xlabel(['PC ' num2str(pcdisp(1))])
+ylabel(['PC ' num2str(pcdisp(2))])
+zlabel(['PC ' num2str(pcdisp(3))])
+grid on
+
 %% Quick estimte of MT input from slip and comparison with modes 3-5
 eh = vertcat(dynCoh.eye(:).hvel);
 ev = vertcat(dynCoh.eye(:).vvel);
