@@ -326,7 +326,7 @@ classdef dynamicCohObj < dcpObj
             ind = 1;
             for di = 1:length(dirs)
                 for seqi = 1:length(sequences)
-                    [~,condLogical] = trialSort(obj,dirs(di),speeds(seqi),NaN,NaN,...
+                    [~,condLogical] = trialSort(obj,dirs(di),NaN,NaN,NaN,...
                         sequences(seqi),perturbations);
                     eh = vertcat(obj.eye(:).hvel);
                     ev = vertcat(obj.eye(:).vvel);
@@ -677,6 +677,135 @@ classdef dynamicCohObj < dcpObj
             FF = V./M;
             phi = min(FF,[],1);
             varCE = V - repmat(phi,[size(M,1),1]).*M;
+        end
+        
+        
+        function [rsc,pval] = spikeCountCorrelationWin(obj,varargin)
+            
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'sequences',NaN)
+            addParameter(Parser,'perturbations',NaN)
+            addParameter(Parser,'win',[150,450])
+            
+            parse(Parser,obj,varargin{:})
+            obj = Parser.Results.obj;
+            dirs = Parser.Results.dirs;
+            sequences = Parser.Results.sequences;
+            perturbations = Parser.Results.perturbations;
+            win = Parser.Results.win;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(sequences)
+                squences = unique(obj.sequences);
+            end               
+            if isnan(perturbations)
+                perturbations = unique(obj.perturbations);
+            end
+            
+            % For each neuron and condition calculatate z-scores
+            zscores = [];
+            for seqi = 1:length(squences)
+                for perti = 1:length(perturbations)
+                    for di = 1:length(dirs)
+                        
+                        counts = conditionalCounts(obj,win,dirs(di),NaN,squences(seqi),...
+                            perturbations(perti));
+                        rstd = nanstd(counts,[],2);
+                        rmean = nanmean(counts,2);
+                        ztemp = (counts-repmat(rmean,[1,size(counts,2)]))./...
+                            repmat(rstd,[1,size(counts,2)]);
+                        zscores = cat(2,zscores,ztemp);
+                    end
+                end
+            end
+            
+            % Find spike count correlations
+            zscores = permute(zscores,[2,1]);
+            [rsc, pval] = corrcoef(zscores);
+        end
+        
+        
+        function [cc, shufflecc] = conditionalCorrelograms(obj,unitsIndex,win,shuffleN,varargin)
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'unitsIndex')
+            addRequired(Parser,'win')
+            addRequired(Parser,'shuffleN')
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'sequences',NaN)
+            addParameter(Parser,'perturbations',NaN)
+            
+            parse(Parser,obj,unitsIndex,win,shuffleN,varargin{:})
+            obj = Parser.Results.obj;
+            win = Parser.Results.win;
+            unitsIndex = Parser.Results.unitsIndex;
+            shufffleN = Parser.Results.shuffleN;
+            dirs = Parser.Results.dirs;
+            sequences = Parser.Results.sequences;
+            perturbations = Parser.Results.perturbations;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(sequences)
+                speeds = unique(obj.sequences);
+            end               
+            if isnan(perturbations)
+                perturbations = unique(obj.perturbations);
+            end
+            
+            % Make edges from bin centers specified by win
+            edges = [win-(win(2)-win(1))/2 win(end)+(win(2)-win(1))/2];
+            
+            cc = zeros([length(win),length(unitsIndex),length(unitsIndex)]);
+            shufflecc = zeros([length(win),length(unitsIndex),length(unitsIndex),shuffleN]);
+                
+            condInds = trialSort(obj,dirs,NaN,NaN,NaN,sequences,perturbations);
+            
+            for triali = 1:length(condInds)
+                spktimes = obj.spikeTimes{condInds(triali)}{1};
+                clusters = obj.spikeTimes{condInds(triali)}{2};
+                spktimes = spktimes(ismember(clusters,unitsIndex));
+                clusters = clusters(ismember(clusters,unitsIndex));
+                
+                % Find differences and add to correlogram
+                for uniti = 1:length(unitsIndex)
+                    for unitj = 1:length(unitsIndex)
+                        ts1 = spktimes(clusters == unitsIndex(uniti));
+                        ts2 = spktimes(clusters == unitsIndex(unitj));
+                        ind = 1;
+                        for ti = 1:length(ts1)
+                            d = ts1(ti) - ts2;
+                            tdiffs = histc(d,edges);
+                            cc(:,uniti,unitj) = cc(:,uniti,unitj) + tdiffs(1:end-1)';
+                            
+                            if isnan(shuffleN)
+                                shufflediffs(:,uniti,unitj,:) = NaN;
+                            else
+                                nspikes = sum(d>=edges(1) & d<edges(end));
+                                if nspikes == 1
+                                    for ri = 1:shuffleN
+                                        randtimes = (win(end)-win(1))*rand + win(1);
+                                        shufflediffs = histc(randtimes,edges);
+                                        shufflecc(:,uniti,unitj,ri) = shufflecc(:,uniti,unitj,ri) + shufflediffs(1:end-1)';
+                                    end
+                                else
+                                    randtimes = (win(end)-win(1))*rand(nspikes,shuffleN) + win(1);
+                                    shufflediffs = histc(randtimes,edges); % Preserves rates, eliminates timing
+                                    shufflecc(:,uniti,unitj,:) = shufflecc(:,uniti,unitj,:) + permute(shufflediffs(1:end-1,:),[1,4,3,2]);
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
         end
         
         %% Plotting methods

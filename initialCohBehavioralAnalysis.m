@@ -150,6 +150,7 @@ gain(1).rmse = sqrt(mean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec
 %% Plotting
 
 %% Mean initiation response
+figure;
 colors = colormap('lines');
 close(gcf)
 figure('Name','Mean initCoh response')

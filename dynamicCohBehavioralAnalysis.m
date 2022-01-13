@@ -187,6 +187,7 @@ end
 %% Plotting
 
 %% Mean dynamicCoh response
+figure;
 colors = colormap('lines');
 close(gcf)
 figure('Name','Mean dynCoh response')

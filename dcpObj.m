@@ -26,7 +26,10 @@ classdef dcpObj
         eye;
         spikeTimes;
         location;
-        
+    end
+     
+    properties (SetAccess = private)
+        probe;
 %         dirPref;
 %         
 %         speedPref;
@@ -462,6 +465,135 @@ classdef dcpObj
             
         end
         
+        function obj = addProbeInfo(obj)
+            fileName = [obj.sname obj.datapath(end-6:end)];
+            tableFile = [obj.datapath(1:end-9) ...
+                'tables/' obj.sname obj.datapath(end-6:end-1) '.xlsx'];
+            T = readtable(tableFile,'Format','auto');
+            if str2num(fileName(3:end-1)) > 200101 && str2num(fileName(3:end-1)) < 210000
+                % Determine number of electrodes/channels
+                if iscell(T.x1_1)
+                    if isempty(T.x1_1{1})
+                        liveContact(1,1) = false;
+                    else
+                        liveContact(1,1) = true;
+                    end
+                else
+                    liveContact(1,1) = false;
+                end
+                if iscell(T.x1_2)
+                    if isempty(T.x1_2{1})
+                        liveContact(1,2) = false;
+                    else
+                        liveContact(1,2) = true;
+                    end
+                else
+                    liveContact(1,2) = false;
+                end
+                if iscell(T.x1_3)
+                    if isempty(T.x1_3{1})
+                        liveContact(1,3) = false;
+                    else
+                        liveContact(1,3) = true;
+                    end
+                else
+                    liveContact(1,3) = false;
+                end
+                if iscell(T.x1_4)
+                    if isempty(T.x1_4{1})
+                        liveContact(1,4) = false;
+                    else
+                        liveContact(1,4) = true;
+                    end
+                else
+                    liveContact(1,4) = false;
+                end
+                if iscell(T.x2_1)
+                    if isempty(T.x2_1{1})
+                        liveContact(2,1) = false;
+                    else
+                        liveContact(2,1) = true;
+                    end
+                else
+                    liveContact(2,1) = false;
+                end
+                if iscell(T.x2_2)
+                    if isempty(T.x2_2{1})
+                        liveContact(2,2) = false;
+                    else
+                        liveContact(2,2) = true;
+                    end
+                else
+                    liveContact(2,2) = false;
+                end
+                if iscell(T.x2_3)
+                    if isempty(T.x2_3{1})
+                        liveContact(2,3) = false;
+                    else
+                        liveContact(2,3) = true;
+                    end
+                else
+                    liveContact(2,3) = false;
+                end
+                if iscell(T.x2_4)
+                    if isempty(T.x2_4{1})
+                        liveContact(2,4) = false;
+                    else
+                        liveContact(2,4) = true;
+                    end
+                else
+                    liveContact(2,4) = false;
+                end
+                if iscell(T.x3_1)
+                    if isempty(T.x3_1{1})
+                        liveContact(3,1) = false;
+                    else
+                        liveContact(3,1) = true;
+                    end
+                else
+                    liveContact(3,1) = false;
+                end
+                if iscell(T.x3_2)
+                    if isempty(T.x3_2{1})
+                        liveContact(3,2) = false;
+                    else
+                        liveContact(3,2) = true;
+                    end
+                else
+                    liveContact(3,2) = false;
+                end
+                if iscell(T.x3_3)
+                    if isempty(T.x3_3{1})
+                        liveContact(3,3) = false;
+                    else
+                        liveContact(3,3) = true;
+                    end
+                else
+                    liveContact(3,3) = false;
+                end
+                if iscell(T.x3_4)
+                    if isempty(T.x3_4{1})
+                        liveContact(3,4) = false;
+                    else
+                        liveContact(3,4) = true;
+                    end
+                else
+                    liveContact(3,4) = false;
+                end
+                obj.probe.type = 'tet';
+                obj.probe.liveContacts = liveContact;
+                
+            elseif str2num(fileName(3:end-1)) >= 210000
+                if strcmp(T.Probe{1},'24V')
+                    obj.probe.type = '24V';
+                    obj.probe.liveContacts = true(1,24);
+                end
+            else
+                obj.probe.type = 'tet';
+                obj.probe.liveContacts = [true(1,4); false(3,4)];
+            end
+        end
+        
         function GetSize(this)
             props = properties(this);
             totSize = 0;
@@ -480,6 +612,144 @@ classdef dcpObj
             save(destination,'-struct','s')
         end
         
+        function [cc, shufflecc] = correlograms(obj,samplerate,unitsIndex,win,shuffleN)
+        % Compute differences in spikes times from all recorded spikes
+            if ~exist('shuffleN','var')
+                shuffleN = NaN;
+            end
+            dataShort = obj.datapath(end-6:end);
+            if strcmp(obj.sname,'ar')
+                datapath2 = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/' obj.datapath(end-8:end)];
+            end
+            if str2num(dataShort(1:end-1)) > 191114
+                kkfile = [obj.sname dataShort '.kwik'];
+                kkpath = [datapath2(1:end-1) 'kk'];
+                kkfull = [kkpath '/' kkfile];
+                kkflg = exist(kkfull,'file');
+                plxflg = false;
+            else
+                kkflg = false;
+                plxfile = [obj.sname dataShort '.plx'];
+                plxpath = [datapath2(1:end-1) 'plx'];
+                plxfull = [plxpath '/' plxfile];
+                plxflg = exist(plxfull,'file');
+            end
+            
+            % Make edges from bin centers specified by win
+            edges = [win-(win(2)-win(1))/2 win(end)+(win(2)-win(1))/2];
+            
+            % Preallocate correlograms
+            if isnan(shuffleN)
+                shufflecc = nan(length(win),length(unitsIndex),length(unitsIndex),1);
+            else
+                shufflecc = zeros([length(win),length(unitsIndex),length(unitsIndex),shuffleN]);
+            end
+            cc = zeros([length(win),length(unitsIndex),length(unitsIndex)]);
+            
+            if kkflg
+                % Get spike times and cell ID
+                spktimes = double(hdf5read(kkfull, '/channel_groups/0/spikes/time_samples'))/samplerate;
+                clusters = hdf5read(kkfull, '/channel_groups/0/spikes/clusters/main');
+                
+                spktimes = spktimes(ismember(clusters,unitsIndex));
+                clusters = clusters(ismember(clusters,unitsIndex));
+            elseif plxflg
+                unitNums = size(unitsIndex, 2);
+                plx = readPLXFileC(plxfull,'waves');
+                for i = 1:unitNums
+                    unitsDataTmp{i} = plx.SpikeChannels(obj.chansIndex(obj.unitIndex==unitsIndex(i))).Timestamps(...
+                        plx.SpikeChannels(obj.chansIndex(obj.unitIndex==unitsIndex(i))).Units == unitsIndex(i));
+                    clustersTmp{i} = unitsIndex(i)*ones(size(unitsDataTmp{i}));
+                end
+                spktimes = double(vertcat(unitsDataTmp{:}))/samplerate;
+                clusters = vertcat(clustersTmp{:});
+            end
+            
+            % Find differences and add to correlogram
+            if plxflg || kkflg
+                for uniti = 1:length(unitsIndex)
+                    for unitj = 1:length(unitsIndex)
+                        ts1 = spktimes(clusters == unitsIndex(uniti));
+                        ts2 = spktimes(clusters == unitsIndex(unitj));
+                        ind = 1;
+                        for ti = 1:length(ts1)
+                            d = ts1(ti) - ts2;
+                            tdiffs = histc(d,edges);
+                            cc(:,uniti,unitj) = cc(:,uniti,unitj) + tdiffs(1:end-1);
+                            
+                            if isnan(shuffleN)
+                                shufflediffs(:,uniti,unitj,:) = NaN;
+                            else
+                                nspikes = sum(d>=edges(1) & d<edges(end));
+                                if nspikes == 1
+                                    for ri = 1:shuffleN
+                                        randtimes = (win(end)-win(1))*rand + win(1);
+                                        shufflediffs = histc(randtimes,edges);
+                                        shufflecc(:,uniti,unitj,ri) = shufflecc(:,uniti,unitj,ri) + shufflediffs(1:end-1)';
+                                    end
+                                else
+                                    randtimes = (win(end)-win(1))*rand(nspikes,shuffleN) + win(1);
+                                    shufflediffs = histc(randtimes,edges); % Preserves rates, eliminates timing
+                                    shufflecc(:,uniti,unitj,:) = shufflecc(:,uniti,unitj,:) + permute(shufflediffs(1:end-1,:),[1,4,3,2]);
+                                end
+                            end
+                        end
+                    end
+                end
+            else
+                for i = 1:length(unitsIndex)
+                    for j = 1:length(unitsIndex)
+                        cc = nan([length(win),length(unitsIndex),length(unitsIndex)]);
+                        shufflecc = nan([length(win),length(unitsIndex),length(unitsIndex),shuffleN]);
+                    end
+                end
+            end
+        
+        end
+        
+        function counts = spikeCount(obj,unitsIndex)
+            dataShort = obj.datapath(end-6:end);
+            if strcmp(obj.sname,'ar')
+                datapath2 = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/' obj.datapath(end-8:end)];
+            end
+            if str2num(dataShort(1:end-1)) > 191114
+                kkfile = [obj.sname dataShort '.kwik'];
+                kkpath = [datapath2(1:end-1) 'kk'];
+                kkfull = [kkpath '/' kkfile];
+                kkflg = exist(kkfull,'file');
+                plxflg = false;
+            else
+                kkflg = false;
+                plxfile = [obj.sname dataShort '.plx'];
+                plxpath = [datapath2(1:end-1) 'plx'];
+                plxfull = [plxpath '/' plxfile];
+                plxflg = exist(plxfull,'file');
+            end
+            
+            if kkflg
+                % Get spike times and cell ID
+                clusters = hdf5read(kkfull, '/channel_groups/0/spikes/clusters/main');
+                clusters = clusters(ismember(clusters,unitsIndex));
+            elseif plxflg
+                unitNums = size(unitsIndex, 2);
+                plx = readPLXFileC(plxfull,'waves');
+                for i = 1:unitNums
+                    unitsDataTmp{i} = plx.SpikeChannels(obj.chansIndex(obj.unitIndex==unitsIndex(i))).Timestamps(...
+                        plx.SpikeChannels(obj.chansIndex(obj.unitIndex==unitsIndex(i))).Units == unitsIndex(i));
+                    clustersTmp{i} = unitsIndex(i)*ones(size(unitsDataTmp{i}));
+                end
+                clusters = vertcat(clustersTmp{:});
+            end
+            
+            if plxflg || kkflg
+                for uniti = 1:length(unitsIndex)
+                    counts(uniti) = sum(clusters == unitsIndex(uniti));
+                end
+            else
+                counts = nan(length(unitsIndex));
+            end
+            
+        end
         
         %% Analysis methods
         function [condInds, condLogical] = trialSort(obj,directions,speeds,locations,...

@@ -414,6 +414,229 @@ classdef initiateCohObj < dcpObj
             phi = min(FF,[],1);
             varCE = V - repmat(phi,[size(M,1),1]).*M;
         end
+        
+        function [rsc,pval] = spikeCountCorrelation(obj,varargin)
+            
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'speeds',NaN)
+            addParameter(Parser,'locs',NaN)
+            addParameter(Parser,'cohs',NaN)
+            
+            parse(Parser,obj,varargin{:})
+            obj = Parser.Results.obj;
+            dirs = Parser.Results.dirs;
+            speeds = Parser.Results.speeds;
+            locs = Parser.Results.locs;
+            cohs = Parser.Results.cohs;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(speeds)
+                speeds = unique(obj.speeds);
+            end               
+            if isnan(cohs)
+                cohs = unique(obj.coh);
+            end
+            
+            % For each neuron and condition calculatate z-scores
+            zscores = [];
+            for si = 1:length(speeds)
+                for ci = 1:length(cohs)
+                    for di = 1:length(dirs)
+                        [~,condLogical] = trialSort(obj,dirs(di),speeds(si),NaN,cohs(ci));
+                        r = obj.r(:,condLogical,:);
+                        rstd = nanstd(r,[],2);
+                        rmean = nanmean(r,2);
+                        ztemp = (r-repmat(rmean,[1,sum(condLogical),1]))./...
+                            repmat(rstd,[1,sum(condLogical),1]);
+                        zscores = cat(2,zscores,ztemp);
+                    end
+                end
+            end
+            
+            % Find spike count correlations
+            zscores = permute(zscores,[2,3,1]);
+            for tind = 1:size(zscores,3)
+                [rsc(:,:,tind),pval(:,:,tind)] = corrcoef(zscores(:,:,tind));
+            end
+        end
+        
+        
+        function [rsc,pval] = spikeCountCorrelationWin(obj,varargin)
+            
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'speeds',NaN)
+            addParameter(Parser,'locs',NaN)
+            addParameter(Parser,'cohs',NaN)
+            addParameter(Parser,'win',[150,450])
+            
+            parse(Parser,obj,varargin{:})
+            obj = Parser.Results.obj;
+            dirs = Parser.Results.dirs;
+            speeds = Parser.Results.speeds;
+            locs = Parser.Results.locs;
+            cohs = Parser.Results.cohs;
+            win = Parser.Results.win;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(speeds)
+                speeds = unique(obj.speeds);
+            end               
+            if isnan(cohs)
+                cohs = unique(obj.coh);
+            end
+            
+            % For each neuron and condition calculatate z-scores
+            zscores = [];
+            for si = 1:length(speeds)
+                for ci = 1:length(cohs)
+                    for di = 1:length(dirs)
+                        
+                        counts = conditionalCounts(obj,win,dirs(di),speeds(si),...
+                            cohs(ci));
+                        rstd = nanstd(counts,[],2);
+                        rmean = nanmean(counts,2);
+                        ztemp = (counts-repmat(rmean,[1,size(counts,2)]))./...
+                            repmat(rstd,[1,size(counts,2)]);
+                        zscores = cat(2,zscores,ztemp);
+                    end
+                end
+            end
+            
+            % Find spike count correlations
+            zscores = permute(zscores,[2,1]);
+            [rsc, pval] = corrcoef(zscores);
+        end
+        
+        function [cc, shufflecc] = conditionalCorrelograms(obj,unitsIndex,win,shuffleN,varargin)
+            % Parse inputs
+            Parser = inputParser;
+            addRequired(Parser,'obj')
+            addRequired(Parser,'unitsIndex')
+            addRequired(Parser,'win')
+            addRequired(Parser,'shuffleN')
+            addParameter(Parser,'dirs',NaN)
+            addParameter(Parser,'speeds',NaN)
+            addParameter(Parser,'locs',NaN)
+            addParameter(Parser,'cohs',NaN)
+            
+            parse(Parser,obj,unitsIndex,win,shuffleN,varargin{:})
+            obj = Parser.Results.obj;
+            win = Parser.Results.win;
+            unitsIndex = Parser.Results.unitsIndex;
+            shufffleN = Parser.Results.shuffleN;
+            dirs = Parser.Results.dirs;
+            speeds = Parser.Results.speeds;
+            locs = Parser.Results.locs;
+            cohs = Parser.Results.cohs;
+            
+            if isnan(dirs)
+                dirs = unique(obj.directions);
+            end            
+            if isnan(speeds)
+                speeds = unique(obj.speeds);
+            end               
+            if isnan(cohs)
+                cohs = unique(obj.coh);
+            end
+            
+            % Make edges from bin centers specified by win
+            edges = [win-(win(2)-win(1))/2 win(end)+(win(2)-win(1))/2];
+            
+            cc = zeros([length(win),length(unitsIndex),length(unitsIndex)]);
+            shufflecc = zeros([length(win),length(unitsIndex),length(unitsIndex),shuffleN]);
+                
+            condInds = trialSort(obj,dirs,speeds,NaN,cohs);
+            
+            for triali = 1:length(condInds)
+                spktimes = obj.spikeTimes{condInds(triali)}{1};
+                clusters = obj.spikeTimes{condInds(triali)}{2};
+                spktimes = spktimes(ismember(clusters,unitsIndex));
+                clusters = clusters(ismember(clusters,unitsIndex));
+                
+                % Find differences and add to correlogram
+                for uniti = 1:length(unitsIndex)
+                    for unitj = 1:length(unitsIndex)
+                        ts1 = spktimes(clusters == unitsIndex(uniti));
+                        ts2 = spktimes(clusters == unitsIndex(unitj));
+                        ind = 1;
+                        for ti = 1:length(ts1)
+                            d = ts1(ti) - ts2;
+                            tdiffs = histc(d,edges);
+                            cc(:,uniti,unitj) = cc(:,uniti,unitj) + tdiffs(1:end-1)';
+                            
+                            if isnan(shuffleN)
+                                shufflediffs(:,uniti,unitj,:) = NaN;
+                            else
+                                nspikes = sum(d>=edges(1) & d<edges(end));
+                                if nspikes == 1
+                                    for ri = 1:shuffleN
+                                        randtimes = (win(end)-win(1))*rand + win(1);
+                                        shufflediffs = histc(randtimes,edges);
+                                        shufflecc(:,uniti,unitj,ri) = shufflecc(:,uniti,unitj,ri) + shufflediffs(1:end-1)';
+                                    end
+                                else
+                                    randtimes = (win(end)-win(1))*rand(nspikes,shuffleN) + win(1);
+                                    shufflediffs = histc(randtimes,edges); % Preserves rates, eliminates timing
+                                    shufflecc(:,uniti,unitj,:) = shufflecc(:,uniti,unitj,:) + permute(shufflediffs(1:end-1,:),[1,4,3,2]);
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+        end
+        
+        function [W, X, deltaT] = ...
+                eyeRegressionModel(obj,speed,dir,coh,win,smoothWin,delays)
+            
+            % Find average eye position, velocity, and acceleration for
+            % condition
+            acceptVec = obj.speeds == speed & obj.directions == dir & obj.coh == coh;
+            positions = vertcat(obj.eye(acceptVec).hpos);
+            position = nanmean(positions,1);
+            velocities = vertcat(obj.eye(acceptVec).hvel);
+            velocity = nanmean(velocities,1);
+            acceleration = [0 diff(velocity)];  % TODO
+            
+            velocity = smooth(velocity,smoothWin);
+            acceleration = smooth(acceleration,smoothWin);
+            
+            X = [position' velocity acceleration ones(size(position'))];
+            
+            tVec = obj.eye_t >= win(1) & obj.eye_t <= win(2);
+            X = X(tVec,:);
+            
+            % Regress with average firing rate for that condition
+            speedInd = find(speed == unique(obj.speeds));
+            cohInd = find(coh == unique(obj.coh));
+            dirInd = find(dir == unique(obj.directions));
+            for neuroni = 1:size(obj.R,4)
+                FR = obj.R(:,speedInd,cohInd,neuroni,dirInd);
+                
+                for delayi = 1:length(delays)
+                    tVec2 = obj.neuron_t >= win(1)+delays(delayi) & ...
+                        obj.neuron_t <= win(2)+delays(delayi);
+                    
+                    [Wall(:,neuroni,delayi),~,res] = regress(FR(tVec2),X);
+                    sse(neuroni,delayi) = sum(res.^2);
+                end
+                
+                [~,minInd] = min(sse(neuroni,:),[],2);
+                W(:,neuroni) = Wall(:,neuroni,minInd);
+                deltaT(neuroni) = delays(minInd);
+            end
+        end
                 
         %% Plotting methods
         function [h,sh,colors] = initiateCohMeanEye(obj,dirs,normalize,window)
