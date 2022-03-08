@@ -6,11 +6,13 @@ function [dyn, gain] = dynamicCohBehavioralAnalysis(sname,varargin)
 %%
 
 %% Defaults
+dcp_default{1} = [];
 
 %% Parse inputs
 Parser = inputParser;
 
 addRequired(Parser,'sname')
+addParameter(Parser,'dcp',dcp_default)
 addParameter(Parser,'dcpObjectsFile',[])
 addParameter(Parser,'trialList',1:5000)
 addParameter(Parser,'speeds',NaN)
@@ -21,10 +23,15 @@ addParameter(Parser,'pertMap',4:11)
 addParameter(Parser,'motionChangeTimes',[150+0:300:1500])
 addParameter(Parser,'forceRead',false)
 addParameter(Parser,'dcpAccept',NaN)
+addParameter(Parser,'outlierReject',false)
+addParameter(Parser,'measurementMethod','peak2peak')
+addParameter(Parser,'directions',[0 180])
+addParameter(Parser,'pertWin',300)
 
 parse(Parser,sname,varargin{:})
 
 sname = Parser.Results.sname;
+dcp = Parser.Results.dcp;
 dcpObjectsFile = Parser.Results.dcpObjectsFile;
 trialList = Parser.Results.trialList;
 speeds = Parser.Results.speeds;
@@ -35,9 +42,13 @@ pertMap = Parser.Results.pertMap;
 motionChangeTimes = Parser.Results.motionChangeTimes;
 forceRead = Parser.Results.forceRead;
 dcpAccept = Parser.Results.dcpAccept;
+outlierReject = Parser.Results.outlierReject;
+measurementMethod = Parser.Results.measurementMethod;
+directions = Parser.Results.directions;
+pertWin = Parser.Results.pertWin;
 
 %% Build dcp objects
-if isempty(dcpObjectsFile)
+if isempty(dcpObjectsFile) && isempty(dcp{1})
     % Build FileList
     potentialFiles = dir(['~/Projects/DynamicCoherencePhysiology/' sname]);
     regOut = regexpi({potentialFiles.name},'[0-9]{8}[a-z]{1,3}','match');
@@ -51,8 +62,8 @@ if isempty(dcpObjectsFile)
         end
     end
     dcp = dcpPrelim(subject,FileList,extractSpikes);
-else
-    load(dcpObjectsFile,'dcp')
+elseif isempty(dcp{1})
+    load(['~/Projects/DynamicCoherencePhysiology/' sname '/dcpObjects/' dcpObjectsFile],'dcp')
     if ~isnan(dcpAccept)
         dcp = dcp(dcpAccept);
     end
@@ -112,7 +123,8 @@ if isnan(seqs)
 end
 for si = 1:length(speeds)
     for seqi = 1:length(seqs)
-        acceptvec = dyn.conditions.speeds == speeds(si) & dyn.conditions.seq == seqs(seqi);
+        acceptvec = dyn.conditions.speeds == speeds(si) & dyn.conditions.seq == seqs(seqi) & ...
+            ismember(dyn.conditions.directions,directions);
         dyn.eye.mean(:,si,seqi) = nanmean(dyn.eye.speed(:,acceptvec),2);
         dyn.eye.ste(:,si,seqi) = nanstd(dyn.eye.speed(:,acceptvec),[],2)./sqrt(sum(acceptvec));
     end
@@ -125,7 +137,8 @@ for seqi = 1:length(seqs)
         
         for pi = 1:length(perts)
             acceptvec = dyn.conditions.seq == seqs(seqi) & ...
-                dyn.conditions.perts == perts(pi);
+                dyn.conditions.perts == perts(pi) &...
+                ismember(dyn.conditions.directions,directions);
             dyn.eye.pert.m(:,seqi,pi) = nanmean(dyn.eye.speed( dyn.t>=win(1) & dyn.t<=win(2),acceptvec)...
                 ./repmat(dyn.conditions.speeds(acceptvec)',[length(dyn.t>=win(1) & dyn.t<=win(2)),1]),2);
             dyn.eye.pert.ste(:,seqi,pi) = nanstd(dyn.eye.speed( dyn.t>=win(1) & dyn.t<=win(2),acceptvec)...
@@ -151,23 +164,24 @@ for seqi = 1:length(seqs)
                         ./repmat(dyn.conditions.speeds(acceptvec)',[length(dyn.t>=win(1) & dyn.t<=win(2)),1]),2);
                     diffTemp = dyn.eye.pert.m(...
                         dyn.t >= dyn.eye.pert.t(seqi,pi) & ...
-                        dyn.t <= dyn.eye.pert.t(seqi,pi)+400,seqi,pi) - ...
+                        dyn.t <= dyn.eye.pert.t(seqi,pi)+pertWin,seqi,pi) - ...
                         control(...
                         dyn.t >= dyn.eye.pert.t(seqi,pi) & ...
-                        dyn.t <= dyn.eye.pert.t(seqi,pi)+400);                    
+                        dyn.t <= dyn.eye.pert.t(seqi,pi)+pertWin);                    
                 end
                 dyn.eye.pert.res(seqi,pi) = max(diffTemp) - min(diffTemp);
                 dyn.eye.pert.coh(seqi,pi) = dyn.coh(dyn.t == dyn.eye.pert.t(seqi,pi),seqi);
             end
             
-             
-%             for iter = 1:2
-%                 mtemp = nanmean(dyn.eye.init{si,seqi});
-%                 stdtemp = nanstd(dyn.eye.init{si,seqi});
-%                 dyn.eye.init{si,seqi} = dyn.eye.init{si,seqi}(...
-%                     dyn.eye.init{si,seqi} < mtemp + 1.96*stdtemp & ...
-%                     dyn.eye.init{si,seqi} > mtemp - 1.96*stdtemp);
-%             end
+            if outlierReject 
+                for iter = 1:2
+                    mtemp = nanmean(dyn.eye.init{si,seqi});
+                    stdtemp = nanstd(dyn.eye.init{si,seqi});
+                    dyn.eye.init{si,seqi} = dyn.eye.init{si,seqi}(...
+                        dyn.eye.init{si,seqi} < mtemp + 1.96*stdtemp & ...
+                        dyn.eye.init{si,seqi} > mtemp - 1.96*stdtemp);
+                end
+            end
         end
     
 end
@@ -178,9 +192,17 @@ end
 %% Measure gain
 for seqi = 1:length(seqs)
     for perti = 2:length(perts)
-        temp = (dyn.eye.pert.m(dyn.eye.pert.t(seqi,perti):dyn.eye.pert.t(seqi,perti)+300,seqi,perti) - ...
-            dyn.eye.pert.m(dyn.eye.pert.t(seqi,perti):dyn.eye.pert.t(seqi,perti)+300,seqi,1));
-        gain(seqi,perti) = sum( abs(temp-mean(temp) ))/8;                   % 8 is the integral of the absolute value of a full cycle perturbation with amplitude 2 deg/s
+        switch measurementMethod
+            case 'integral'
+                temp = (dyn.eye.pert.m(dyn.eye.pert.t(seqi,perti):dyn.eye.pert.t(seqi,perti)+300,seqi,perti) - ...
+                    dyn.eye.pert.m(dyn.eye.pert.t(seqi,perti):dyn.eye.pert.t(seqi,perti)+300,seqi,1));
+                gain(seqi,perti) = sum( abs(temp-mean(temp) ))/8;                   % 8 is the integral of the absolute value of a full cycle perturbation with amplitude 2 deg/s
+        
+            case 'peak2peak'
+                temp = dyn.eye.pert.m(:,seqi,perti) - dyn.eye.pert.m(:,seqi,perts==0);
+                temp = temp(dyn.eye.pert.t(seqi,perti):dyn.eye.pert.t(seqi,perti)+pertWin);
+                gain(seqi,perti) = (max(temp)-min(temp))/0.4;                         % peak to peak amplitude of perturbation was 40% of target speed)
+        end
     end
 end
 
@@ -207,6 +229,8 @@ for seqi = 1:length(seqs)
         plotVertical(motionChangeTimes);
     end
 end
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
 
 %% Perturbations
 figure('Name','Pertubation response','Position',[855 54 583 1242])
@@ -245,6 +269,8 @@ for pi = pertInds
     xlabel('Time from motion onset (ms)')
     ylabel('Perturbation response (deg/s)')
 end
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
 
 figure('Name','Feedforward gain estimate')
 for seqi = 1:length(seqs)
@@ -256,3 +282,5 @@ for seqi = 1:length(seqs)
 end
 xlabel('Coherence')
 ylabel('Gain')
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])

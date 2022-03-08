@@ -13,6 +13,8 @@ for listi = 1:length(FileList)
         datapath2 = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/' data];
     elseif strcmp(subject,'re')
         datapath2 = data;
+    elseif strcmp(subject,'fr')
+        datapath2 = data;
     end
     if str2num(dataShort(1:end-1)) > 191114
         plxfile = [subject dataShort '.pl2'];

@@ -31,6 +31,7 @@ classdef dynamicCohObj < dcpObj
         rateCutoff;
         cutWindow;
         passCutoff;
+        pertAmp;
         
         eye_t;
         neuron_t;
@@ -122,6 +123,12 @@ classdef dynamicCohObj < dcpObj
                             obj.eye(:,ind).vvel(sacs) = NaN;
                             obj.eye(:,ind).saccades = sacs;
                             
+                            if isempty(file.trialInfo.perts)
+                                obj.pertAmp(ind) = 0;
+                            else
+                                obj.pertAmp(ind) = file.trialInfo.perts.amp;
+                            end
+                            
                             % Add spike times
                             if obj.spikesExtracted
                                 obj.spikeTimes{ind} = ...
@@ -189,6 +196,12 @@ classdef dynamicCohObj < dcpObj
                             obj.eye(:,ind).hvel(sacs) = NaN;
                             obj.eye(:,ind).vvel(sacs) = NaN;
                             obj.eye(:,ind).saccades = sacs;
+                            
+                            if isempty(file.trialInfo.perts)
+                                obj.pertAmp(ind) = 0;
+                            else
+                                obj.pertAmp(ind) = file.trialInfo.perts.amp;
+                            end
                             
                             % Add spike times
                             if obj.spikesExtracted

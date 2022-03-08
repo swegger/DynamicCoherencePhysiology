@@ -1,4 +1,4 @@
-function [init, gain] = initialCohBehavioralAnalysis(sname,varargin)
+function [init, gain] = initialCohPertBehavioralAnalysis(sname,varargin)
 %%
 %
 %
@@ -9,30 +9,37 @@ function [init, gain] = initialCohBehavioralAnalysis(sname,varargin)
 plotSamps_default.On = true;
 plotSamps_default.n = 100;
 plotSamps_default.replacement = false;
+dcp_default{1} = [];
 
 %% Parse inputs
 Parser = inputParser;
 
 addRequired(Parser,'sname')
+addParameter(Parser,'dcp',dcp_default)
 addParameter(Parser,'dcpObjectsFile',[])
 addParameter(Parser,'trialList',1:5000)
 addParameter(Parser,'win',[150 200])
 addParameter(Parser,'plotSamps',plotSamps_default)
 addParameter(Parser,'outlierReject',false)
 addParameter(Parser,'directions',[0 180])
+addParameter(Parser,'keep_pert3always0deg',false)
+addParameter(Parser,'pertWin',300)
 
 parse(Parser,sname,varargin{:})
 
 sname = Parser.Results.sname;
+dcp = Parser.Results.dcp;
 dcpObjectsFile = Parser.Results.dcpObjectsFile;
 trialList = Parser.Results.trialList;
 win = Parser.Results.win;
 plotSamps = Parser.Results.plotSamps;
 outlierReject = Parser.Results.outlierReject;
 directions = Parser.Results.directions;
+keep_pert3always0deg = Parser.Results.keep_pert3always0deg;
+pertWin = Parser.Results.pertWin;
 
 %% Build dcp objects
-if isempty(dcpObjectsFile)
+if isempty(dcpObjectsFile) && isempty(dcp{1})
     % Build FileList
     potentialFiles = dir(['~/Projects/DynamicCoherencePhysiology/' sname]);
     regOut = regexpi({potentialFiles.name},'[0-9]{8}[a-z]{1,3}','match');
@@ -46,45 +53,60 @@ if isempty(dcpObjectsFile)
         end
     end
     dcp = dcpPrelim(subject,FileList,extractSpikes);
-else
+elseif isempty(dcp{1})
     load(['~/Projects/DynamicCoherencePhysiology/' sname '/dcpObjects/' dcpObjectsFile],'dcp')
 end
 
+pert3always0deg = false(1,length(dcp));
+for filei = 1:length(dcp)
+    if str2num(dcp{filei}.datapath(end-8:end-1)) < 20220223
+        pert3always0deg(filei) = true;
+    end
+end
+if keep_pert3always0deg && sum(pert3always0deg) > 0
+    warning('Data set includes at least 1 file where the pertrubation direction during pattern velocity only was always towards 0 deg first, regardless of the direction of pattern velocity')
+else
+    dcp = dcp(~pert3always0deg);
+end
+    
 %% Get data from initiateCoh experiments
-initCoh = initiateCohObj(dcp{1}.sname,dcp{1}.datapath);
-initCoh = initiateCohTrials(initCoh,trialList);
+initCohPert = initiateCohPertObj(dcp{1}.sname,dcp{1}.datapath);
+initCohPert = initiateCohPertTrials(initCohPert,trialList);
 
-init.t = initCoh.eye_t';
+init.t = initCohPert.eye_t';
 init.conditions.directions = nan(max(trialList)*length(dcp),1);
 init.conditions.speeds = nan(max(trialList)*length(dcp),1);
 init.conditions.coh = nan(max(trialList)*length(dcp),1);
+init.conditions.pert = nan(max(trialList)*length(dcp),1);
 init.eye.hvel = nan(length(init.t),max(trialList)*length(dcp));
 init.eye.vvel = nan(length(init.t),max(trialList)*length(dcp));
 ind = 1;
 for filei = 1:length(dcp)
     
-    initCoh = initiateCohObj(dcp{filei}.sname,dcp{filei}.datapath);
-    initCoh = initiateCohTrials(initCoh,trialList);
+    initCohPert = initiateCohPertObj(dcp{filei}.sname,dcp{filei}.datapath);
+    initCohPert = initiateCohPertTrials(initCohPert,trialList);
     
-    if ~isempty(initCoh.trialtype)
-        init.conditions.directions(ind:ind+length(initCoh.directions)-1) = initCoh.directions;
-        init.conditions.speeds(ind:ind+length(initCoh.directions)-1) = initCoh.speeds;
-        init.conditions.coh(ind:ind+length(initCoh.directions)-1) = initCoh.coh;
+    if ~isempty(initCohPert.trialtype)
+        init.conditions.directions(ind:ind+length(initCohPert.directions)-1) = initCohPert.directions;
+        init.conditions.speeds(ind:ind+length(initCohPert.directions)-1) = initCohPert.speeds;
+        init.conditions.coh(ind:ind+length(initCohPert.directions)-1) = initCohPert.coh;
+        init.conditions.pert(ind:ind+length(initCohPert.directions)-1) = initCohPert.perturbations;
         
-        init.eye.hvel(:,ind:ind+length(initCoh.directions)-1) = vertcat(initCoh.eye(:).hvel)';
-        init.eye.vvel(:,ind:ind+length(initCoh.directions)-1) = vertcat(initCoh.eye(:).vvel)';
+        init.eye.hvel(:,ind:ind+length(initCohPert.directions)-1) = vertcat(initCohPert.eye(:).hvel)';
+        init.eye.vvel(:,ind:ind+length(initCohPert.directions)-1) = vertcat(initCohPert.eye(:).vvel)';
         
-        ind = ind+length(initCoh.directions);
+        ind = ind+length(initCohPert.directions);
     end
 end
 init.conditions.directions = init.conditions.directions(1:ind-1);
 init.conditions.speeds = init.conditions.speeds(1:ind-1);
 init.conditions.coh = init.conditions.coh(1:ind-1);
+init.conditions.pert = init.conditions.pert(1:ind-1);
 init.eye.hvel = init.eye.hvel(:,1:ind-1);
 init.eye.vvel = init.eye.vvel(:,1:ind-1);
 init.eye.speed = sqrt(init.eye.hvel.^2 + init.eye.vvel.^2);
 
-%% Find conditional means, marginalize direction
+%% Find conditional means, marginalize direction and perturbations
 speeds = unique(init.conditions.speeds);
 cohs = unique(init.conditions.coh);
 for si = 1:length(speeds)
@@ -93,6 +115,39 @@ for si = 1:length(speeds)
             ismember(init.conditions.directions,directions);
         init.eye.mean(:,si,ci) = nanmean(init.eye.speed(:,acceptvec),2);
         init.eye.ste(:,si,ci) = nanstd(init.eye.speed(:,acceptvec),[],2)./sqrt(sum(acceptvec));
+    end
+end
+
+
+%% Find conditional means, marginalize direction
+perturbations = unique(init.conditions.pert);
+for si = 1:length(speeds)
+    for ci = 1:length(cohs)
+        for pi = 1:length(perturbations)
+            acceptvec = init.conditions.speeds == speeds(si) & init.conditions.coh == cohs(ci) & init.conditions.pert == perturbations(pi) & ...
+                ismember(init.conditions.directions,directions);
+            init.eye.pert.mean(:,si,ci,pi) = nanmean(init.eye.speed(:,acceptvec),2);
+            init.eye.pert.ste(:,si,ci,pi) = nanstd(init.eye.speed(:,acceptvec),[],2)./sqrt(sum(acceptvec));
+            
+            % Find perturbation response amplitude
+            if perturbations(pi) == 0
+                init.eye.pert.t(si,ci,pi) = NaN;
+                init.eye.pert.res(si,ci,pi) = 0;
+            else
+
+                if perturbations(pi) == 3
+                    init.eye.pert.t(si,ci,pi) = 50;
+                elseif perturbations(pi) == 7
+                    init.eye.pert.t(si,ci,pi) = 600;
+                end
+                diffTemp = init.eye.pert.mean(init.t >= init.eye.pert.t(si,ci,pi) & ...
+                    init.t <= init.eye.pert.t(si,ci,pi)+pertWin,si,ci,pi) - ...
+                    init.eye.pert.mean(init.t >= init.eye.pert.t(si,ci,pi) & ...
+                    init.t <= init.eye.pert.t(si,ci,pi)+pertWin,si,ci,perturbations == 0);
+                init.eye.pert.res(si,ci,pi) = max(diffTemp) - min(diffTemp);
+            end
+            
+        end
     end
 end
 
@@ -166,7 +221,7 @@ gain(1).rmse = sqrt(mean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec
 figure;
 colors = colormap('lines');
 close(gcf)
-figure('Name','Mean initCoh response','Position',[911 802 1610 520])
+figure('Name','Mean initCoh response')
 tempMax = max([length(cohs) length(speeds)]);
 for ci = 1:length(cohs)
     subplot(2,tempMax,ci)
@@ -222,6 +277,70 @@ end
 plotUnity;
 axis square
 ax = axis;
-text(ax(2)*0.1,ax(4)*0.9,['Dirs: ' num2str(directions)])
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
 xlabel('Target speed (deg/s)')
 ylabel('Initiation speed (deg/s)')
+
+%% Perturbation response
+h = figure;
+colors = colormap('lines');
+set(h,'Position', [347 292 962 937]);
+ind = 0;
+pertsTemp = perturbations(perturbations ~= 0);
+for si = 1:length(speeds)
+    for pi = 1:length(pertsTemp)
+        ind = ind+1;
+        subplot(length(speeds),length(pertsTemp),ind)
+        for ci = 1:length(cohs)
+            meanCond = init.eye.pert.mean(:,si,ci,perturbations == pertsTemp(pi));
+            meanControl = init.eye.pert.mean(:,si,ci,perturbations == 0);
+            plot(initCohPert.eye_t,meanCond-meanControl);
+            hold on
+        end
+        
+        axis tight
+        ylim([-speeds(si) speeds(si)]*0.2)
+        
+        plotHorizontal(0);
+        plotVertical(init.eye.pert.t(si,1,perturbations == pertsTemp(pi)));
+        
+        xlabel('Time from motion onset (ms)')
+        ylabel('Perturbation response (deg/s)')
+    end
+end
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
+
+figure('Name','Perturabation response')
+pertInd = 0;
+for pi = 1:length(perturbations)
+    if perturbations(pi) > 0
+        pertInd = pertInd+1;
+        subplot(1,sum(perturbations>0),pertInd)
+        for ci = 1:length(cohs)
+            plot(speeds',init.eye.pert.res(:,ci,pi)',...
+                'o-','Color',colors(ci,:))
+            hold on
+        end
+        xlabel('Speed (deg/s)')
+        ylabel('Perturbation response')
+        title(['Perturbation time = ' num2str(init.eye.pert.t(1,1,pi))])
+    end
+end
+
+figure('Name','Feedforward gain estimate')
+pertInd = 0;
+for pi = 1:length(perturbations)
+    if perturbations(pi) > 0
+        pertInd = pertInd+1;
+        subplot(1,sum(perturbations>0),pertInd)
+        for si = 1:length(speeds)
+            plot(cohs',init.eye.pert.res(si,:,pi)'/(0.4*speeds(si)),...
+                'o-','Color',colors(si,:))
+            hold on
+        end
+        xlabel('Coherence')
+        ylabel('Gain')
+        title(['Perturbation time = ' num2str(init.eye.pert.t(1,1,pi))])
+    end
+end

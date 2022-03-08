@@ -7,11 +7,12 @@
 %
 %%
 
-classdef initiateCohObj < dcpObj
+classdef initiateCohPertObj < dcpObj
     properties
-        objType = 'initiateCohObj';
+        objType = 'initiateCohPertObj';
         coh;
         cohTuning;
+        perturbations;
         r;
         R;
         Rste;
@@ -28,6 +29,7 @@ classdef initiateCohObj < dcpObj
         rateCutoff;
         cutWindow;
         passCutoff;
+        pertAmp;
         
         eye_t;
         neuron_t;
@@ -35,14 +37,14 @@ classdef initiateCohObj < dcpObj
     
     methods
         %% Core methods
-        function obj = initiateCohObj(sname,datapath)
+        function obj = initiateCohPertObj(sname,datapath)
         %Constructor
             obj = obj@dcpObj(sname,datapath);
             obj.cohTuning.parameters = nan(1,3);
         end 
         
-        %% initiateCohTrials
-        function obj = initiateCohTrials(obj,trialNs)
+        %% initiateCohPertTrials
+        function obj = initiateCohPertTrials(obj,trialNs)
         % Add direction preference trials to data object
             files = dir(obj.datapath);
             
@@ -60,11 +62,11 @@ classdef initiateCohObj < dcpObj
                     if length(files)-fileInx+1 > ti
                         
                         % Read file
-                        %disp([obj.datapath '/' files(ti+fileInx-1).name])
+%                         disp([obj.datapath '/' files(ti+fileInx-1).name])
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
                         
                         trialname = file.trialname;
-                        if strcmp(trialname(1:7),'initCoh')
+                        if strcmp(trialname(1:11),'initCohPert')
                             ind = ind+1;
                             % Update triali                            obj.trialNumbers(ind,1) = ti;
                             obj.trialDataFiles{ind} = files(ti+fileInx-1).name;
@@ -86,6 +88,10 @@ classdef initiateCohObj < dcpObj
                             obj.speeds(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
+                            % LOCATIONS OF DOT PATCHS ARE NOT SPECIFIED BY
+                            % INITCOHPERT; returns NaN. Positions can be
+                            % recovered from trialtype and .jmx file used
+                            % to generate this data.
                             [startIndex,endIndex] = regexp(trialname,'x\d{3}');
                             obj.locations(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex))-100;
@@ -93,6 +99,10 @@ classdef initiateCohObj < dcpObj
                             [startIndex,endIndex] = regexp(trialname,'y\d{3}');
                             obj.locations(ind,2) = ...
                                 str2double(trialname(startIndex+1:endIndex))-100;
+                            
+                            [startIndex,endIndex] = regexp(trialname,'p\d{3}');
+                            obj.perturbations(ind,1) = ...
+                                str2double(trialname(startIndex+1:endIndex));
                             
                             % Add eye information
                             obj.eye(:,ind).hpos = (file.data(1,:) - ...
@@ -112,6 +122,12 @@ classdef initiateCohObj < dcpObj
                             obj.eye(:,ind).hvel(sacs) = NaN;
                             obj.eye(:,ind).vvel(sacs) = NaN;
                             obj.eye(:,ind).saccades = sacs;
+                            
+                            if isempty(file.trialInfo.perts)
+                                obj.pertAmp(ind) = 0;
+                            else
+                                obj.pertAmp(ind) = file.trialInfo.perts.amp;
+                            end
                             
                             % Add spike times 
                             if obj.spikesExtracted
@@ -640,7 +656,7 @@ classdef initiateCohObj < dcpObj
         end
                 
         %% Plotting methods
-        function [h,sh,colors] = initiateCohMeanEye(obj,dirs,normalize,window)
+        function [h,sh,colors] = initiateCohPertMeanEye(obj,dirs,normalize,window,sortMethod)
         % Plots mean eye speed for each sequence and target speed
             if ~exist('normalize','var')
                 normalize = true;
@@ -648,51 +664,151 @@ classdef initiateCohObj < dcpObj
             if ~exist('window','var')
                 window = [0 300];
             end
+            if ~exist('sortMethod','var')
+                sortMethod = 'speed';
+            end
             h = figure;
             colors = colormap('lines');
             set(h,'Position',[345 557 1965 420]);
             speeds = unique(obj.speeds);
             cohs = unique(obj.coh);
-            for hi = 1:length(cohs)
-                sh(hi) = subplot(1,length(cohs),hi);
-                for si = 1:length(speeds)
-                    if normalize
-                        nrm = speeds(si);
-                    else
-                        nrm = 1;
+            switch sortMethod
+                case 'speed'
+                    for hi = 1:length(cohs)
+                        sh(hi) = subplot(1,length(cohs),hi);
+                        for si = 1:length(speeds)
+                            if normalize
+                                nrm = speeds(si);
+                            else
+                                nrm = 1;
+                            end
+                            [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(hi));
+                            plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
+                                'h',h,'sh',sh(hi),'color',colors(si,:));
+                        end
+                        axis tight
+                        ax(hi,:) = axis;
                     end
-                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(hi));
-                    plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
-                        'h',h,'sh',sh(hi),'color',colors(si,:));
-                end
-                axis tight
-                ax(hi,:) = axis;
+                    for hi = 1:length(cohs)
+                        subplot(sh(hi))
+                        %                 axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+                        axis([window min(ax(:,3)) max(ax(:,4))])
+                        plotVertical(150);
+                        xlabel('Time from motion onset (ms)')
+                        if normalize
+                            plotHorizontal(1);
+                            ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
+                            mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
+                                'interpreter','latex','yticks',[0.1 1])
+                        else
+                            ylabel('Eye speed (deg/s)')
+                            mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
+                                'interpreter','latex')
+                        end
+                    end
+                    
+                    for li = 1:(2*length(speeds)+2)
+                        leg{li} = '';
+                    end
+                    for si = 1:length(speeds)
+                        leg{2*si} = [num2str(speeds(si)) ' deg/s'];
+                    end
+                    legend(leg)
+                    
+                    
+                case 'coherence'
+                    for si = 1:length(speeds)
+                        sh(si) = subplot(1,length(speeds),si);
+                        for ci = 1:length(cohs)
+                            if normalize
+                                nrm = speeds(si);
+                            else
+                                nrm = 1;
+                            end
+                            [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci));
+                            plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
+                                'h',h,'sh',sh(si),'color',colors(ci,:));
+                        end
+                        axis tight
+                        ax(si,:) = axis;
+                    end
+                    for si = 1:length(speeds)
+                        subplot(sh(si))
+                        %                 axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+                        axis([window min(ax(:,3)) max(ax(:,4))])
+                        plotVertical(150);
+                        xlabel('Time from motion onset (ms)')
+                        if normalize
+                            plotHorizontal(1);
+                            ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
+                            mymakeaxis(gca,'xytitle',[num2str(speeds(si)) 'deg/s'],...
+                                'interpreter','latex','yticks',[0.1 1])
+                        else
+                            ylabel('Eye speed (deg/s)')
+                            mymakeaxis(gca,'xytitle',[num2str(speeds(si)) 'deg/s'],...
+                                'interpreter','latex')
+                        end
+                    end
+                    
+                    for li = 1:(2*length(cohs)+2)
+                        leg{li} = '';
+                    end
+                    for ci = 1:length(cohs)
+                        leg{2*ci} = [num2str(cohs(ci))];
+                    end
+                    legend(leg)                    
             end
-            for hi = 1:length(cohs)
-                subplot(sh(hi))
-%                 axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
-                axis([window min(ax(:,3)) max(ax(:,4))])
-                plotVertical(150);
-                xlabel('Time from motion onset (ms)')
-                if normalize
-                    plotHorizontal(1);
-                    ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
-                    mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
-                        'interpreter','latex','yticks',[0.1 1])
-                else
-                    ylabel('Eye speed (deg/s)')
-                    mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
-                        'interpreter','latex')                    
-                end
-            end
+        end
+        
+        function [h,colors] = initiateCohPerturbationResponse(obj,dirs)
+        % Plots mean response to perturbations
             
-            for li = 1:(2*length(speeds)+2)
-                leg{li} = '';
-            end
+            h = figure;
+            colors = colormap('lines');
+            set(h,'Position',[345 557 1965 420]);
+            speeds = unique(obj.speeds);
+            cohs = unique(obj.coh);
+            perts = unique(obj.perturbations);
+            perts = perts(perts>0);
+            
+            ind = 0;
             for si = 1:length(speeds)
-                leg{2*si} = [num2str(speeds(si)) ' deg/s'];
+                for pi = 1:length(perts)
+                    ind = ind+1;
+                    subplot(length(speeds),length(perts),ind)
+                    for ci = 1:length(cohs)
+                        [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,perts(pi));
+                        temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                            vertcat(obj.eye(condLogical).vvel).^2);
+                        meanCond = nanmean(temp,1);
+                        
+                        [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,0);
+                        temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                            vertcat(obj.eye(condLogical).vvel).^2);
+                        meanControl = nanmean(temp,1);
+                        
+                        plot(obj.eye_t,meanCond-meanControl);
+                        hold on
+                    end
+                    
+                    axis tight
+                    ylim([-speeds(si) speeds(si)]*0.2)
+                    
+                    plotHorizontal(0);
+                    if perts(pi) == 3
+                        pertTime = 50;
+                    elseif perts(pi) == 7
+                        pertTime = 600;
+                    else
+                        pertTime = NaN;
+                    end
+                    plotVertical(pertTime);
+                    
+                    xlabel('Time from motion onset (ms)')
+                    ylabel('Perturbation response (deg/s)')
+                    
+                end
             end
-            legend(leg)
         end
     end
 end
