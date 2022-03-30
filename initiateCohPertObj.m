@@ -31,6 +31,9 @@ classdef initiateCohPertObj < dcpObj
         passCutoff;
         pertAmp;
         
+        reward;
+        rotation;
+        
         eye_t;
         neuron_t;
     end
@@ -124,10 +127,14 @@ classdef initiateCohPertObj < dcpObj
                             obj.eye(:,ind).saccades = sacs;
                             
                             if isempty(file.trialInfo.perts)
-                                obj.pertAmp(ind) = 0;
+                                obj.pertAmp(ind,1) = 0;
                             else
-                                obj.pertAmp(ind) = file.trialInfo.perts.amp;
+                                obj.pertAmp(ind,1) = file.trialInfo.perts.amp;
                             end
+                            
+                            obj.rotation(ind,1) = file.key.iVelTheta/1000;
+                            
+                            obj.reward(ind,1) = file.key.iRewLen1;
                             
                             % Add spike times 
                             if obj.spikesExtracted

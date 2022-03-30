@@ -33,6 +33,9 @@ classdef dynamicCohObj < dcpObj
         passCutoff;
         pertAmp;
         
+        reward;
+        rotation;
+        
         eye_t;
         neuron_t;
     end
@@ -202,6 +205,10 @@ classdef dynamicCohObj < dcpObj
                             else
                                 obj.pertAmp(ind) = file.trialInfo.perts.amp;
                             end
+                            
+                            obj.rotation(ind,1) = file.key.iVelTheta/1000;
+                            
+                            obj.reward(ind,1) = file.key.iRewLen1;                           
                             
                             % Add spike times
                             if obj.spikesExtracted

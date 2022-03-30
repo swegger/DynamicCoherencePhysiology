@@ -12,6 +12,8 @@ classdef dirPrefObj < dcpObj
         objType = 'dirPrefObj';
         directionTuning;
         r;
+        reward;
+        rotation;
     end
     
     methods
@@ -92,6 +94,10 @@ classdef dirPrefObj < dcpObj
                             obj.eye(:,ind).hvel(sacs) = NaN;
                             obj.eye(:,ind).vvel(sacs) = NaN;
                             obj.eye(:,ind).saccades = sacs;
+                            
+                            obj.rotation(ind,1) = file.key.iVelTheta/1000;
+                            
+                            obj.reward(ind,1) = file.key.iRewLen1;
                             
                             % Add spike times
                             if obj.spikesExtracted
