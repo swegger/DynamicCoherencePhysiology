@@ -219,7 +219,8 @@ gain(1).rmse = sqrt(mean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec
 
 %% Mean initiation response
 figure;
-colors = colormap('lines');
+speedColors = colormap('lines');
+cohColors = 1-repmat(cohs/100,[1,3]);
 close(gcf)
 figure('Name','Mean initCoh response')
 tempMax = max([length(cohs) length(speeds)]);
@@ -227,10 +228,10 @@ for ci = 1:length(cohs)
     subplot(2,tempMax,ci)
     for si = 1:length(speeds)
         patchProps.FaceAlpha = 0.3;
-        patchProps.FaceColor = colors(si,:);
+        patchProps.FaceColor = speedColors(si,:);
         myPatch(init.t(:),init.eye.mean(:,si,ci),init.eye.ste(:,si,ci),'patchProperties',patchProps);
         hold on
-        plot(init.t,init.eye.mean(:,si,ci),'Color',colors(si,:),'LineWidth',2)
+        plot(init.t,init.eye.mean(:,si,ci),'Color',speedColors(si,:),'LineWidth',2)
     end
     xlabel('Time from motion onset (ms)')
     ylabel('Eye speeds (deg/s)')
@@ -241,10 +242,10 @@ for si = 1:length(speeds)
     subplot(2,tempMax,tempMax+si)
     for ci = 1:length(cohs)
         patchProps.FaceAlpha = 0.3;
-        patchProps.FaceColor = colors(ci,:);
+        patchProps.FaceColor = cohColors(ci,:);
         myPatch(init.t(:),init.eye.mean(:,si,ci),init.eye.ste(:,si,ci),'patchProperties',patchProps);
         hold on
-        plot(init.t,init.eye.mean(:,si,ci),'Color',colors(ci,:),'LineWidth',2)
+        plot(init.t,init.eye.mean(:,si,ci),'Color',cohColors(ci,:),'LineWidth',2)
     end
     xlabel('Time from motion onset (ms)')
     ylabel('Eye speeds (deg/s)')
@@ -261,7 +262,7 @@ if plotSamps.On
         for si = 1:length(speeds)
             %         plot(speeds(si),randsample(init.eye.init{si,ci},50),'o','Color',colors(ci,:))
             plot(speeds(si)+randn(plotSamps.n,1)/10,init.eye.init{si,ci}(randsample(size(init.eye.init{si,ci},2),plotSamps.n,plotSamps.replacement)),...
-                'o','Color',colors(ci,:),'MarkerSize',4,'MarkerFaceColor',colors(ci,:))
+                'o','Color',cohColors(ci,:),'MarkerSize',4,'MarkerFaceColor',cohColors(ci,:))
             hold on
         end
     end
@@ -269,10 +270,10 @@ end
 for ci = 1:length(cohs)
     for si = 1:length(speeds)
         plot(speeds(si),nanmean(init.eye.init{si,ci}),...
-            'o','Color',colors(ci,:),'MarkerSize',8,'MarkerFaceColor',[1 1 1])
+            'o','Color',cohColors(ci,:),'MarkerSize',8,'MarkerFaceColor',[1 1 1])
         hold on
     end
-    plot(xs,gain(ci).B(1)*xs + gain(ci).B(2),'Color',colors(ci,:))
+    plot(xs,gain(ci).B(1)*xs + gain(ci).B(2),'Color',speedColors(ci,:))
 end
 plotUnity;
 axis square
@@ -283,7 +284,7 @@ ylabel('Initiation speed (deg/s)')
 
 %% Perturbation response
 h = figure;
-colors = colormap('lines');
+speedColors = colormap('lines');
 set(h,'Position', [347 292 962 937]);
 ind = 0;
 pertsTemp = perturbations(perturbations ~= 0);
@@ -294,7 +295,7 @@ for si = 1:length(speeds)
         for ci = 1:length(cohs)
             meanCond = init.eye.pert.mean(:,si,ci,perturbations == pertsTemp(pi));
             meanControl = init.eye.pert.mean(:,si,ci,perturbations == 0);
-            plot(initCohPert.eye_t,meanCond-meanControl);
+            plot(initCohPert.eye_t,meanCond-meanControl,'Color',cohColors(ci,:));
             hold on
         end
         
@@ -319,7 +320,7 @@ for pi = 1:length(perturbations)
         subplot(1,sum(perturbations>0),pertInd)
         for ci = 1:length(cohs)
             plot(speeds',init.eye.pert.res(:,ci,pi)',...
-                'o-','Color',colors(ci,:))
+                'o-','Color',cohColors(ci,:))
             hold on
         end
         xlabel('Speed (deg/s)')
@@ -336,7 +337,7 @@ for pi = 1:length(perturbations)
         subplot(1,sum(perturbations>0),pertInd)
         for si = 1:length(speeds)
             plot(cohs',init.eye.pert.res(si,:,pi)'/(0.4*speeds(si)),...
-                'o-','Color',colors(si,:))
+                'o-','Color',speedColors(si,:))
             hold on
         end
         xlabel('Coherence')

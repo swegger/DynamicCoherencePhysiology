@@ -514,6 +514,14 @@ xlabel('Time from motion onset (ms)')
 ylabel('Spikes/s')
 
 %% Simple avaraging, by cluster
+initSpeed = 10;
+testInitGain = true;
+gainRegression.y = [];
+if testInitGain
+    gainRegression.x = nan(length(speeds)*length(cohs)+2*length(sequences),NumClusters);
+else
+    gainRegression.x = nan(2*length(sequences),NumClusters);
+end
 for i = 1:NumClusters
     a = Rinit(dynCoh.neuron_t<=1350,:,:,idx == i);
     b = nan(size(Rdyn(:,:,idx == i)));
@@ -541,22 +549,101 @@ for i = 1:NumClusters
         hold on
         plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(b(:,seqi,:)),2)*1000,'Color',colors(seqi,:))
     end
-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,2,1,:)-a(:,2,2,:)),2)*1000,'Color',initColors(1,:))
+    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,1,:)-a(:,speeds == initSpeed,2,:)),2)*1000,'Color',initColors(1,:))
     hold on
-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,2,3,:)-a(:,2,2,:)),2)*1000,'Color',initColors(3,:))
+    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,3,:)-a(:,speeds == initSpeed,2,:)),2)*1000,'Color',initColors(3,:))
     plotHorizontal(0);
     plotVertical([450 750 1050]);
     xlabel('Time from motion onset (ms)')
     ylabel('Excess spike/s')
 
     subplot(2,1,2)
-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,2,2,:)),2)*1000,'Color',initColors(2,:))
+    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,2,:)),2)*1000,'Color',initColors(2,:))
     hold on
     plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(Rdyn(:,5,idx == i)),2)*1000,'Color',colors(5,:))
     plotVertical([450 750 1050]);
     xlabel('Time from motion onset (ms)')
     ylabel('Spikes/s')
+    
+    gvrh = figure('Name',['Cluster ' num2str(i)]);
+    if ~exist('gain','var')
+        [~,gain] = dynamicCohBehavioralAnalysis('ar','dcp',dcp,'directions',[0,180],'pertWin',200);
+        figure(gvrh);
+    end
+    dynRatesTemp = nanmean(squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 750 & dynCoh.neuron_t <= 850,:,idx==i),1)),2)*1000;
+    gainRegression.x(1:length(sequences),i) = dynRatesTemp;
+    plot(gain(:,3),dynRatesTemp,'ko')
+    hold on
+    dynRatesTemp = nanmean(squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 1050 & dynCoh.neuron_t <= 1150,:,idx==i),1)),2)*1000;
+    gainRegression.x(length(sequences)+1:2*length(sequences),i) = dynRatesTemp;
+    plot(gain(:,4),dynRatesTemp,'ks')
+    if testInitGain
+        dcpInitCohPert = load('dcpObjectsPertTemp.mat');
+        if ~exist('initGain','var')
+            [init,~] = initialCohPertBehavioralAnalysis('ar','dcp',dcpInitCohPert.dcp(9:end),...
+                'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',200);
+            initGain = init.eye.pert.res./(0.4*repmat([5;10;20],[1,3,3]));
+            figure(gvrh);
+        end
+        for si = 1:length(speeds)
+            initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 750 & dynCoh.neuron_t <= 850,si,:,:),1)),2)*1000;
+            gainRegression.x(2*length(sequences)+(si-1)*length(cohs)+1:2*length(sequences)+si*length(cohs),i) = initRatesTemp;
+            plot(squeeze(initGain(si,:,3)),initRatesTemp,...
+                'o-','Color',colors(si,:))
+        end
+        
+    end
+    xlabel('Behavioral gain (unitless)')
+    ylabel('Spikes/s')
 end
+
+%% Gain decoding performance
+regressorClusters = 1:NumClusters; %[2,7,8];
+gainRegression.z = (gainRegression.x - repmat(mean(gainRegression.x,1),[size(gainRegression.x,1),1])) ./ ...
+    repmat(std(gainRegression.x,[],1),[size(gainRegression.x,1),1]);
+gainRegression.y(1:length(sequences)) = gain(:,3);
+gainRegression.y(length(sequences)+1:2*length(sequences)) = gain(:,4);
+if testInitGain
+    for si = 1:length(speeds)
+        gainRegression.y(2*length(sequences)+(si-1)*length(cohs)+1:2*length(sequences)+si*length(cohs)) = initGain(si,:,3);
+    end
+end
+gainRegression.B = regress(gainRegression.y(:),[gainRegression.z(:,regressorClusters) ones(size(gainRegression.x,1),1)]);
+gainRegression.yhat = [gainRegression.z(:,regressorClusters) ones(size(gainRegression.x,1),1)]*gainRegression.B;
+
+figure('Name','Gain decoding','Position',[1633 927 888 395])
+subplot(1,2,1)
+for seqi = 1:length(sequences)
+    plot(gainRegression.y(seqi),gainRegression.yhat(seqi),...
+        'o','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    hold on
+end
+for seqi = 1:length(sequences)
+    plot(gainRegression.y(seqi+length(sequences)),gainRegression.yhat(seqi+length(sequences)),...
+        's','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    hold on
+end
+if testInitGain
+    for si = 1:length(speeds)
+        for ci = 1:length(cohs)
+            plot(gainRegression.y(2*length(sequences)+(si-1)*length(cohs)+ci),...
+                gainRegression.yhat(2*length(sequences)+(si-1)*length(cohs)+ci),...
+                'o','Color',initColors(ci,:),'MarkerFaceColor',initColors(ci,:))
+            hold on
+        end
+    end
+end
+plotUnity;
+axis equal
+axis tight
+xlabel('Behaioral gain')
+ylabel('Estimated gain')
+
+subplot(1,2,2)
+stem(regressorClusters,gainRegression.B(1:end-1))
+xlabel('Cluster')
+ylabel('Regression weight')
+axis square
 
 %% Coherence sensitivity vs functional mapping
 regressionType = 'PCA';
