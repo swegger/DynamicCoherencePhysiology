@@ -948,6 +948,7 @@ classdef dcpObj
             addParameter(Parser,'t',NaN)
             addParameter(Parser,'color',NaN)
             addParameter(Parser,'normalizer',1)
+            addParameter(Parser,'plotPatch',true)
             
             parse(Parser,obj,condLogical,varargin{:})
             
@@ -958,6 +959,7 @@ classdef dcpObj
             t = Parser.Results.t;
             color = Parser.Results.color;
             normalizer = Parser.Results.normalizer;
+            plotPatch = Parser.Results.plotPatch;
             
             if ishandle(h)
                 figure(h);
@@ -976,14 +978,16 @@ classdef dcpObj
                 t = 0:length(mE)-1;
             end
             
-            patchProps.FaceAlpha = 0.3;
-            if ~any(isnan(color))
-                patchProps.FaceColor = color;
-            else
-                color = [0 0 0];
-                patchProps.FaceColor = color;
+            if plotPatch
+                patchProps.FaceAlpha = 0.3;
+                if ~any(isnan(color))
+                    patchProps.FaceColor = color;
+                else
+                    color = [0 0 0];
+                    patchProps.FaceColor = color;
+                end
+                myPatch(t(:),mE(:),steE(:),'patchProperties',patchProps);
             end
-            myPatch(t(:),mE(:),steE(:),'patchProperties',patchProps);
             hold on
             plot(t,mE,'Color',color,'LineWidth',2)
         end
