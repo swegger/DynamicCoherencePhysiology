@@ -69,7 +69,7 @@ classdef initiateCohPertObj < dcpObj
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
                         
                         trialname = file.trialname;
-                        if strcmp(trialname(1:11),'initCohPert')
+                        if ~isempty(trialname) && strcmp(trialname(1:11),'initCohPert')
                             ind = ind+1;
                             % Update triali                            obj.trialNumbers(ind,1) = ti;
                             obj.trialDataFiles{ind} = files(ti+fileInx-1).name;

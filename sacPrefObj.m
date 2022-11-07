@@ -1,19 +1,20 @@
-%% dirPrefObj
+%% sacPrefObj
 %
-%   Defines properties and methods of direction preference object used for 
-%   analysis of DynamicCoherencePhysiology data.
+%   Defines properties and methods of saccade direction preference object 
+%   used for analysis of DynamicCoherencePhysiology data.
 %
 %   Defined as a subclass of the dcpObj
 %
 %%
 
-classdef dirPrefObj < dcpObj
+classdef sacPrefObj < dcpObj
     properties (SetAccess = private)
-        objType = 'dirPrefObj';
+        objType = 'sacPrefObj';
         directionTuning;
         r;
         reward;
         rotation;
+        amplitudes;
         
         filterWidth;
         R;
@@ -28,16 +29,15 @@ classdef dirPrefObj < dcpObj
     
     methods
         %% Core methods
-        function obj = dirPrefObj(sname,datapath)
+        function obj = sacPrefObj(sname,datapath)
         %Constructor
             obj = obj@dcpObj(sname,datapath);
             obj.directionTuning.tuningFun = @vonMises;
             obj.directionTuning.parameters = nan(1,3);
-        end      
+        end  
         
-        
-        %% dirPrefTrials
-        function obj = dirPrefTrials(obj,trialNs)
+        %% sacPrefTrials
+        function obj = sacPrefTrials(obj,trialNs)
         % Add direction preference trials to data object
             datapath = obj.returnDatapath;
             files = dir(datapath);
@@ -59,7 +59,7 @@ classdef dirPrefObj < dcpObj
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
                         
                         trialname = file.trialname;
-                        if ~isempty(trialname) && strcmp(trialname(1:5),'dPref')
+                        if ~isempty(trialname) && strcmp(trialname(1:7),'sacPref')
                             ind = ind+1;
                             % Update trial
                             obj.trialNumbers(ind,1) = ti;
@@ -74,8 +74,8 @@ classdef dirPrefObj < dcpObj
                             obj.directions(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
-                            [startIndex,endIndex] = regexp(trialname,'s\d{3}');
-                            obj.speeds(ind,1) = ...
+                            [startIndex,endIndex] = regexp(trialname,'a\d{3}');
+                            obj.amplitudes(ind,1) = ...
                                 str2double(trialname(startIndex+1:endIndex));
                             
                             [startIndex,endIndex] = regexp(trialname,'x\d{3}');
@@ -101,12 +101,23 @@ classdef dirPrefObj < dcpObj
                                 file.data(4,:)*obj.calib.speedGain,...
                                 'accelerationThreshold',obj.calib.accThres,...
                                 'windowSize',40);
-                            obj.eye(:,ind).hvel(sacs) = NaN;
-                            obj.eye(:,ind).vvel(sacs) = NaN;
                             obj.eye(:,ind).saccades = sacs;
                             
                             obj.rotation(ind,1) = file.key.iVelTheta/1000;
                             
+                            onTemp = [file.targets.on{2:end}];
+                            t_temp = min(onTemp):(max(onTemp)-1);
+                            obj.eye(:,ind).t = t_temp;
+                            acquiredInd = find(sqrt( ...
+                                (obj.eye(:,ind).hpos-obj.amplitudes(ind,1)*cosd(obj.directions(ind,1)+obj.rotation(ind,1))).^2 + ...
+                                (obj.eye(:,ind).vpos-obj.amplitudes(ind,1)*sind(obj.directions(ind,1)+obj.rotation(ind,1))).^2) < 2,1);
+                            if ~isempty(acquiredInd)
+                                obj.eye(:,ind).targetAcquired = t_temp(acquiredInd);
+                            else
+                                obj.eye(:,ind).targetAcquired = NaN;
+                            end
+                            
+                            % Add other information
                             obj.reward(ind,1) = file.key.iRewLen1;
                             
                             % Add spike times
@@ -122,24 +133,24 @@ classdef dirPrefObj < dcpObj
                             
                         end
                         
-                        onTemp = [file.targets.on{2:end}];
-                        t_temp = min(onTemp):(max(onTemp)-1);
-                        
                     end
                 end
-                if exist('t_temp','var')
-                    obj.eye_t = t_temp;
-                else
-                    obj.eye_t = [];
-                end
         end
-
+        
         %% Neural analysis methods
-        function [r,rste] = conditionalRates(obj,width,directions,t)
+        function [r,rste] = conditionalRates(obj,width,directions,t,alignToSaccade)
             if ~exist('t','var')
-                t = -100:1600;
+                t = -1000:100;
             end
-            rAll = obj.calcRates(width,'t',t);
+            if ~exist('alignToSaccade')
+                alignToSaccade = true;
+                t_offsets = [obj.eye(:).targetAcquired];
+            end
+            if alignToSaccade
+                rAll = obj.calcRates(width,'t',t,'t_offsets',t_offsets);
+            else
+                rAll = obj.calcRates(width,'t',t);
+            end
             [~,condLogical] = trialSort(obj,directions,NaN,NaN);
             r = mean(rAll(:,condLogical,:),2);
             rste = sqrt(var(rAll(:,condLogical,:),[],2)/sum(condLogical));
@@ -152,13 +163,15 @@ classdef dirPrefObj < dcpObj
             addRequired(Parser,'obj')
             addParameter(Parser,'width',50)
             addParameter(Parser,'dirs',NaN)
-            addParameter(Parser,'t',-100:1600)
+            addParameter(Parser,'t',-1000:100)
+            addParameter(Parser,'alignToSaccade',true)
             
             parse(Parser,obj,varargin{:})
             obj = Parser.Results.obj;
             width = Parser.Results.width;
             dirs = Parser.Results.dirs;
             t = Parser.Results.t;
+            alignToSaccade = Parser.Results.alignToSaccade;
             
             if isnan(dirs)
                 dirs = unique(obj.directions);
@@ -168,7 +181,7 @@ classdef dirPrefObj < dcpObj
             for di = 1:length(dirs)
                 [R(:,di,:),Rste(:,di,:)] = ...
                     conditionalRates(obj,width,...
-                    dirs(di),t);
+                    dirs(di),t,alignToSaccade);
             end
             if exist('R','var')
                 obj.R = R;
@@ -182,8 +195,12 @@ classdef dirPrefObj < dcpObj
             
         end
         
-        function obj = dirRates(obj,boxCarWidth)
-            obj.r = obj.calcRates(boxCarWidth);
+        function obj = dirRates(obj,boxCarWidth,t_offsets)
+            if exist('t_offsets','var')
+                obj.r = obj.calcRates(boxCarWidth,'t',-1000:100,'t_offsets',t_offsets);
+            else
+                obj.r = obj.calcRates(boxCarWidth);
+            end
         end
         
         
@@ -233,18 +250,7 @@ classdef dirPrefObj < dcpObj
             counts = counts(1:maxtrials,:,:,:);
         end
         
-        function obj = dirfindActive(obj,rateCutoff,cutWindow)
-            if isempty(obj.R)
-                obj.passCutoff = false(length(obj.unitIndex));
-            else
-                obj.passCutoff = (permute(max(obj.R(cutWindow(1):cutWindow(2),:,:),[],[1,2])*1000,[3,1,2]) - ...
-                    permute(min(obj.R(cutWindow(1):cutWindow(2),:),[],[1,2])*1000,[3,1,2])) > rateCutoff;
-            end
-            obj.rateCutoff = rateCutoff;
-            obj.cutWindow = cutWindow;
-        end
-        
-        function dirPrefRaster(obj,dirs,units)
+        function sacPrefRaster(obj,dirs,units)
             figure('Name','Direction responses','Position',[559 92 1699 1205]);
             si = 0;
             r = 1;
@@ -265,16 +271,17 @@ classdef dirPrefObj < dcpObj
                 si = find(xy(:,1) == yloc & xy(:,2) == xloc);
                 set(h(si),'visible','on')
                 subplot(h(si))
-                rasterPlot(obj,condLogical,units)
+                t_offsets = [obj.eye(condLogical).targetAcquired];
+                rasterPlot(obj,condLogical,units,t_offsets)
                 axis tight
                 
                 ax(di,:) = axis;
                 trialN(di) = sum(condLogical);
                 count(di) = 0;
                 for triali = 1:length(condInds)
-                    spikeTimes = obj.spikeTimes{condInds(triali)}{1};
+                    spikeTimes = obj.spikeTimes{condInds(triali)}{1} - t_offsets(triali);
                     spikeTimes = spikeTimes(ismember(obj.spikeTimes{condInds(triali)}{2},units));
-                    count(di) = count(di) + numel(spikeTimes);
+                    count(di) = count(di) + sum(spikeTimes > -300 & spikeTimes < 100);
                 end
             end
             lineProps.color = [1 0 0];
@@ -285,7 +292,7 @@ classdef dirPrefObj < dcpObj
                 subplot(h(si))
                 axis([min(ax(:,1)) max(ax(:,2)) min(0) max(trialN)])
                 plotVertical(0,'lineProperties',lineProps);
-                xlabel('Time since motion onset (ms)')
+                xlabel('Time target onset (ms)')
                 ylabel('Trial #')
                 mymakeaxis(gca,'xytitle',num2str(dirs(di)))
             end
@@ -293,5 +300,6 @@ classdef dirPrefObj < dcpObj
             subplot(h(si))
             polar((pi/180)*([dirs dirs(1)]),([count count(1)])./([trialN trialN(1)]))
         end
+        
     end
 end

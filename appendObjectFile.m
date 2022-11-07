@@ -25,6 +25,9 @@ addParameter(Parser,'addFile',[])
 addParameter(Parser,'extractSpikes',true)
 addParameter(Parser,'excludeList',excludeList_default)
 addParameter(Parser,'assertkk',false)
+addParameter(Parser,'startChannel','EVT01')
+addParameter(Parser,'acceptMU',false)
+addParameter(Parser,'checkReceipt',false)
 
 parse(Parser,datafile,varargin{:})
 
@@ -36,6 +39,9 @@ addFile = Parser.Results.addFile;
 extractSpikes = Parser.Results.extractSpikes;
 excludeList = Parser.Results.excludeList;
 assertkk = Parser.Results.assertkk;
+startChannel = Parser.Results.startChannel;
+acceptMU = Parser.Results.acceptMU;
+checkReceipt = Parser.Results.checkReceipt;
 
 %% Load dcp object
 load(datafile)
@@ -90,7 +96,7 @@ if isempty(addFile)
         ind = length(dcp);
         for filei = 1:length(FileList)
             disp(['Working on ' FileList{filei} ', file ' num2str(filei) ' of ' num2str(length(FileList)) '.'])
-            dcpNew = dcpPrelim(sname,FileList(filei),extractSpikes);
+            dcpNew = dcpPrelim(sname,FileList(filei),'extractSpikes',extractSpikes,'startChannel',startChannel,'acceptMU',acceptMU,'checkReceipt',checkReceipt);
             dcp{ind+filei} = dcpNew{1};
             
             % Saving
@@ -114,7 +120,7 @@ if isempty(addFile)
     end
 else
     % Extract data from desired file
-    dcpNew = dcpPrelim(sname,addFile,extractSpikes);
+    dcpNew = dcpPrelim(sname,addFile,'extractSpikes',extractSpikes,'startChannel',startChannel,'acceptMU',acceptMU,'checkReceipt',checkReceipt);
     
     
     % Add to dcpObject cell

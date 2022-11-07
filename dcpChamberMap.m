@@ -33,6 +33,7 @@ addParameter(Parser,'extractSpikes',true)
 addParameter(Parser,'trList',1:5000)
 addParameter(Parser,'boxCarWidth',30)
 addParameter(Parser,'excludeList',excludeList_default)
+addParameter(Parser,'plotTransparent',false)
 
 parse(Parser,subject,varargin{:})
 
@@ -47,6 +48,7 @@ extractSpikes = Parser.Results.extractSpikes;
 trList = Parser.Results.trList;
 boxCarWidth = Parser.Results.boxCarWidth;
 excludeList = Parser.Results.excludeList;
+plotTransparent = Parser.Results.plotTransparent;
 
 % Validate inputs
 if strcmp('Custom',PlotType)
@@ -119,7 +121,7 @@ analysisSelectionBox = uix.BoxPanel( 'Parent', hbox2, 'Title', 'Analyses' );
 selectFile = uicontrol('Parent',fileSelectionBox,'Style','listbox','String',FileList,'Max',1,'Callback',@fileSelectionCallback);
 selectUnit = uicontrol('Parent',unitSelectionBox,'Style','listbox','String',UnitsString,'Max',1,'Callback',@unitSelectionCallback);
 selectAnalysis = uicontrol('Parent',analysisSelectionBox,'Style', 'listbox',...
-    'String',{'dirPref','speedPref','initiateCoh','dynamicCoh'},...
+    'String',{'dirPref','speedPref','initiateCoh','dynamicCoh','sacPref'},...
     'Max',1,'Callback',@analysisCallback);
 % vbox.Heights = [-2 -1]; 
 
@@ -131,13 +133,21 @@ xhandle = plot3(NaN,NaN,NaN,'x');
 xhandle.Visible = 'off';
 for i = 1:length(dcp)
     if isempty(dcp{i}.location)
-        siteHandles(i) = plot3(NaN,NaN,NaN,'k.');
+        if plotTransparent
+            siteHandles(i) = scatter3(NaN,NaN,NaN,'o','MarkerEdgeColor','None','MarkerFaceColor','k','MarkerFaceAlpha',0.1);
+        else
+            siteHandles(i) = plot3(NaN,NaN,NaN,'k.');
+        end
         ringHandles(i) = plot3(NaN,NaN,NaN,'ko');
         set(ringHandles(i),'Visible','off');
         %sites(i,:) = [NaN,NaN,NaN];
     else
-        siteHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'k.');
-        ringHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth,'ko');
+        if plotTransparent
+            siteHandles(i) = scatter3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth/1000,'o','MarkerEdgeColor','None','MarkerFaceColor','k','MarkerFaceAlpha',0.1);
+        else
+            siteHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth/1000,'k.');
+        end
+        ringHandles(i) = plot3(dcp{i}.location.x,dcp{i}.location.y,-dcp{i}.location.depth/1000,'ko');
         set(ringHandles(i),'Visible','off');
         %sites(i,:) = [dcp{i}.location.x,dcp{i}.location.y,dcp{i}.location.depth];
     end
@@ -164,9 +174,11 @@ for i = 1:length(dcp)
     end
 end
 % axis equal
-xlabel('Medial-lateral (mm)')
-ylabel('Anterior-posterior (mm)')
-zlabel('Depth from cortical surface (um)')
+ylabel('Medial-lateral (mm)')
+xlabel('Anterior-posterior (mm)')
+zlabel('Depth from cortical surface (mm)')
+axis tight
+axis equal
 view([45,10])
 grid on
 % set(gca,'ButtonDownFcn', @mouseclick_callback)
@@ -180,6 +192,8 @@ initCoh = initiateCohObj(subject,...
 dirPref = dirPrefObj(subject,...
     dcp{1}.datapath);         % Builds direction preference object
 speedPref = speedPrefObj(subject,...
+    dcp{1}.datapath);
+sacPref = sacPrefObj(subject,...
     dcp{1}.datapath);
 
 %% Callbacks
@@ -198,12 +212,22 @@ speedPref = speedPrefObj(subject,...
                     colorindex = index - iter*size(colors,1);
                     iter = iter+1;
                 end
-                siteHandles(i).Color = colors(colorindex,:);
+                if plotTransparent
+                    siteHandles(i).MarkerFaceColor = colors(colorindex,:);
+                    siteHandles(i).MarkerFaceAlpha = 1;
+                else
+                    siteHandles(i).Color = colors(colorindex,:);
+                end
                 ringHandles(i).Visible = 'on';
                 ringHandles(i).Color = colors(colorindex,:);
                 
             else
-                siteHandles(i).Color = [0 0 0];
+                if plotTransparent
+                    siteHandles(i).MarkerFaceColor = [0 0 0];
+                    siteHandles(i).MarkerFaceAlpha = 0.1;
+                else
+                    siteHandles(i).Color = [0 0 0];
+                end
                 ringHandles(i).Visible = 'off';
                 ringHandles(i).Color = [0 0 0];
             end
@@ -218,7 +242,7 @@ speedPref = speedPrefObj(subject,...
         else
             totalunits = length(dcp{selectFile.Value}.unitIndex);
             for i = 1:totalunits
-                UnitsString{i} = num2str(dcp{selectFile.Value}.unitIndex(i));
+                UnitsString{i} = [num2str(dcp{selectFile.Value}.unitIndex(i)) ':' dcp{selectFile.Value}.unitTypes{i}];
             end
         end
         selectUnit.String = UnitsString;
@@ -233,6 +257,8 @@ speedPref = speedPrefObj(subject,...
             dcp{selectFile.Value}.datapath);         % Builds direction preference object
         speedPref = speedPrefObj(subject,...
             dcp{selectFile.Value}.datapath);
+        sacPref = sacPrefObj(subject,...
+            dcp{selectFile.Value}.datapath);
         
     end
 
@@ -241,6 +267,7 @@ speedPref = speedPrefObj(subject,...
         
         unitSelected = UnitsString{selectUnit.Value};
         index = selectFile.Value;
+%         disp(['Unit selected is ' dcp{index}.unitTypes{selectUnit.Value}]);
         
         if length(dcp{index}.location.x) > 1
             if length(dcp{index}.location.x) == 24
@@ -262,7 +289,7 @@ speedPref = speedPrefObj(subject,...
         end
         
         % Generate list of analyses
-        selectAnalysis.String = {'dirPref','speedPref','initiateCoh','dynamicCoh'};
+        selectAnalysis.String = {'dirPref','speedPref','initiateCoh','dynamicCoh','sacPref'};
     end
 
 % Analysis selection callback
@@ -282,7 +309,7 @@ speedPref = speedPrefObj(subject,...
                     end
                     
                     % Sort by direction and plot rasters
-                    unitSelected= str2double(UnitsString{selectUnit.Value});
+                    unitSelected= str2double(extractBefore(UnitsString{selectUnit.Value},':'));
                     dirPrefRaster(dirPref,0:45:315,unitSelected);
                     
                     % Plot grand average PSTH across all trials
@@ -304,7 +331,7 @@ speedPref = speedPrefObj(subject,...
                     end
                     
                     % Sort by speed and plot rasters
-                    unitSelected= str2double(UnitsString{selectUnit.Value});
+                    unitSelected= str2double(extractBefore(UnitsString{selectUnit.Value},':'));
                     speedPrefRaster(speedPref,unique(speedPref.directions),...
                         unique(speedPref.speeds),unitSelected)
                     
@@ -348,13 +375,14 @@ speedPref = speedPrefObj(subject,...
                             ax(cohi,:) = axis;
                         end
                         
-                        for cohi = 1:length(unique(initCoh.coh))
-                            subplot(1,length(unique(initCoh.coh)),cohi)
+                        cohs = unique(initCoh.coh);
+                        for cohi = 1:length(cohs)
+                            subplot(1,length(cohs),cohi)
                             axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
                             plotVertical(0);
                             xlabel('Time (ms)')
                             ylabel('sp/s')
-                            mymakeaxis(gca)
+                            mymakeaxis(gca,'xytitle',['Coh = ' num2str(cohs(cohi))])
                         end
                         
                         figure('Name','Speed/coherence conditioned rates 2','Position',[342 449 1972 420])
@@ -368,13 +396,14 @@ speedPref = speedPrefObj(subject,...
                             ax(speedi,:) = axis;
                         end
                         
-                        for speedi = 1:length(unique(initCoh.speeds))
-                            subplot(1,length(unique(initCoh.speeds)),speedi)
+                        speeds = unique(initCoh.speeds);
+                        for speedi = 1:length(speeds)
+                            subplot(1,length(speeds),speedi)
                             axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
                             plotVertical(0);
                             xlabel('Time (ms)')
                             ylabel('sp/s')
-                            mymakeaxis(gca)
+                            mymakeaxis(gca,'xytitle',['Speed = ' num2str(speeds(speedi)) ' deg/s'])
                         end
                     end
                     
@@ -414,6 +443,30 @@ speedPref = speedPrefObj(subject,...
                         plotVertical([150 150+0:300:1500]);
                         xlim(ax(1:2))
                     end
+                    
+                case 'sacPref'
+                    if isempty(sacPref.directions)
+                        sacPref = assertSpikesExtracted(sacPref,...
+                            dcp{selectFile.Value}.spikesExtracted);  % Asserts that spiking data has (not) been extracted already
+                        sacPref = unitsIndex(sacPref);                  % Finds the indices to the units
+                        sacPref = sacPrefTrials(sacPref,trList);        % Finds dirPref trial data
+                        t_offsets = [sacPref.eye(:).targetAcquired];
+                        sacPref = sacPref.dirRates(boxCarWidth,t_offsets);
+                    end
+                    
+                    % Sort by direction and plot rasters
+                    unitSelected= str2double(extractBefore(UnitsString{selectUnit.Value},':'));
+                    sacPrefRaster(sacPref,0:45:315,unitSelected);
+                    
+                    % Plot grand average PSTH across all trials
+                    figure;                   % Calculates rates based with 50 ms boxcar
+                    plot(-1000:100,nanmean(sacPref.r(:,:,selectUnit.Value)*1000,2));
+                    hold on
+                    plotVertical(0);
+                    xlabel('Time from target acquisition (ms)')
+                    ylabel('Sp/s')
+                    mymakeaxis(gca);
+                    
             end
         catch
             warning(['Analysis of ' analysisType ' failed.'])

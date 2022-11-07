@@ -30,6 +30,7 @@ classdef dcpObj
      
     properties (SetAccess = private)
         probe;
+        unitTypes;
 %         dirPref;
 %         
 %         speedPref;
@@ -85,22 +86,110 @@ classdef dcpObj
             end
         end
         
-        function obj = extractKKData(obj,kkname,kkdir,plxname,plxdir,maestrodir,addSpike)
+        function obj = extractKKData(obj,kkname,kkdir,plxname,plxdir,maestrodir,addSpike,startChannel,acceptMU,checkReceipt)
         % Add spiking data to Maestro data files
             if ~exist('addSpike','var')
                 addSpike = false;
             end
+            if ~exist('startChannel','var')
+                startChannel = 'EVT01';
+            end
+            if ~exist('acceptMU','var')
+                acceptMU = false;
+            end
+            if ~exist('checkReceipt')
+                checckReceipt = false;
+            end
+            
+            if checkReceipt
+                receiptFile = dir([maestrodir '/spikesReceipt']);
+                if isempty(receiptFile)
+                    receiptExists = false;
+                else
+                    receiptExists = true;
+                end
+            end
+            
             if obj.spikesExtracted
                 disp('Spikes already extracted and inserted into Maestro files.')
+            elseif checkReceipt && receiptExists
+                disp('Spike receipt exists, spikes already extracted and inserted into Maestro files.')
+                obj.spikesExtracted = true;
+                
+                tsvFiles = dir([kkdir '/*.tsv']);
+                if length(tsvFiles) > 1
+                    tsv = tdfread([kkdir '/cluster_info_' kkname(end-5) '.tsv']);
+                else
+                    tsv = tdfread([kkdir '/cluster_info.tsv']);
+                end
+                kkIndex = [];
+                for uniti = 1:size(tsv.group,1)
+                    unitType = [tsv.group(uniti,:) '     '];
+                    if acceptMU
+                        if strcmp(unitType(1:4),'good') | strcmp(unitType(1:3),'mua')
+                            kkIndex = [kkIndex; tsv.channel(uniti) tsv.id(uniti)];
+                        end
+                    else
+                        if strcmp(unitType(1:4),'good')
+                            kkIndex = [kkIndex; tsv.channel(uniti) tsv.id(uniti)];
+                        end
+                    end
+                end
+                obj.klustaID = kkIndex;
+%                 obj = unitsIndex(obj);
+%                 obj = setUnitType(obj,kkdir,kkname,acceptMU);
             else
                 if strcmp(plxname(end-2:end),'pl2')
-                    [~, ~, ~, ~, unitsIndex] = ...
-                        extractKKSpikes(kkname,kkdir,plxname,plxdir,maestrodir,'addSpike',addSpike);
-                    obj.klustaID = unitsIndex;
+                    [~, ~, unitsData, ~, kkIndex] = ...
+                        extractKKSpikes(kkname,kkdir,plxname,plxdir,maestrodir,'addSpike',addSpike,...
+                        'startChannel',startChannel,'acceptMU',acceptMU);
+                    obj.klustaID = kkIndex;
+%                     obj = unitsIndex(obj);                    
+%                     obj = setUnitType(obj,kkdir,kkname,acceptMU);
+                    
+                    % Write receipt
+                    if ~isempty(kkIndex)
+                        Ntrials = length(unitsData);
+                        Nspikes = numel(vertcat(unitsData{:,1}));
+                        Nclusters = length(kkIndex);
+                        Nchannels = numel(unique(vertcat(unitsData{:,3})));
+                        ftemp = fopen([maestrodir '/spikesReceipt'],'w+');
+                        fprintf(ftemp,'%6s %12s %18s %24s\n','Ntrials','Nspikes','Nclusters','Nchannels');
+                        fprintf(ftemp,'%6d %12d %18d %24d\n',Ntrials,Nspikes,Nclusters,Nchannels);
+                        fclose(ftemp);
+                    else
+                        Ntrials = length(unitsData);
+                        ftemp = fopen([maestrodir '/spikesReceipt'],'w+');
+                        fprintf(ftemp,'%6s %12s %18s %24s\n','Ntrials','Nspikes','Nclusters','Nchannels');
+                        fprintf(ftemp,'%6d %12d %18d %24d\n',Ntrials,0,0,0);
+                        fclose(ftemp);
+                    end
                 else
                     error(['Extraction format ' plxname(end-2:end) ' not recognized!'])
                 end
                 obj.spikesExtracted = true;
+            end
+        end
+        
+        function obj = setUnitType(obj,kkdir,kkname)
+            if obj.spikesExtracted
+                
+                if isempty(obj.unitIndex)
+                    obj = unitsIndex(obj);
+                end
+                
+                tsvFiles = dir([kkdir '/*.tsv']);
+                if length(tsvFiles) > 1
+                    tsv = tdfread([kkdir '/cluster_info_' kkname(end-5) '.tsv']);
+                else
+                    tsv = tdfread([kkdir '/cluster_info.tsv']);
+                end
+                for uniti = 1:length(obj.unitIndex)
+                    unitj = find(obj.unitIndex(uniti) == tsv.id);
+                    obj.unitTypes{uniti} = strtrim(tsv.group(unitj,:));
+                end
+            else
+                obj.unitTypes = {''};
             end
         end
         
@@ -156,6 +245,7 @@ classdef dcpObj
             addParameter(Parser,'units',NaN)
             addParameter(Parser,'t',-100:1600)
             addParameter(Parser,'trialN',NaN)
+            addParameter(Parser,'t_offsets',NaN)
             
             parse(Parser,obj,width,varargin{:})
             
@@ -163,7 +253,8 @@ classdef dcpObj
             width = Parser.Results.width;
             units = Parser.Results.units;
             t = Parser.Results.t;
-            trialN = Parser.Results.trialN;            
+            trialN = Parser.Results.trialN;     
+            t_offsets = Parser.Results.t_offsets;
             
             if any(isnan(trialN))
                 trialN = 1:numel(obj.spikeTimes);
@@ -183,12 +274,16 @@ classdef dcpObj
             end
             t = t(:); 
             
+            if isnan(t_offsets)
+                t_offsets = zeros(length(trialN),1);
+            end
+            
             % Find smoothed rates
             f = @(diffs)obj.myBoxCar(diffs,width);
             r = nan(length(t),numel(trialN),numel(units));
             for triali = trialN
                 spikeTimes = obj.spikeTimes{triali}(1:2);
-                spikeTimes{1} = spikeTimes{1}(ismember(spikeTimes{2},units));
+                spikeTimes{1} = spikeTimes{1}(ismember(spikeTimes{2},units))-t_offsets(triali);
                 spikeTimes{2} = spikeTimes{2}(ismember(spikeTimes{2},units));
                 [~, ~, ~, rTemp] = spikeTimes2Rate(spikeTimes,...
                     'time',t,'resolution',1,'Filter',f,...
@@ -453,6 +548,16 @@ classdef dcpObj
                         chanLoc = chanMap(chanMap(:,1) == chans(chani),2);
                         obj.location.depth(chanLoc+1) = refDepth-150*chanLoc;
                     end
+                elseif strcmp(T.Probe{1},'single')
+                    chanMap = [0,0];
+                    indx = find(strcmp(fileName,T.Date));
+                    tempLoc = regexp(T.Location_x_y_z_{1},',','split');
+                    obj.location.x = str2num(tempLoc{1});
+                    obj.location.y = str2num(tempLoc{2});
+                    obj.location.z = str2num(tempLoc{3});
+                    refDepth = str2num(T.Location_x_y_z_{indx-1})-...
+                        str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth'))+1});
+                   obj.location.depth = refDepth;
                 end
             else
                 indx = find(strcmp(fileName,T.Date));
@@ -863,9 +968,12 @@ classdef dcpObj
         end
         
         %% Plotting methods
-        function h = rasterPlot(obj,trials,units)
+        function h = rasterPlot(obj,trials,units,t_offsets)
         % Raster plot
 %             h = figure;
+            if ~exist('t_offsets','var')
+                t_offsets = [];
+            end
             if islogical(trials)
                 trials = find(trials);
             end
@@ -874,8 +982,11 @@ classdef dcpObj
             for triali = 1:length(trials)
                 spikeTimes = obj.spikeTimes{trials(triali)}{1};
                 spikeTimes = spikeTimes(ismember(obj.spikeTimes{trials(triali)}{2},units));
-                if ~isempty(spikeTimes)
+                if ~isempty(spikeTimes) && isempty(t_offsets)
                     plotVertical(spikeTimes,...
+                        'MinMax',[triali,triali+1],'lineProperties',lineProps);
+                elseif ~isempty(spikeTimes)
+                    plotVertical(spikeTimes-t_offsets(triali),...
                         'MinMax',[triali,triali+1],'lineProperties',lineProps);
                 end
                 hold on

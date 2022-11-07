@@ -128,6 +128,7 @@ for si = 1:length(speeds)
                 ismember(init.conditions.directions,directions);
             init.eye.pert.mean(:,si,ci,pi) = nanmean(init.eye.speed(:,acceptvec),2);
             init.eye.pert.ste(:,si,ci,pi) = nanstd(init.eye.speed(:,acceptvec),[],2)./sqrt(sum(acceptvec));
+            init.eye.pert.N(si,ci,pi) = sum(acceptvec);
             
             % Find perturbation response amplitude
             if perturbations(pi) == 0
@@ -144,7 +145,72 @@ for si = 1:length(speeds)
                     init.t <= init.eye.pert.t(si,ci,pi)+pertWin,si,ci,pi) - ...
                     init.eye.pert.mean(init.t >= init.eye.pert.t(si,ci,pi) & ...
                     init.t <= init.eye.pert.t(si,ci,pi)+pertWin,si,ci,perturbations == 0);
-                init.eye.pert.res(si,ci,pi) = max(diffTemp) - min(diffTemp);
+                steTemp = sqrt(init.eye.pert.ste(init.t >= init.eye.pert.t(si,ci,pi) & ...
+                    init.t <= init.eye.pert.t(si,ci,pi)+pertWin,si,ci,pi).^2 + ...
+                    init.eye.pert.ste(init.t >= init.eye.pert.t(si,ci,pi) & ...
+                    init.t <= init.eye.pert.t(si,ci,pi)+pertWin,si,ci,perturbations == 0).^2);
+                [maxRes, maxInd] = max(diffTemp);
+                [minRes, minInd] = min(diffTemp);
+                init.eye.pert.res(si,ci,pi) = maxRes - minRes;
+                init.eye.pert.resSTE(si,ci,pi) = sqrt(steTemp(maxInd).^2 + steTemp(minInd).^2);
+                
+                if init.eye.pert.t(si,ci,pi) > pertWin
+%                     diffTemp2 = init.eye.pert.mean(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+%                         init.t <= init.eye.pert.t(si,ci,pi),si,ci,pi) - ...
+%                         init.eye.pert.mean(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+%                         init.t <= init.eye.pert.t(si,ci,pi),si,ci,perturbations == 0);
+%                     steTemp2 = sqrt(init.eye.pert.ste(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+%                         init.t <= init.eye.pert.t(si,ci,pi),si,ci,pi).^2 + ...
+%                         init.eye.pert.ste(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+%                         init.t <= init.eye.pert.t(si,ci,pi),si,ci,perturbations == 0).^2);
+%                     [maxRes, maxInd] = max(diffTemp2);
+%                     [minRes, minInd] = min(diffTemp2);
+%                     init.eye.pert.resControl(si,ci,pi) = maxRes - minRes;
+%                     init.eye.pert.resControlSTE(si,ci,pi) = sqrt(steTemp2(maxInd).^2 + steTemp2(minInd).^2);
+                    
+                    acceptvec = init.conditions.pert == perturbations(pi) & ...
+                        ismember(init.conditions.directions,directions);
+                    controlMean = nanmean(init.eye.speed(:,acceptvec),2);
+                    controlSTE = nanstd(init.eye.speed(:,acceptvec),[],2)/sqrt(sum(acceptvec));
+                    acceptvec = init.conditions.pert == 0 & ...
+                        ismember(init.conditions.directions,directions);
+                    controlMean2 = nanmean(init.eye.speed(:,acceptvec),2);
+                    controlSTE2 = nanstd(init.eye.speed(:,acceptvec),[],2)/sqrt(sum(acceptvec));
+                    diffTemp2 = controlMean(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi)) - ...
+                        controlMean2(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi));
+                    steTemp2 = sqrt(controlSTE(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi)).^2 + ...
+                        controlSTE2(init.t >= init.eye.pert.t(si,ci,pi) - pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi)).^2);
+                    [maxRes, maxInd] = max(diffTemp2);
+                    [minRes, minInd] = min(diffTemp2);
+                    init.eye.pert.resControl(si,ci,pi) = maxRes - minRes;
+                    init.eye.pert.resControlSTE(si,ci,pi) = sqrt(steTemp2(maxInd).^2 + steTemp2(minInd).^2);
+                    
+                else
+                    acceptvec = init.conditions.pert == perturbations(pi) & ...
+                        ismember(init.conditions.directions,directions);
+                    controlMean = nanmean(init.eye.speed(:,acceptvec),2);
+                    controlSTE = nanstd(init.eye.speed(:,acceptvec),[],2)/sqrt(sum(acceptvec));
+                    acceptvec = init.conditions.pert == 0 & ...
+                        ismember(init.conditions.directions,directions);
+                    controlMean2 = nanmean(init.eye.speed(:,acceptvec),2);
+                    controlSTE2 = nanstd(init.eye.speed(:,acceptvec),[],2)/sqrt(sum(acceptvec));
+                    diffTemp2 = controlMean(init.t >= init.eye.pert.t(si,ci,pi) + 2*pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi) + 3*pertWin) - ...
+                        controlMean2(init.t >= init.eye.pert.t(si,ci,pi) + 2*pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi) + 3*pertWin);
+                    steTemp2 = sqrt(controlSTE(init.t >= init.eye.pert.t(si,ci,pi) + 2*pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi) + 3*pertWin).^2 + ...
+                        controlSTE2(init.t >= init.eye.pert.t(si,ci,pi) + 2*pertWin & ...
+                        init.t <= init.eye.pert.t(si,ci,pi) + 3*pertWin).^2);
+                    [maxRes, maxInd] = max(diffTemp2);
+                    [minRes, minInd] = min(diffTemp2);
+                    init.eye.pert.resControl(si,ci,pi) = maxRes - minRes;
+                    init.eye.pert.resControlSTE(si,ci,pi) = sqrt(steTemp2(maxInd).^2 + steTemp2(minInd).^2);                    
+                end
             end
             
         end
@@ -261,19 +327,29 @@ if plotSamps.On
     for ci = 1:length(cohs)
         for si = 1:length(speeds)
             %         plot(speeds(si),randsample(init.eye.init{si,ci},50),'o','Color',colors(ci,:))
-            plot(speeds(si)+randn(plotSamps.n,1)/10,init.eye.init{si,ci}(randsample(size(init.eye.init{si,ci},2),plotSamps.n,plotSamps.replacement)),...
-                'o','Color',cohColors(ci,:),'MarkerSize',4,'MarkerFaceColor',cohColors(ci,:))
+            if plotSamps.n < size(init.eye.init{si,ci},2)
+                plot(speeds(si)+randn(plotSamps.n,1)/10,init.eye.init{si,ci}(randsample(size(init.eye.init{si,ci},2),plotSamps.n,plotSamps.replacement)),...
+                    'o','Color',cohColors(ci,:),'MarkerSize',4,'MarkerFaceColor',cohColors(ci,:))
+            else
+                plot(speeds(si)+randn(size(init.eye.init{si,ci},2),1)/10,init.eye.init{si,ci},...
+                    'o','Color',cohColors(ci,:),'MarkerSize',4,'MarkerFaceColor',cohColors(ci,:))
+            end
             hold on
         end
     end
 end
 for ci = 1:length(cohs)
     for si = 1:length(speeds)
-        plot(speeds(si),nanmean(init.eye.init{si,ci}),...
-            'o','Color',cohColors(ci,:),'MarkerSize',8,'MarkerFaceColor',[1 1 1])
+        if plotSamps.On
+            plot(speeds(si),nanmean(init.eye.init{si,ci}),...
+                'o','Color',cohColors(ci,:),'MarkerSize',8,'MarkerFaceColor',[1 1 1])
+        else
+            plot(speeds(si),nanmean(init.eye.init{si,ci}),...
+                'o','Color',cohColors(ci,:),'MarkerSize',8,'MarkerFaceColor',cohColors(ci,:))
+        end
         hold on
     end
-    plot(xs,gain(ci).B(1)*xs + gain(ci).B(2),'Color',speedColors(ci,:))
+    plot(xs,gain(ci).B(1)*xs + gain(ci).B(2),'Color',cohColors(ci,:))
 end
 plotUnity;
 axis square
@@ -319,15 +395,29 @@ for pi = 1:length(perturbations)
         pertInd = pertInd+1;
         subplot(1,sum(perturbations>0),pertInd)
         for ci = 1:length(cohs)
-            plot(speeds',init.eye.pert.res(:,ci,pi)',...
+            % Gain > 1, therefore one-sided test for significance w/ alpha = 0.05 therefore z = 1.64 (95% chance the true mean is above lower error bar)
+            errorbar(speeds',init.eye.pert.res(:,ci,pi)'-init.eye.pert.resControl(:,ci,pi)',...
+                sqrt(init.eye.pert.resSTE(:,ci,pi)'.^2 + init.eye.pert.resControlSTE(:,ci,pi)'.^2)*1.64,[],...
                 'o-','Color',cohColors(ci,:))
             hold on
         end
         xlabel('Speed (deg/s)')
         ylabel('Perturbation response')
         title(['Perturbation time = ' num2str(init.eye.pert.t(1,1,pi))])
+        axis tight
+        ax(pertInd,:) = axis;
     end
 end
+pertInd = 0;
+for pi = 1:length(perturbations)
+    if perturbations(pi) > 0
+        pertInd = pertInd+1;
+        subplot(1,sum(perturbations>0),pertInd)
+        axis([0.8*min(speeds) 1.2*max(speeds) min(ax(:,3)) max(ax(:,4))])
+        plotHorizontal(0);
+    end
+end
+
 
 figure('Name','Feedforward gain estimate')
 pertInd = 0;
@@ -336,12 +426,26 @@ for pi = 1:length(perturbations)
         pertInd = pertInd+1;
         subplot(1,sum(perturbations>0),pertInd)
         for si = 1:length(speeds)
-            plot(cohs',init.eye.pert.res(si,:,pi)'/(0.4*speeds(si)),...
+            % Gain > 1, therefore one-sided test for significance w/ alpha = 0.05 therefore z = 1.64 (95% chance the true mean is above lower errorbar)
+            errorbar(cohs',(init.eye.pert.res(si,:,pi)'-init.eye.pert.resControl(si,:,pi)')/(0.4*speeds(si)),...
+                sqrt(init.eye.pert.resSTE(:,ci,pi)'.^2 + init.eye.pert.resControlSTE(:,ci,pi)'.^2)/(0.4*speeds(si))*1.64,[],...
                 'o-','Color',speedColors(si,:))
             hold on
         end
         xlabel('Coherence')
         ylabel('Gain')
         title(['Perturbation time = ' num2str(init.eye.pert.t(1,1,pi))])
+        axis tight
+        ax2(pertInd,:) = axis;
+    end
+end
+
+pertInd = 0;
+for pi = 1:length(perturbations)
+    if perturbations(pi) > 0
+        pertInd = pertInd+1;
+        subplot(1,sum(perturbations>0),pertInd)
+        axis([0.8*min(cohs) 1.2*max(cohs) min(ax2(:,3)) max(ax2(:,4))])
+        plotHorizontal(0);
     end
 end
