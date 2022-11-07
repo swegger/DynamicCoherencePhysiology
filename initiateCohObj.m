@@ -647,13 +647,16 @@ classdef initiateCohObj < dcpObj
         end
                 
         %% Plotting methods
-        function [h,sh,colors] = initiateCohMeanEye(obj,dirs,normalize,window)
+        function [h,sh,colors] = initiateCohMeanEye(obj,dirs,normalize,window,figureType)
         % Plots mean eye speed for each sequence and target speed
             if ~exist('normalize','var')
                 normalize = true;
             end
             if ~exist('window','var')
                 window = [0 300];
+            end
+            if ~exist('figureType','var')
+                figureType = 'matlab';
             end
             h = figure;
             colors = colormap('lines');
@@ -669,8 +672,16 @@ classdef initiateCohObj < dcpObj
                         nrm = 1;
                     end
                     [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(hi));
-                    plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
-                        'h',h,'sh',sh(hi),'color',colors(si,:));
+                    switch figureType
+                        case 'fyp'
+                            plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
+                                'h',h,'sh',sh(hi),'color',colors(si,:),'plotPatch',false);
+                        case 'matlab'
+                            plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
+                                'h',h,'sh',sh(hi),'color',colors(si,:),'plotPatch',true);
+                        otherwise
+                            error(['Figure type ' figureType ' not recognized!'])
+                    end
                 end
                 axis tight
                 ax(hi,:) = axis;
@@ -683,21 +694,44 @@ classdef initiateCohObj < dcpObj
                 xlabel('Time from motion onset (ms)')
                 if normalize
                     plotHorizontal(1);
-                    ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
-                    mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
-                        'interpreter','latex','yticks',[0.1 1])
+                    switch figureType
+                        case 'fyp'
+                            ylabel('Eye speed / Target speed')
+                            title([num2str(cohs(hi)) '% coherence'])
+                        case 'matlab'
+                            ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
+                            mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
+                                'interpreter','latex','yticks',[0.1 1])
+                        otherwise
+                            error(['Figure type ' figureType ' not recognized!'])
+                    end
                 else
-                    ylabel('Eye speed (deg/s)')
-                    mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
-                        'interpreter','latex')                    
+                    switch figureType
+                        case 'fyp'
+                            ylabel('Eye speed (deg/s)')
+                            title([num2str(cohs(hi)) '% coherence'])
+                        case 'matlab'
+                            ylabel('Eye speed (deg/s)')
+                            mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
+                                'interpreter','latex')
+                        otherwise
+                            error(['Figure type ' figureType ' not recognized!'])
+                    end                  
                 end
             end
             
-            for li = 1:(2*length(speeds)+2)
-                leg{li} = '';
-            end
-            for si = 1:length(speeds)
-                leg{2*si} = [num2str(speeds(si)) ' deg/s'];
+            switch figureType
+                case 'fyp'
+                    for si = 1:length(speeds)
+                        leg{si} = [num2str(speeds(si)) ' deg/s'];
+                    end
+                case 'matlab'
+                    for li = 1:(2*length(speeds)+2)
+                        leg{li} = '';
+                    end
+                    for si = 1:length(speeds)
+                        leg{2*si} = [num2str(speeds(si)) ' deg/s'];
+                    end
             end
             legend(leg)
         end
