@@ -548,6 +548,24 @@ classdef dcpObj
                         chanLoc = chanMap(chanMap(:,1) == chans(chani),2);
                         obj.location.depth(chanLoc+1) = refDepth-150*chanLoc;
                     end
+                elseif strcmp(T.Probe{1},'24V.2')
+                    chanMap = [23 0; 22 1; 21 2; 20 3; 19 4; 18 5; 17 6; 16 7; 15 8; 14 9; 13 10; 12 11; 11 12; 10 13; 9 14; 8 15; 7 16; 6 17; 5 18; 4 19; 3 20; 2 21; 1 22; 0 23];
+                    indx = find(strcmp(fileName,T.Date));
+                    tempLoc = regexp(T.Location_x_y_z_{1},',','split');
+                    obj.location.x = repmat(str2num(tempLoc{1}),[1,24]);
+                    obj.location.y = repmat(str2num(tempLoc{2}),[1,24]);
+                    obj.location.z = repmat(str2num(tempLoc{3}),[1,24]);
+%                     obj.location.x = repmat(str2num(T.Location_x_y_z_{1}(1:4)),[1,24]);
+%                     obj.location.y = repmat(str2num(T.Location_x_y_z_{1}(6:9)),[1,24]);
+%                     obj.location.z = repmat(str2num(T.Location_x_y_z_{1}(11:14)),[1,24]);
+                    obj.location.depth = nan(1,24);
+                    refDepth = str2num(T.Location_x_y_z_{indx-1})-...
+                        str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth'))+1});
+                    chans = unique(obj.chansIndex);
+                    for chani = 1:length(chans)
+                        chanLoc = chanMap(chanMap(:,1) == chans(chani),2);
+                        obj.location.depth(chanLoc+1) = refDepth-150*chanLoc;
+                    end
                 elseif strcmp(T.Probe{1},'single')
                     chanMap = [0,0];
                     indx = find(strcmp(fileName,T.Date));

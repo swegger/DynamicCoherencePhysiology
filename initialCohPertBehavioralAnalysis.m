@@ -398,10 +398,10 @@ for pi = 1:length(perturbations)
             % Gain > 1, therefore one-sided test for significance w/ alpha = 0.05 therefore z = 1.64 (95% chance the true mean is above lower error bar)
             errorbar(speeds',init.eye.pert.res(:,ci,pi)'-init.eye.pert.resControl(:,ci,pi)',...
                 sqrt(init.eye.pert.resSTE(:,ci,pi)'.^2 + init.eye.pert.resControlSTE(:,ci,pi)'.^2)*1.64,[],...
-                'o-','Color',cohColors(ci,:))
+                'o-','Color',cohColors(ci,:),'MarkerFaceColor',cohColors(ci,:))
             hold on
         end
-        xlabel('Speed (deg/s)')
+        xlabel('Target Speed (deg/s)')
         ylabel('Perturbation response')
         title(['Perturbation time = ' num2str(init.eye.pert.t(1,1,pi))])
         axis tight
@@ -428,8 +428,8 @@ for pi = 1:length(perturbations)
         for si = 1:length(speeds)
             % Gain > 1, therefore one-sided test for significance w/ alpha = 0.05 therefore z = 1.64 (95% chance the true mean is above lower errorbar)
             errorbar(cohs',(init.eye.pert.res(si,:,pi)'-init.eye.pert.resControl(si,:,pi)')/(0.4*speeds(si)),...
-                sqrt(init.eye.pert.resSTE(:,ci,pi)'.^2 + init.eye.pert.resControlSTE(:,ci,pi)'.^2)/(0.4*speeds(si))*1.64,[],...
-                'o-','Color',speedColors(si,:))
+                sqrt(init.eye.pert.resSTE(si,:,pi)'.^2 + init.eye.pert.resControlSTE(si,:,pi)'.^2)/(0.4*speeds(si))*1.64,[],...
+                'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
             hold on
         end
         xlabel('Coherence')
@@ -446,6 +446,37 @@ for pi = 1:length(perturbations)
         pertInd = pertInd+1;
         subplot(1,sum(perturbations>0),pertInd)
         axis([0.8*min(cohs) 1.2*max(cohs) min(ax2(:,3)) max(ax2(:,4))])
+        plotHorizontal(0);
+    end
+end
+
+figure('Name','Feedforward gain estimate')
+pertInd = 0;
+for pi = 1:length(perturbations)
+    if perturbations(pi) > 0
+        pertInd = pertInd+1;
+        subplot(1,sum(perturbations>0),pertInd)
+        for ci = 1:length(cohs)
+            % Gain > 1, therefore one-sided test for significance w/ alpha = 0.05 therefore z = 1.64 (95% chance the true mean is above lower errorbar)
+            errorbar(speeds',(init.eye.pert.res(:,ci,pi)'-init.eye.pert.resControl(:,ci,pi)')./(0.4*speeds'),...
+                sqrt(init.eye.pert.resSTE(:,ci,pi)'.^2 + init.eye.pert.resControlSTE(:,ci,pi)'.^2)./(0.4*speeds')*1.64,[],...
+                'o-','Color',cohColors(ci,:),'MarkerFaceColor',cohColors(ci,:))
+            hold on
+        end
+        xlabel('Target speed (deg/s)')
+        ylabel('Gain')
+        title(['Perturbation time = ' num2str(init.eye.pert.t(1,1,pi))])
+        axis tight
+        ax2(pertInd,:) = axis;
+    end
+end
+
+pertInd = 0;
+for pi = 1:length(perturbations)
+    if perturbations(pi) > 0
+        pertInd = pertInd+1;
+        subplot(1,sum(perturbations>0),pertInd)
+        axis([0.8*min(speeds) 1.2*max(speeds) min(ax2(:,3)) max(ax2(:,4))])
         plotHorizontal(0);
     end
 end
