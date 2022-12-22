@@ -24,6 +24,10 @@ addParameter(Parser,'shuffleN',100)
 addParameter(Parser,'sampleRate',40)
 addParameter(Parser,'ClusterMethod','densityClust')
 addParameter(Parser,'pertWin',250)
+addParameter(Parser,'resultsFile','none')
+addParameter(Parser,'testInitGain',true)
+addParameter(Parser,'initSpeed',10)
+addParameter(Parser,'includeEarlyInitCohPertTime',false)
 
 parse(Parser,varargin{:})
 
@@ -40,436 +44,456 @@ shuffleN = Parser.Results.shuffleN;
 sampleRate = Parser.Results.sampleRate;
 ClusterMethod = Parser.Results.ClusterMethod;
 pertWin = Parser.Results.pertWin;
+resultsFile = Parser.Results.resultsFile;
+testInitGain = Parser.Results.testInitGain;
+initSpeed = Parser.Results.initSpeed;
+includeEarlyInitCohPertTime = Parser.Results.includeEarlyInitCohPertTime;
 
 %% Load dcp object file
-load(dcpObjectFile);
+if strcmp(resultsFile,'none')
+    load(dcpObjectFile);
+    fileExist = false;
+else
+    fileExist = exist(resultsFile,'file');
+    if fileExist
+        load(resultsFile)
+    else
+        error(['File ' resultsFile ' does not exist in path.'])
+    end
+end
 
-%% Get mean and covariance of each unit
-passCutoff = nan(1000,1);
-Rinit = nan(1701,3,3,1000);
-Rdyn = nan(1701,5,1000);
-locations = nan(1000,3);
-cellID = nan(1000,100,3);
-RSCinit = nan(1000,100);
-RSCinit_pval = nan(1000,100);
-RSCdyn = nan(1000,100);
-RSCdyn_pval = nan(1000,100);
-indx = 1;
-for filei = 1:length(dcp)
-    disp(['File ' num2str(filei) ' of ' num2str(length(dcp))])
-
-    % Add probe info
-    dcp{filei} = addProbeInfo(dcp{filei});
-
-    % InitCoh data
-    load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/initCoh' ...
-        dcp{filei}.datapath(end-8:end)])
-
-    % DynCoh data
-    load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/dynCoh' ...
-        dcp{filei}.datapath(end-8:end)])
-
-    if ~isempty(initCoh.R) && (~isempty(dynCoh.R) || ~any(isnan(dynCoh.R(:))) && size(dynCoh.R,2) > 1)
-        if length(initCoh.unitIndex) == length(dynCoh.unitIndex)
-            speeds = unique(initCoh.speeds);
-            cohs = unique(initCoh.coh);
-            sequences = unique(dynCoh.sequences);
-            perturbations = unique(dynCoh.perturbations);
-
-            passCutoff(indx:indx+length(initCoh.passCutoff)-1) = initCoh.passCutoff | dynCoh.passCutoff;
-
-
-            e = sqrt(vertcat(initCoh.eye(:).hvel).^2 + vertcat(initCoh.eye(:).vvel).^2)';
-            eInit = nanmean(e(initCoh.eye_t >= initWin(1) & initCoh.eye_t <= initWin(2),:),1);
-
-
-
-            if calcRSC
-                [rsc,pval] = spikeCountCorrelationWin(initCoh,'win',[150,450]);
-                [rsc2,pval2] = spikeCountCorrelationWin(dynCoh,'win',[150,450]);
-            end
-
-            if calcCC
-                [cc, shufflecc] = correlograms(initCoh,sampleRate,initCoh.unitIndex,win,shuffleN);
-                counts = spikeCount(initCoh,initCoh.unitIndex);
-            end
-
-            % Get data for each neuron
-            for uniti = 1:length(initCoh.preferredDirectionRelative)
-                ind = find(dir == initCoh.preferredDirectionRelative(uniti));
-                Rinit(:,:,:,indx) = initCoh.R(:,:,:,uniti,ind);
-
-                ind = find(dir == dynCoh.preferredDirectionRelative(uniti));
-                Rdyn(:,:,indx) = dynCoh.R(:,:,uniti,ind);
-
-
-                for j = 1:length(initCoh.unitIndex)
-                    cellID(indx,j,1) = filei;
-                    cellID(indx,j,2) = initCoh.unitIndex(uniti);
-                    cellID(indx,j,3) = initCoh.unitIndex(j);
-                end
-
+%% Results file check start
+if ~fileExist
+    
+    %% Get mean and covariance of each unit
+    passCutoff = nan(1000,1);
+    Rinit = nan(1701,3,3,1000);
+    Rdyn = nan(1701,5,1000);
+    locations = nan(1000,3);
+    cellID = nan(1000,100,3);
+    RSCinit = nan(1000,100);
+    RSCinit_pval = nan(1000,100);
+    RSCdyn = nan(1000,100);
+    RSCdyn_pval = nan(1000,100);
+    indx = 1;
+    for filei = 1:length(dcp)
+        disp(['File ' num2str(filei) ' of ' num2str(length(dcp))])
+        
+        % Add probe info
+        dcp{filei} = addProbeInfo(dcp{filei});
+        
+        % InitCoh data
+        load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/initCoh' ...
+            dcp{filei}.datapath(end-8:end)])
+        
+        % DynCoh data
+        load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/dynCoh' ...
+            dcp{filei}.datapath(end-8:end)])
+        
+        if ~isempty(initCoh.R) && (~isempty(dynCoh.R) || ~any(isnan(dynCoh.R(:))) && size(dynCoh.R,2) > 1)
+            if length(initCoh.unitIndex) == length(dynCoh.unitIndex)
+                speeds = unique(initCoh.speeds);
+                cohs = unique(initCoh.coh);
+                sequences = unique(dynCoh.sequences);
+                perturbations = unique(dynCoh.perturbations);
+                
+                passCutoff(indx:indx+length(initCoh.passCutoff)-1) = initCoh.passCutoff | dynCoh.passCutoff;
+                
+                
+                e = sqrt(vertcat(initCoh.eye(:).hvel).^2 + vertcat(initCoh.eye(:).vvel).^2)';
+                eInit = nanmean(e(initCoh.eye_t >= initWin(1) & initCoh.eye_t <= initWin(2),:),1);
+                
+                
+                
                 if calcRSC
-                    for j = 1:length(initCoh.unitIndex)
-                        RSCinit(indx,j) = rsc(uniti,j);
-                        RSCinit_pval(indx,j) = pval(uniti,j);
-                        RSCdyn(indx,j) = rsc2(uniti,j);
-                        RSCdym_pval(indx,j) = pval2(uniti,j);
-                    end
+                    [rsc,pval] = spikeCountCorrelationWin(initCoh,'win',[150,450]);
+                    [rsc2,pval2] = spikeCountCorrelationWin(dynCoh,'win',[150,450]);
                 end
-
+                
                 if calcCC
-                    for j = 1:length(initCoh.unitIndex)
-                        CC(indx,j,:) = (cc(:,uniti,j)-mean(shufflecc(:,uniti,j,:),4))/counts(uniti);                            % Shuffle corrected correlogram
-                        shuffletemp = reshape(shufflecc(:,uniti,j,:),[numel(shufflecc(:,uniti,j,:)),1]);
-                        CC_CI(indx,j,:) = [-1.96*std(shuffletemp),1.96*std(shuffletemp)]/counts(uniti);   % 95% confidence intervals of correlogram
-                    end
+                    [cc, shufflecc] = correlograms(initCoh,sampleRate,initCoh.unitIndex,win,shuffleN);
+                    counts = spikeCount(initCoh,initCoh.unitIndex);
                 end
-
-                if isempty(initCoh.location)
-                    x = NaN;
-                    y = NaN;
-                    z = NaN;
-                elseif length(initCoh.location.x)==24
-                    siteIndex = chanMap(initCoh.chansIndex(uniti) == chanMap(:,1),2);
-                    x = initCoh.location.x(siteIndex);
-                    y = initCoh.location.y(siteIndex);
-                    depth = -initCoh.location.depth(siteIndex);
-                elseif length(initCoh.location.x) > 1
-                    siteIndex = floor(initCoh.chansIndex(uniti)/4)+1;
-                    tempIndex = find(~isnan(initCoh.location.x));
-                    if siteIndex>length(tempIndex)
+                
+                % Get data for each neuron
+                for uniti = 1:length(initCoh.preferredDirectionRelative)
+                    ind = find(dir == initCoh.preferredDirectionRelative(uniti));
+                    Rinit(:,:,:,indx) = initCoh.R(:,:,:,uniti,ind);
+                    
+                    ind = find(dir == dynCoh.preferredDirectionRelative(uniti));
+                    Rdyn(:,:,indx) = dynCoh.R(:,:,uniti,ind);
+                    
+                    
+                    for j = 1:length(initCoh.unitIndex)
+                        cellID(indx,j,1) = filei;
+                        cellID(indx,j,2) = initCoh.unitIndex(uniti);
+                        cellID(indx,j,3) = initCoh.unitIndex(j);
+                    end
+                    
+                    if calcRSC
+                        for j = 1:length(initCoh.unitIndex)
+                            RSCinit(indx,j) = rsc(uniti,j);
+                            RSCinit_pval(indx,j) = pval(uniti,j);
+                            RSCdyn(indx,j) = rsc2(uniti,j);
+                            RSCdym_pval(indx,j) = pval2(uniti,j);
+                        end
+                    end
+                    
+                    if calcCC
+                        for j = 1:length(initCoh.unitIndex)
+                            CC(indx,j,:) = (cc(:,uniti,j)-mean(shufflecc(:,uniti,j,:),4))/counts(uniti);                            % Shuffle corrected correlogram
+                            shuffletemp = reshape(shufflecc(:,uniti,j,:),[numel(shufflecc(:,uniti,j,:)),1]);
+                            CC_CI(indx,j,:) = [-1.96*std(shuffletemp),1.96*std(shuffletemp)]/counts(uniti);   % 95% confidence intervals of correlogram
+                        end
+                    end
+                    
+                    if isempty(initCoh.location)
                         x = NaN;
                         y = NaN;
-                        depth = NaN;
+                        z = NaN;
+                    elseif length(initCoh.location.x)==24
+                        siteIndex = chanMap(initCoh.chansIndex(uniti) == chanMap(:,1),2);
+                        x = initCoh.location.x(siteIndex);
+                        y = initCoh.location.y(siteIndex);
+                        depth = -initCoh.location.depth(siteIndex);
+                    elseif length(initCoh.location.x) > 1
+                        siteIndex = floor(initCoh.chansIndex(uniti)/4)+1;
+                        tempIndex = find(~isnan(initCoh.location.x));
+                        if siteIndex>length(tempIndex)
+                            x = NaN;
+                            y = NaN;
+                            depth = NaN;
+                        else
+                            x = initCoh.location.x(tempIndex(siteIndex));
+                            y = initCoh.location.y(tempIndex(siteIndex));
+                            depth = -initCoh.location.depth(tempIndex(siteIndex));
+                        end
                     else
-                        x = initCoh.location.x(tempIndex(siteIndex));
-                        y = initCoh.location.y(tempIndex(siteIndex));
-                        depth = -initCoh.location.depth(tempIndex(siteIndex));
+                        x = initCoh.location.x;
+                        y = initCoh.location.y;
+                        depth = -initCoh.location.depth;
                     end
-                else
-                    x = initCoh.location.x;
-                    y = initCoh.location.y;
-                    depth = -initCoh.location.depth;
-                end
-                locations(indx,:) = [x,y,depth];
-
-                indx = indx+1;
-            end
-        end
-    end
-end
-
-Rinit = Rinit(:,:,:,1:indx-1);
-Rdyn = Rdyn(:,:,1:indx-1);
-locations = locations(1:indx-1,:);
-passCutoff = logical(passCutoff(1:indx-1));
-cellID = cellID(1:indx-1,:,:);
-RSCinit = RSCinit(1:indx-1,:);
-RSCinit_pval = RSCinit_pval(1:indx-1,:);
-RSCdyn = RSCdyn(1:indx-1,:);
-RSCdyn_pval = RSCdyn_pval(1:indx-1,:);
-
-%% Remove data that doesn't pass cutoff
-Rinit = Rinit(:,:,:,passCutoff);
-Rdyn = Rdyn(:,:,passCutoff);
-locations = locations(passCutoff,:);
-cellID = cellID(passCutoff,:,:);
-RSCinit = RSCinit(logical(passCutoff),:);
-RSCinit_pval = RSCinit_pval(logical(passCutoff),:);
-RSCdyn = RSCdyn(logical(passCutoff),:);
-RSCdyn_pval = RSCdyn_pval(logical(passCutoff),:);
-CC = CC(logical(passCutoff),:,:);
-CC_CI = CC_CI(logical(passCutoff),:,:);
-
-%% Remove outlier rates
-m = squeeze(max(Rinit,[],[1,2,3]))*1000;
-m2 = squeeze(max(Rdyn,[],[1,2]))*1000;
-Rinit = Rinit(:,:,:,m<=150 & m2<=150);
-Rdyn = Rdyn(:,:,m<=150 & m2<=150);
-locations = locations(m<=150 & m2<=150,:);
-cellID = cellID(m<=150 & m2<150,:,:);
-RSCinit = RSCinit(m<=150 & m2<150,:);
-RSCinit_pval = RSCinit_pval(m<=150 & m2<=150,:);
-RSCdyn = RSCdyn(m<=150 & m2<=150,:);
-RSCdyn_pval = RSCdyn_pval(m<=150 & m2<=150,:);
-CC = CC(m<=150 & m2<=150,:,:);
-CC_CI = CC_CI(m<=150 & m2<=150,:,:);
-
-%% Remove tail
-Rdyn = Rdyn(dynCoh.neuron_t<=1350,:,:);
-
-%% Mean center
-Rinit2 = Rinit;
-mRinit2 = nanmean(Rinit2,[1,2,3]);
-Rinit2 = Rinit2 - mRinit2;
-
-Rdyn2 = Rdyn;
-mRdyn2 = nanmean(Rdyn2,[1,2]);
-Rdyn2 = Rdyn2 - mRdyn2;
-
-%% Reshape
-sz = size(Rinit2);
-Rinit3 = reshape(Rinit2,[prod(sz(1:3)),prod(sz(end))]);
-
-sz = size(Rdyn2);
-Rdyn3 = reshape(Rdyn2,[prod(sz(1:2)),prod(sz(end))]);
-
-
-%% Use nonlinear dimensionality reduction to attempt to identify neuron 'types'
-NumDimensions = 2;
-Perplexity = 10;
-Y = tsne([Rinit3; Rdyn3]','Distance','cosine','NumDimensions',NumDimensions,'Perplexity',Perplexity);
-
-switch ClusterMethod
-    case 'K-means'
-        NumClusters = 3;
-        idx = kmeans(Y,NumClusters);
-
-    case 'densityClust'
-        dist = pdist2(Y,Y);
-        percNeigh = 0.02;
-        % 'Gauss' denotes the use of Gauss Kernel to compute rho, and
-        % 'Cut-off' denotes the use of Cut-off Kernel.
-        % For large-scale data sets, 'Cut-off' is preferable owing to computational efficiency,
-        % otherwise, 'Gauss' is preferable in the case of small samples (especially with noises).
-        kernel = 'Gauss';
-        % set critical system parameters for DensityClust
-        [dc, rho] = paraSet(dist, percNeigh, kernel);
-        [NumClusters, idx, centInd, haloInd] = densityClust(dist, dc, rho, true);
-end
-
-%% Distances in functional space vs physical space
-locations2 = locations;
-locations2(locations(:,1)>1,:) = [locations(locations(:,1)>1,2), locations(locations(:,1)>1,1), locations(locations(:,1)>1,3)];     % correction for mapping error between tetrode and vprobe recording set ups
-locations2(:,end) = locations2(:,end)/1000;
-
-euclidLoc = pdist(locations2);
-euclidY = pdist(Y);
-
-% Population level distance correlation
-[locCor,locCorP] = corrcoef(euclidLoc(~isnan(euclidLoc)&~isnan(euclidY)),euclidY(~isnan(euclidLoc)&~isnan(euclidY)));
-
-% K nearest neighbor distances
-Kneighbors = 10;
-nnIdx = knnsearch(locations2,locations2,'K',Kneighbors+1);
-for ni = 1:size(nnIdx,1)
-    mdist(ni) = mean(pdist(Y(nnIdx(ni,2:end),:)));
-    randIdx = [randsample(size(Y,1),Kneighbors+1)];
-    mdistRand(ni) = mean(pdist(Y(randIdx,:)));
-end
-
-%% calculate Rsc by cluster
-if calcRSC
-    RSC2 = RSCinit;
-%     RSC2(RSCinit_pval>0.05) = NaN;
-    RSC2(RSC2 == 1) = NaN;
-    [TEMP1 TEMP2] = meshgrid(1:NumClusters);
-    typesAll = [TEMP1(:) TEMP2(:)];
-    RSC_typeConditioned = cell(1,size(typesAll,1));
-    mRSC = nan(1,size(typesAll,1));
-    for compi = 1:size(typesAll,1)
-        types = typesAll(compi,:);%[3,3];
-        type1 = find(idx == types(1));
-
-        tempIDs = nan(length(type1),1);
-        ind = 0;
-        for uniti = 1:length(type1)
-            filei = cellID(type1(uniti),1,1);
-            unitIDs = cellID(type1(uniti),:,3);
-            unitIDs = unitIDs(~isnan(unitIDs));
-            for unitj = 1:length(unitIDs)
-                unit2 = find(cellID(:,1,1) == filei & cellID(:,1,2) ==  unitIDs(unitj));
-                type2 = idx(unit2);
-                if type2 == types(2)
-                    ind = ind+1;
-                    tempIDs(ind) = RSC2(type1(uniti),unitj);
+                    locations(indx,:) = [x,y,depth];
+                    
+                    indx = indx+1;
                 end
             end
         end
-        tempIDs = tempIDs(1:ind);
-        RSC_typeConditioned{compi} = tempIDs;
-        mRSC(compi) = nanmean(tempIDs);
     end
-end
-
-%% PCA
-CR = cov(Rinit3);
-[vecs,vals] = eig(CR);
-vecs = fliplr(vecs);
-vals = flipud(diag(vals));
-reconstructionN = 5;
-
-sz = size(Rinit);
-RlowD = nan([sz(1:3),reconstructionN]);
-for si = 1:size(Rinit,2)
-    for ci = 1:size(Rinit,3)
-        RlowD(:,si,ci,:) = permute(vecs(:,1:reconstructionN)'*squeeze(Rinit2(:,si,ci,:))',[2,3,4,1]);
+    
+    Rinit = Rinit(:,:,:,1:indx-1);
+    Rdyn = Rdyn(:,:,1:indx-1);
+    locations = locations(1:indx-1,:);
+    passCutoff = logical(passCutoff(1:indx-1));
+    cellID = cellID(1:indx-1,:,:);
+    RSCinit = RSCinit(1:indx-1,:);
+    RSCinit_pval = RSCinit_pval(1:indx-1,:);
+    RSCdyn = RSCdyn(1:indx-1,:);
+    RSCdyn_pval = RSCdyn_pval(1:indx-1,:);
+    
+    %% Remove data that doesn't pass cutoff
+    Rinit = Rinit(:,:,:,passCutoff);
+    Rdyn = Rdyn(:,:,passCutoff);
+    locations = locations(passCutoff,:);
+    cellID = cellID(passCutoff,:,:);
+    RSCinit = RSCinit(logical(passCutoff),:);
+    RSCinit_pval = RSCinit_pval(logical(passCutoff),:);
+    RSCdyn = RSCdyn(logical(passCutoff),:);
+    RSCdyn_pval = RSCdyn_pval(logical(passCutoff),:);
+    CC = CC(logical(passCutoff),:,:);
+    CC_CI = CC_CI(logical(passCutoff),:,:);
+    
+    %% Remove outlier rates
+    m = squeeze(max(Rinit,[],[1,2,3]))*1000;
+    m2 = squeeze(max(Rdyn,[],[1,2]))*1000;
+    Rinit = Rinit(:,:,:,m<=150 & m2<=150);
+    Rdyn = Rdyn(:,:,m<=150 & m2<=150);
+    locations = locations(m<=150 & m2<=150,:);
+    cellID = cellID(m<=150 & m2<150,:,:);
+    RSCinit = RSCinit(m<=150 & m2<150,:);
+    RSCinit_pval = RSCinit_pval(m<=150 & m2<=150,:);
+    RSCdyn = RSCdyn(m<=150 & m2<=150,:);
+    RSCdyn_pval = RSCdyn_pval(m<=150 & m2<=150,:);
+    CC = CC(m<=150 & m2<=150,:,:);
+    CC_CI = CC_CI(m<=150 & m2<=150,:,:);
+    
+    %% Remove tail
+    Rdyn = Rdyn(dynCoh.neuron_t<=1350,:,:);
+    
+    %% Mean center
+    Rinit2 = Rinit;
+    mRinit2 = nanmean(Rinit2,[1,2,3]);
+    Rinit2 = Rinit2 - mRinit2;
+    
+    Rdyn2 = Rdyn;
+    mRdyn2 = nanmean(Rdyn2,[1,2]);
+    Rdyn2 = Rdyn2 - mRdyn2;
+    
+    %% Reshape
+    sz = size(Rinit2);
+    Rinit3 = reshape(Rinit2,[prod(sz(1:3)),prod(sz(end))]);
+    
+    sz = size(Rdyn2);
+    Rdyn3 = reshape(Rdyn2,[prod(sz(1:2)),prod(sz(end))]);
+    
+    
+    %% Use nonlinear dimensionality reduction to attempt to identify neuron 'types'
+    NumDimensions = 2;
+    Perplexity = 10;
+    Y = tsne([Rinit3; Rdyn3]','Distance','cosine','NumDimensions',NumDimensions,'Perplexity',Perplexity);
+    
+    switch ClusterMethod
+        case 'K-means'
+            NumClusters = 3;
+            idx = kmeans(Y,NumClusters);
+            
+        case 'densityClust'
+            dist = pdist2(Y,Y);
+            percNeigh = 0.02;
+            % 'Gauss' denotes the use of Gauss Kernel to compute rho, and
+            % 'Cut-off' denotes the use of Cut-off Kernel.
+            % For large-scale data sets, 'Cut-off' is preferable owing to computational efficiency,
+            % otherwise, 'Gauss' is preferable in the case of small samples (especially with noises).
+            kernel = 'Gauss';
+            % set critical system parameters for DensityClust
+            [dc, rho] = paraSet(dist, percNeigh, kernel);
+            [NumClusters, idx, centInd, haloInd] = densityClust(dist, dc, rho, true);
     end
-end
-
-sz = size(Rdyn);
-RDynlowD = nan([sz(1:2),reconstructionN]);
-for seqi = 1:size(Rdyn,2)
-
-    RDynlowD(:,seqi,:) = permute(vecs(:,1:reconstructionN)'*squeeze(Rdyn2(:,seqi,:))',[2,3,4,1]);
-
-end
-
-%% Targeted dimensionality reduction
-[COEFF, SCORE, LATENT, TSQUARED, EXPLAINED] = pca(Rinit3);
-zInit = Rinit2./repmat(std(Rinit2,[],[1,2,3]),[size(Rinit2,1),size(Rinit2,2),size(Rinit2,3)]);
-zDyn = Rdyn2./repmat(std(Rdyn2,[],[1,2]),[size(Rdyn2,1),size(Rdyn2,2)]);
-dynCohT = dynCoh.coh;
-dynCohT = [60*ones(sum(dynCoh.neuron_t<0),5);dynCohT];
-% Linear model
-Binit = nan(3,size(zInit,4),size(zInit,1));
-Bdyn = nan(2,size(zInit,4),size(zDyn,1));
-lagT = 100;
-[Cohs Spds] = meshgrid(cohs,speeds);
-for uniti = 1:size(zInit,4)
+    
+    %% Distances in functional space vs physical space
+    locations2 = locations;
+    locations2(locations(:,1)>1,:) = [locations(locations(:,1)>1,2), locations(locations(:,1)>1,1), locations(locations(:,1)>1,3)];     % correction for mapping error between tetrode and vprobe recording set ups
+    locations2(:,end) = locations2(:,end)/1000;
+    
+    euclidLoc = pdist(locations2);
+    euclidY = pdist(Y);
+    
+    % Population level distance correlation
+    [locCor,locCorP] = corrcoef(euclidLoc(~isnan(euclidLoc)&~isnan(euclidY)),euclidY(~isnan(euclidLoc)&~isnan(euclidY)));
+    
+    % K nearest neighbor distances
+    Kneighbors = 10;
+    nnIdx = knnsearch(locations2,locations2,'K',Kneighbors+1);
+    for ni = 1:size(nnIdx,1)
+        mdist(ni) = mean(pdist(Y(nnIdx(ni,2:end),:)));
+        randIdx = [randsample(size(Y,1),Kneighbors+1)];
+        mdistRand(ni) = mean(pdist(Y(randIdx,:)));
+    end
+    
+    %% calculate Rsc by cluster
+    if calcRSC
+        RSC2 = RSCinit;
+        %     RSC2(RSCinit_pval>0.05) = NaN;
+        RSC2(RSC2 == 1) = NaN;
+        [TEMP1 TEMP2] = meshgrid(1:NumClusters);
+        typesAll = [TEMP1(:) TEMP2(:)];
+        RSC_typeConditioned = cell(1,size(typesAll,1));
+        mRSC = nan(1,size(typesAll,1));
+        for compi = 1:size(typesAll,1)
+            types = typesAll(compi,:);%[3,3];
+            type1 = find(idx == types(1));
+            
+            tempIDs = nan(length(type1),1);
+            ind = 0;
+            for uniti = 1:length(type1)
+                filei = cellID(type1(uniti),1,1);
+                unitIDs = cellID(type1(uniti),:,3);
+                unitIDs = unitIDs(~isnan(unitIDs));
+                for unitj = 1:length(unitIDs)
+                    unit2 = find(cellID(:,1,1) == filei & cellID(:,1,2) ==  unitIDs(unitj));
+                    type2 = idx(unit2);
+                    if type2 == types(2)
+                        ind = ind+1;
+                        tempIDs(ind) = RSC2(type1(uniti),unitj);
+                    end
+                end
+            end
+            tempIDs = tempIDs(1:ind);
+            RSC_typeConditioned{compi} = tempIDs;
+            mRSC(compi) = nanmean(tempIDs);
+        end
+    end
+    
+    %% PCA
+    CR = cov(Rinit3);
+    [vecs,vals] = eig(CR);
+    vecs = fliplr(vecs);
+    vals = flipud(diag(vals));
+    reconstructionN = 5;
+    
+    sz = size(Rinit);
+    RlowD = nan([sz(1:3),reconstructionN]);
+    for si = 1:size(Rinit,2)
+        for ci = 1:size(Rinit,3)
+            RlowD(:,si,ci,:) = permute(vecs(:,1:reconstructionN)'*squeeze(Rinit2(:,si,ci,:))',[2,3,4,1]);
+        end
+    end
+    
+    sz = size(Rdyn);
+    RDynlowD = nan([sz(1:2),reconstructionN]);
+    for seqi = 1:size(Rdyn,2)
+        
+        RDynlowD(:,seqi,:) = permute(vecs(:,1:reconstructionN)'*squeeze(Rdyn2(:,seqi,:))',[2,3,4,1]);
+        
+    end
+    
+    %% Targeted dimensionality reduction
+    [COEFF, SCORE, LATENT, TSQUARED, EXPLAINED] = pca(Rinit3);
+    zInit = Rinit2./repmat(std(Rinit2,[],[1,2,3]),[size(Rinit2,1),size(Rinit2,2),size(Rinit2,3)]);
+    zDyn = Rdyn2./repmat(std(Rdyn2,[],[1,2]),[size(Rdyn2,1),size(Rdyn2,2)]);
+    dynCohT = dynCoh.coh;
+    dynCohT = [60*ones(sum(dynCoh.neuron_t<0),5);dynCohT];
+    % Linear model
+    Binit = nan(3,size(zInit,4),size(zInit,1));
+    Bdyn = nan(2,size(zInit,4),size(zDyn,1));
+    lagT = 100;
+    [Cohs Spds] = meshgrid(cohs,speeds);
+    for uniti = 1:size(zInit,4)
+        for ti = 1:size(zInit,1)
+            ztemp = reshape(zInit(ti,:,:,uniti),[numel(Spds),1]);
+            Binit(:,uniti,ti) = regress(ztemp,[Spds(:),Cohs(:),ones(numel(Spds),1)]);
+        end
+        
+        for ti = 151:size(zDyn,1)
+            ztemp = reshape(zDyn(ti,:,uniti),[size(zDyn,2),1]);
+            if length(unique(dynCohT(ti-lagT,:))) == 1
+                Bdyn(1,uniti,ti-lagT) = NaN;
+                Bdyn(2,uniti,ti-lagT) = mean(ztemp);
+            else
+                warning('off','all')
+                Bdyn(:,uniti,ti-lagT) = regress(ztemp,[dynCohT(ti-lagT,:)',ones(numel(ztemp),1)]);
+                warning('on','all')
+            end
+        end
+        
+    end
+    
+    Dtemp = nan(size(COEFF,1),size(COEFF,1));
+    BinitPCA = nan(3,size(Binit,2),size(Binit,3));
+    BdynPCA = nan(2,size(Bdyn,2),size(Bdyn,3));
+    for n = 1:10
+        Dtemp(:,:,n) = COEFF(:,n)*COEFF(:,n)';
+    end
+    D = sum(Dtemp,3);
     for ti = 1:size(zInit,1)
-        ztemp = reshape(zInit(ti,:,:,uniti),[numel(Spds),1]);
-        Binit(:,uniti,ti) = regress(ztemp,[Spds(:),Cohs(:),ones(numel(Spds),1)]);
+        BinitPCA(:,:,ti) = permute(D*Binit(:,:,ti)',[2,1,3]);
+        normB(ti) = norm(BinitPCA(:,:,ti));
     end
-
-    for ti = 151:size(zDyn,1)
-        ztemp = reshape(zDyn(ti,:,uniti),[size(zDyn,2),1]);
-        if length(unique(dynCohT(ti-lagT,:))) == 1
-            Bdyn(1,uniti,ti-lagT) = NaN;
-            Bdyn(2,uniti,ti-lagT) = mean(ztemp);
-        else
-            warning('off','all')
-            Bdyn(:,uniti,ti-lagT) = regress(ztemp,[dynCohT(ti-lagT,:)',ones(numel(ztemp),1)]);
-            warning('on','all')
+    maxNormIndx = find(normB == max(normB));
+    BinitMax = BinitPCA(:,:,maxNormIndx);
+    BinitTi = BinitPCA(:,:,initCoh.neuron_t==750);
+    BinitOrth = qr(BinitTi');
+    sz = size(Rinit2);
+    Xinit = COEFF(:,1:10)'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])';
+    pInit = reshape((BinitOrth'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])')',[sz(1),sz(2),sz(3),3]);
+    
+    for ti = 1:size(zDyn,1)
+        BdynPCA(:,:,ti) = permute(D*Bdyn(:,:,ti)',[2,1,3]);
+        %     normB(ti) = norm(BdynPCA(:,:,ti));
+    end
+    BdynTi = BdynPCA(:,:,dynCoh.neuron_t==750);
+    BdynOrth = qr(BdynTi');
+    sz = size(Rdyn2);
+    Xdyn = COEFF(:,1:10)'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])';
+    pDyn = reshape((BdynOrth'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),2]);
+    pDynCross = reshape((BinitOrth'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),3]);
+    
+    %% Regress targeted projection with coherence
+    for ti = 1:size(pInit,1)
+        for di = 1:2
+            betaInit(:,ti,di) = regress(permute(pInit(ti,2,:,di),[3,1,2,4]),[cohs ones(size(cohs))]);
         end
     end
-
-end
-
-Dtemp = nan(size(COEFF,1),size(COEFF,1));
-BinitPCA = nan(3,size(Binit,2),size(Binit,3));
-BdynPCA = nan(2,size(Bdyn,2),size(Bdyn,3));
-for n = 1:10
-    Dtemp(:,:,n) = COEFF(:,n)*COEFF(:,n)';
-end
-D = sum(Dtemp,3);
-for ti = 1:size(zInit,1)
-    BinitPCA(:,:,ti) = permute(D*Binit(:,:,ti)',[2,1,3]);
-    normB(ti) = norm(BinitPCA(:,:,ti));
-end
-maxNormIndx = find(normB == max(normB));
-BinitMax = BinitPCA(:,:,maxNormIndx);
-BinitTi = BinitPCA(:,:,initCoh.neuron_t==750);
-BinitOrth = qr(BinitTi');
-sz = size(Rinit2);
-Xinit = COEFF(:,1:10)'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])';
-pInit = reshape((BinitOrth'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])')',[sz(1),sz(2),sz(3),3]);
-
-for ti = 1:size(zDyn,1)
-    BdynPCA(:,:,ti) = permute(D*Bdyn(:,:,ti)',[2,1,3]);
-%     normB(ti) = norm(BdynPCA(:,:,ti));
-end
-BdynTi = BdynPCA(:,:,dynCoh.neuron_t==750);
-BdynOrth = qr(BdynTi');
-sz = size(Rdyn2);
-Xdyn = COEFF(:,1:10)'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])';
-pDyn = reshape((BdynOrth'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),2]);
-pDynCross = reshape((BinitOrth'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),3]);
-
-%% Regress targeted projection with coherence
-for ti = 1:size(pInit,1)
-    for di = 1:2
-        betaInit(:,ti,di) = regress(permute(pInit(ti,2,:,di),[3,1,2,4]),[cohs ones(size(cohs))]);
-    end
-end
-betaDyn = nan(2,size(pDynCross,1),2);
-startTi = find(dynCoh.neuron_t == 550);
-endTi = find(dynCoh.neuron_t == 1150);
-for ti = startTi:endTi
-    for di = 1:2
-        betaDyn(:,ti,di) = regress(permute(pDynCross(ti,:,di),[2,1,3]),[dynCohT(ti-100,:)' ones(size(dynCoh.coh(ti-100,:)'))]);
-    end
-end
-
-%% Cross correllogram analysis
-if calcCC
-    nSig = nansum(CC(:,:,151:200) > repmat(CC_CI(:,:,2),[1,1,50]) | CC(:,:,151:200) < repmat(CC_CI(:,:,1),[1,1,50]),3) + ...
-        nansum(CC(:,:,202:251) > repmat(CC_CI(:,:,2),[1,1,50]) | CC(:,:,202:251) < repmat(CC_CI(:,:,1),[1,1,50]),3);
-
-    nSig(cellID(:,:,2)==cellID(:,:,3)) = NaN;
-
-    nSig2 = nan(size(nSig,1),size(nSig,1));
-    connectivity = nan(size(nSig,1),size(nSig,2),4);
-    chanN = nan(size(nSig,1),size(nSig,1));
-    fileID = nan(size(nSig,1),size(nSig,1));
-    for i = 1:size(nSig,1)
-        for j = 1:size(nSig,2)
-            newi = i;
-            newj = find(cellID(:,1,1) == cellID(i,j,1) & cellID(:,1,2) == cellID(i,j,3));
-            nSig2(newi,newj) = nSig(i,j);
-
-            connectivity(newi,newj,1) = nansum(CC(i,j,201-20:200) > repmat(CC_CI(i,j,2),[1,1,length(201-20:200)]));          % Excitatory from j to i
-            connectivity(newi,newj,2) = nansum(CC(i,j,202:201+20) > repmat(CC_CI(i,j,2),[1,1,length(202:201+20)]));          % Excitatory from i to j
-            connectivity(newi,newj,3) = nansum(CC(i,j,201-20:200) < repmat(CC_CI(i,j,1),[1,1,length(201-20:200)]));          % Inhibitory from j to i
-            connectivity(newi,newj,4) = nansum(CC(i,j,202:201+20) < repmat(CC_CI(i,j,1),[1,1,length(202:201+20)]));          % Inhibitory from i to j
-
-            chanN(newi,newj) = sum(dcp{cellID(i,1,1)}.probe.liveContacts(:));
-            fileID(newi,newj) = cellID(i,1,1);
+    betaDyn = nan(2,size(pDynCross,1),2);
+    startTi = find(dynCoh.neuron_t == 550);
+    endTi = find(dynCoh.neuron_t == 1150);
+    for ti = startTi:endTi
+        for di = 1:2
+            betaDyn(:,ti,di) = regress(permute(pDynCross(ti,:,di),[2,1,3]),[dynCohT(ti-100,:)' ones(size(dynCoh.coh(ti-100,:)'))]);
         end
     end
-
-    dist = squareform(euclidLoc);
-    dist = triu(dist,1);
-    nSig3 = triu(nSig2,1);
-    nSig3(nSig3 == 0) = NaN;
-    for i = 1:4
-        connectivity3(:,:,i) = triu(connectivity(:,:,i),1);
-    end
-    connectivity3(connectivity==0) = NaN;
-    chanN = triu(chanN,1);
-    fileID = triu(fileID,1);
-
-    edges = -0.075:0.15:3.5;
-    startID = 1;%find(cellID(:,1,1) > 30,1);
-    dist3 = dist(startID:end,startID:end);
-    x = nSig3(startID:end,startID:end);
-    x = x(:);
-    temp = triu(ones(size(dist3)),1);
-    temp(temp==0)= NaN;
-    dist3 = dist3.*temp;
-    dist3 = dist3(:);
-    [~,b] = histc(dist3,edges);
-    thres = 5:5:50;
-    for ti = 1:length(thres)
-        for i = 1:length(edges)-1
-            probCC(ti,i) = sum(x(b==i) >= thres(ti))/numel(x(b==i));
+    
+    %% Cross correllogram analysis
+    if calcCC
+        nSig = nansum(CC(:,:,151:200) > repmat(CC_CI(:,:,2),[1,1,50]) | CC(:,:,151:200) < repmat(CC_CI(:,:,1),[1,1,50]),3) + ...
+            nansum(CC(:,:,202:251) > repmat(CC_CI(:,:,2),[1,1,50]) | CC(:,:,202:251) < repmat(CC_CI(:,:,1),[1,1,50]),3);
+        
+        nSig(cellID(:,:,2)==cellID(:,:,3)) = NaN;
+        
+        nSig2 = nan(size(nSig,1),size(nSig,1));
+        connectivity = nan(size(nSig,1),size(nSig,2),4);
+        chanN = nan(size(nSig,1),size(nSig,1));
+        fileID = nan(size(nSig,1),size(nSig,1));
+        for i = 1:size(nSig,1)
+            for j = 1:size(nSig,2)
+                newi = i;
+                newj = find(cellID(:,1,1) == cellID(i,j,1) & cellID(:,1,2) == cellID(i,j,3));
+                nSig2(newi,newj) = nSig(i,j);
+                
+                connectivity(newi,newj,1) = nansum(CC(i,j,201-20:200) > repmat(CC_CI(i,j,2),[1,1,length(201-20:200)]));          % Excitatory from j to i
+                connectivity(newi,newj,2) = nansum(CC(i,j,202:201+20) > repmat(CC_CI(i,j,2),[1,1,length(202:201+20)]));          % Excitatory from i to j
+                connectivity(newi,newj,3) = nansum(CC(i,j,201-20:200) < repmat(CC_CI(i,j,1),[1,1,length(201-20:200)]));          % Inhibitory from j to i
+                connectivity(newi,newj,4) = nansum(CC(i,j,202:201+20) < repmat(CC_CI(i,j,1),[1,1,length(202:201+20)]));          % Inhibitory from i to j
+                
+                chanN(newi,newj) = sum(dcp{cellID(i,1,1)}.probe.liveContacts(:));
+                fileID(newi,newj) = cellID(i,1,1);
+            end
         end
+        
+        dist = squareform(euclidLoc);
+        dist = triu(dist,1);
+        nSig3 = triu(nSig2,1);
+        nSig3(nSig3 == 0) = NaN;
+        for i = 1:4
+            connectivity3(:,:,i) = triu(connectivity(:,:,i),1);
+        end
+        connectivity3(connectivity==0) = NaN;
+        chanN = triu(chanN,1);
+        fileID = triu(fileID,1);
+        
+        edges = -0.075:0.15:3.5;
+        startID = 1;%find(cellID(:,1,1) > 30,1);
+        dist3 = dist(startID:end,startID:end);
+        x = nSig3(startID:end,startID:end);
+        x = x(:);
+        temp = triu(ones(size(dist3)),1);
+        temp(temp==0)= NaN;
+        dist3 = dist3.*temp;
+        dist3 = dist3(:);
+        [~,b] = histc(dist3,edges);
+        thres = 5:5:50;
+        for ti = 1:length(thres)
+            for i = 1:length(edges)-1
+                probCC(ti,i) = sum(x(b==i) >= thres(ti))/numel(x(b==i));
+            end
+        end
+        
+        
+        for filei = 1:length(dcp)
+            totSig(filei) = nansum(nSig3(fileID==filei));
+            totPlus(filei) = sum(nSig3(fileID==filei)>=thres(2));
+            chs(filei) = sum(dcp{filei}.probe.liveContacts(:));
+        end
+        
+        figure('Name','Connectivity statistics','Position',[1151 629 1370 700])
+        subplot(2,2,[1,3])
+        imagesc(nSig3>=thres(2))
+        axis square
+        xlabel('Neuron #')
+        ylabel('Neuron #')
+        
+        subplot(2,2,2)
+        scatter(1:78,totPlus,10*(chs))
+        xlabel('Recording day')
+        ylabel('Number of pairs')
+        
+        subplot(2,2,4)
+        plot(edges(1:end-1)+(edges(2)-edges(1))/2,probCC')
+        xlabel('Euclidean distance')
+        ylabel('Average connected pairs')
     end
-
-
-    for filei = 1:length(dcp)
-        totSig(filei) = nansum(nSig3(fileID==filei));
-        totPlus(filei) = sum(nSig3(fileID==filei)>=thres(2));
-        chs(filei) = sum(dcp{filei}.probe.liveContacts(:));
-    end
-
-    figure('Name','Connectivity statistics','Position',[1151 629 1370 700])
-    subplot(2,2,[1,3])
-    imagesc(nSig3>=thres(2))
-    axis square
-    xlabel('Neuron #')
-    ylabel('Neuron #')
-
-    subplot(2,2,2)
-    scatter(1:78,totPlus,10*(chs))
-    xlabel('Recording day')
-    ylabel('Number of pairs')
-
-    subplot(2,2,4)
-    plot(edges(1:end-1)+(edges(2)-edges(1))/2,probCC')
-    xlabel('Euclidean distance')
-    ylabel('Average connected pairs')
+    
+    %% End results file check
 end
 
 %% Simple avaraging
@@ -515,9 +539,50 @@ plotVertical([450 750 1050]);
 xlabel('Time from motion onset (ms)')
 ylabel('Spikes/s')
 
+gvmrh = figure('Name',['Grand average']);
+if ~exist('gain','var')
+    [~,gain] = dynamicCohBehavioralAnalysis('ar','dcp',dcp,'directions',[0,180],'pertWin',pertWin);
+    figure(gvmrh);
+end
+dynRatesTemp = squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,:),[1,3]))*1000;
+for seqi = 1:length(sequences)
+    plot(gain(seqi,2),dynRatesTemp(seqi),'d','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    hold on
+end
+dynRatesTemp = squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,:,:),[1,3]))*1000;
+for seqi = 1:length(sequences)
+    plot(gain(seqi,3),dynRatesTemp(seqi),'o','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+end
+dynRatesTemp = squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 1000 & dynCoh.neuron_t <= 1100,:,:),[1,3]))*1000;
+for seqi = 1:length(sequences)
+    plot(gain(seqi,4),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+end
+if testInitGain
+    dcpInitCohPert = load('dcpObjectsPertTemp.mat');
+    if ~exist('initGain','var')
+        [init,~] = initialCohPertBehavioralAnalysis('ar','dcp',dcpInitCohPert.dcp(1:end),...
+            'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
+        initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
+        figure(gvmrh);
+    end
+    for si = 1:length(speeds)
+        initRatesTemp = squeeze(nanmean(a(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,si,:,:),[1,4]))*1000;
+        plot(squeeze(initGain(si,:,3)),initRatesTemp,...
+            'o-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+    end
+    if includeEarlyInitCohPertTime
+        for si = 1:length(speeds)
+            initRatesTemp = squeeze(nanmean(a(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),[1,4]))*1000;
+            plot(squeeze(initGain(si,:,2)),initRatesTemp,...
+                'd-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+        end
+    end
+    
+end
+xlabel('Behavioral gain (unitless)')
+ylabel('Spikes/s')
+
 %% Simple avaraging, by cluster
-initSpeed = 10;
-testInitGain = true;
 gainRegression.y = [];
 if testInitGain
     gainRegression.x = nan(length(speeds)*length(cohs)+3*length(sequences),NumClusters);
@@ -631,12 +696,14 @@ for i = 1:NumClusters
             plot(squeeze(initGain(si,:,3)),initRatesTemp,...
                 'o-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
         end
-%         for si = 1:length(speeds)
-%             initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),1)),2)*1000;
-%             gainRegression.x(3*length(sequences)+3*length(cohs) + (si-1)*length(cohs)+1:3*length(sequences)+3*length(cohs)+si*length(cohs),i) = initRatesTemp;
-%             plot(squeeze(initGain(si,:,2)),initRatesTemp,...
-%                 'd-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
-%         end
+        if includeEarlyInitCohPertTime
+            for si = 1:length(speeds)
+                initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),1)),2)*1000;
+                gainRegression.x(3*length(sequences)+3*length(cohs) + (si-1)*length(cohs)+1:3*length(sequences)+3*length(cohs)+si*length(cohs),i) = initRatesTemp;
+                plot(squeeze(initGain(si,:,2)),initRatesTemp,...
+                    'd-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+            end
+        end
         
     end
     xlabel('Behavioral gain (unitless)')
@@ -657,9 +724,11 @@ if testInitGain
     for si = 1:length(speeds)
         gainRegression.y(3*length(sequences)+(si-1)*length(cohs)+1:3*length(sequences)+si*length(cohs)) = initGain(si,:,3);
     end
-%     for si = 1:length(speeds)
-%         gainRegression.y(3*length(sequences)+3*length(cohs)+(si-1)*length(cohs)+1:3*length(sequences)+3*length(cohs)+si*length(cohs)) = initGain(si,:,2);
-%     end
+    if includeEarlyInitCohPertTime
+        for si = 1:length(speeds)
+            gainRegression.y(3*length(sequences)+3*length(cohs)+(si-1)*length(cohs)+1:3*length(sequences)+3*length(cohs)+si*length(cohs)) = initGain(si,:,2);
+        end
+    end
 end
 gainRegression.B = regress(gainRegression.y(:),[gainRegression.z(:,regressorClusters) ones(size(gainRegression.x,1),1)]);
 gainRegression.yhat = [gainRegression.z(:,regressorClusters) ones(size(gainRegression.x,1),1)]*gainRegression.B;
@@ -691,14 +760,16 @@ if testInitGain
             hold on
         end
     end
-%     for si = 1:length(speeds)
-%         for ci = 1:length(cohs)
-%             plot(gainRegression.y(3*length(sequences)+3*length(cohs)+(si-1)*length(cohs)+ci),...
-%                 gainRegression.yhat(3*length(sequences)+3*length(cohs)+(si-1)*length(cohs)+ci),...
-%                 'd','Color',initColors(ci,:),'MarkerFaceColor',initColors(ci,:))
-%             hold on
-%         end
-%     end
+    if includeEarlyInitCohPertTime
+        for si = 1:length(speeds)
+            for ci = 1:length(cohs)
+                plot(gainRegression.y(3*length(sequences)+3*length(cohs)+(si-1)*length(cohs)+ci),...
+                    gainRegression.yhat(3*length(sequences)+3*length(cohs)+(si-1)*length(cohs)+ci),...
+                    'd','Color',initColors(ci,:),'MarkerFaceColor',initColors(ci,:))
+                hold on
+            end
+        end
+    end
 end
 plotUnity;
 axis equal
@@ -1128,11 +1199,17 @@ for ri = 1:reconstructionN
     for si = 1:size(RlowD,2)
         subplot(size(RlowD,2),reconstructionN,ri+(si-1)*reconstructionN)
         for ci = 1:size(RlowD,3)
-            plot(initCoh.neuron_t,RlowD(:,si,ci,ri),'Color',colors(ci,:))
+            plot(initCoh.neuron_t,RlowD(:,si,ci,ri),'Color',initColors(ci,:))
             hold on
         end
+        templims(si,:) = axis;
     end
 
+    for si = 1:size(RlowD,2)
+        subplot(size(RlowD,2),reconstructionN,ri+(si-1)*reconstructionN)
+        ylim([min(templims(:,3)) max(templims(:,4))]);
+    end
+        
     xlabel('Time from motion onset (ms)')
     ylabel(['PC ' num2str(ri)])
 end
@@ -1184,9 +1261,11 @@ figure('Name','Input related activity','Position',[1139 909 1382 420])
 % axis tight
 
 subplot(2,3,1)
-for cohi = 1:3
-    plot(initCoh.neuron_t,pInit(:,2,cohi,1),'-','Color',initColors(cohi,:))
-    hold on
+for speedi = 1:3
+    for cohi = 1:3
+        plot(initCoh.neuron_t,pInit(:,speedi,cohi,1),'-','Color',colors(speedi,:))
+        hold on
+    end
 end
 axis tight
 ax(1,:) = axis;
@@ -1225,8 +1304,10 @@ end
 
 subplot(2,3,4)
 for cohi = 1:3
-    plot(initCoh.neuron_t,pInit(:,2,cohi,2),'-','Color',initColors(cohi,:))
-    hold on
+    for speedi = 1:length(speeds)
+        plot(initCoh.neuron_t,pInit(:,speedi,cohi,2),'-','Color',initColors(cohi,:))
+        hold on
+    end
 end
 axis tight
 ax(1,:) = axis;
@@ -1252,6 +1333,50 @@ for subploti = 1:2
         plotVertical(750);
     end
 end
+
+%% Targeted dimension activity vs gain
+gvth = figure('Name',['Cluster ' num2str(i)]);
+if ~exist('gain','var')
+    [~,gain] = dynamicCohBehavioralAnalysis('ar','dcp',dcp,'directions',[0,180],'pertWin',pertWin);
+    figure(gvth);
+end
+dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,2),1));
+for seqi = 1:length(sequences)
+    plot(gain(seqi,2),dynRatesTemp(seqi),'d','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    hold on
+end
+dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,:,2),1));
+for seqi = 1:length(sequences)
+    plot(gain(seqi,3),dynRatesTemp(seqi),'o','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+end
+dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 1000 & dynCoh.neuron_t <= 1100,:,2),1));
+for seqi = 1:length(sequences)
+    plot(gain(seqi,4),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+end
+if testInitGain
+    dcpInitCohPert = load('dcpObjectsPertTemp.mat');
+    if ~exist('initGain','var')
+        [init,~] = initialCohPertBehavioralAnalysis('ar','dcp',dcpInitCohPert.dcp(1:end),...
+            'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
+        initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
+        figure(gvth);
+    end
+    for si = 1:length(speeds)
+        initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,si,:,2),1));
+        plot(squeeze(initGain(si,:,3)),initRatesTemp,...
+            'o-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+    end
+    if includeEarlyInitCohPertTime
+        for si = 1:length(speeds)
+            initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,2),1));
+            plot(squeeze(initGain(si,:,2)),initRatesTemp,...
+                'd-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+        end
+    end
+    
+end
+xlabel('Behavioral gain (unitless)')
+ylabel('Projection on coherence axis')
 
 %% Strength of inputs in targeted dimension
 figure('Name','Motion input strength','Position',[1440 757 1086 572])
