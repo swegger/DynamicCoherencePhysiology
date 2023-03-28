@@ -30,15 +30,27 @@ saveOpts = Parser.Results.saveOpts;
 mtdata = load(file);
 
 %% For each neuron create an mtobj
-neuronIDs = unique(mtdata.sethdata.neuron);
+fnames = fieldnames(mtdata);
+if any(strcmp(fnames,'sethdata'))
+    neuronIDs = unique(mtdata.sethdata.neuron);
+elseif any(strcmp(fnames,'MTdataTable'))
+    neuronIDs = unique(mtdata.MTdataTable.neuron);
+else
+    error('Fields not recognized!')
+end
+
 clear mtdata
 
+neuronj = 0;
 for neuroni = 1:length(neuronIDs)
-    mt{neuroni} = mtObj(sname,...
-        [fileDirectory '/' file],...
-        char(neuronIDs(neuroni)));
-    
-    mt{neuroni} = mtObjTrials(mt{neuroni},trials);
+    if strcmp(neuronIDs{neuroni}(1:2),sname)
+        neuronj = neuronj+1;
+        mt{neuronj} = mtObj(sname,...
+            [fileDirectory '/' file],...
+            char(neuronIDs(neuroni)));
+        
+        mt{neuronj} = mtObjTrials(mt{neuronj},trials);
+    end
 end
 
 %% Save to destination

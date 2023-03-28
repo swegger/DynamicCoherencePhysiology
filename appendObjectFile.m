@@ -12,7 +12,8 @@ function dcp = appendObjectFile(datafile,varargin)
 excludeList_default = {'20191021a','20191022a','20191022b','20191111a',...
     '20191115a','20191118t','20191119a','20200210a','20200213a','20200218a',...
     '20200221a','20200309b','20200316a','20210205a','20200214a','20200214b',...
-    '20210203a','20210308a'};
+    '20210203a','20210308a','20220722a','20220722b','20220722c','20220722d',...
+    '20220902a','20221024a','20221222a'};
 
 %% Parse inputs
 Parser = inputParser;
@@ -78,11 +79,14 @@ if isempty(addFile)
     
     % Check for kwik files if assertkk
     if assertkk
+        kkflg = false(length(FileList),1);
         for filei = 1:length(FileList)
             data = FileList{filei};
             dataShort = data(3:end);
             if strcmp(sname,'ar')
                 datapath2 = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/' data];
+            elseif strcmp(sname,'fr')
+                datapath2 = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Frederick/' data];
             end
             kkfile = [sname dataShort '.kwik'];
             kkpath = [datapath2(1:end-1) 'kk'];

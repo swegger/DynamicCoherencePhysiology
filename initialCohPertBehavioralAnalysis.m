@@ -46,13 +46,12 @@ if isempty(dcpObjectsFile) && isempty(dcp{1})
     ind = 0;
     for listi = 1:length(regOut)
         if ~isempty(regOut{listi}) && ~strcmp(regOut{listi}{1}(end-2:end),'plx') ...
-                && ~strcmp(regOut{listi}{1}(end-1:end),'kk') ...
-                && ~any(strcmp(regOut{listi}{1},excludeList))
+                && ~strcmp(regOut{listi}{1}(end-1:end),'kk') 
             ind = ind+1;
             FileList{ind} = regOut{listi}{1};
         end
     end
-    dcp = dcpPrelim(subject,FileList,extractSpikes);
+    dcp = dcpPrelim(sname,FileList,'extractSpikes',false);
 elseif isempty(dcp{1})
     load(['~/Projects/DynamicCoherencePhysiology/' sname '/dcpObjects/' dcpObjectsFile],'dcp')
 end
@@ -70,16 +69,29 @@ else
 end
     
 %% Get data from initiateCoh experiments
-initCohPert = initiateCohPertObj(dcp{1}.sname,dcp{1}.datapath);
-initCohPert = initiateCohPertTrials(initCohPert,trialList);
+initCohPertEmpty = true;
+ind = 0;
+emptyList = true(length(dcp),1);
+while initCohPertEmpty
+    ind = ind+1;
+    initCohPert = initiateCohPertObj(dcp{ind}.sname,dcp{ind}.datapath);
+    initCohPert = initiateCohPertTrials(initCohPert,trialList);
+    initCohPertEmpty = isempty(initCohPert.eye_t);
+end
+
+for filei = ind:length(dcp)
+    initCohPert = initiateCohPertObj(dcp{filei}.sname,dcp{filei}.datapath);
+    initCohPert = initiateCohPertTrials(initCohPert,trialList);
+    emptyList(filei) = isempty(initCohPert.eye_t);
+end
 
 init.t = initCohPert.eye_t';
-init.conditions.directions = nan(max(trialList)*length(dcp),1);
-init.conditions.speeds = nan(max(trialList)*length(dcp),1);
-init.conditions.coh = nan(max(trialList)*length(dcp),1);
-init.conditions.pert = nan(max(trialList)*length(dcp),1);
-init.eye.hvel = nan(length(init.t),max(trialList)*length(dcp));
-init.eye.vvel = nan(length(init.t),max(trialList)*length(dcp));
+init.conditions.directions = nan(max(trialList)*sum(~emptyList),1);
+init.conditions.speeds = nan(max(trialList)*sum(~emptyList),1);
+init.conditions.coh = nan(max(trialList)*sum(~emptyList),1);
+init.conditions.pert = nan(max(trialList)*sum(~emptyList),1);
+init.eye.hvel = nan(length(init.t),max(trialList)*sum(~emptyList));
+init.eye.vvel = nan(length(init.t),max(trialList)*sum(~emptyList));
 ind = 1;
 for filei = 1:length(dcp)
     

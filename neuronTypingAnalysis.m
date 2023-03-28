@@ -26,8 +26,14 @@ addParameter(Parser,'ClusterMethod','densityClust')
 addParameter(Parser,'pertWin',250)
 addParameter(Parser,'resultsFile','none')
 addParameter(Parser,'testInitGain',true)
+addParameter(Parser,'dcpInitCohPertFile','dcpObjectsPertTemp.mat')
 addParameter(Parser,'initSpeed',10)
 addParameter(Parser,'includeEarlyInitCohPertTime',false)
+addParameter(Parser,'speeds',[5; 10; 20])
+addParameter(Parser,'cohs',[20; 60; 100])
+addParameter(Parser,'sequences',[1; 2; 3; 4; 5])
+addParameter(Parser,'perturbations',[0; 4; 6; 8])
+addParameter(Parser,'NumClusters',8)
 
 parse(Parser,varargin{:})
 
@@ -48,6 +54,19 @@ resultsFile = Parser.Results.resultsFile;
 testInitGain = Parser.Results.testInitGain;
 initSpeed = Parser.Results.initSpeed;
 includeEarlyInitCohPertTime = Parser.Results.includeEarlyInitCohPertTime;
+dcpInitCohPertFile = Parser.Results.dcpInitCohPertFile;
+speeds = Parser.Results.speeds;
+cohs = Parser.Results.cohs;
+sequences = Parser.Results.sequences;
+perturbations = Parser.Results.perturbations;
+NumClusters = Parser.Results.NumClusters;
+
+%% Colors
+speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
+figure;
+colors = colormap('lines');
+close(gcf)
+initColors = 1-[20 20 20; 60 60 60; 100 100 100]/100;
 
 %% Load dcp object file
 if strcmp(resultsFile,'none')
@@ -59,6 +78,21 @@ else
         load(resultsFile)
     else
         error(['File ' resultsFile ' does not exist in path.'])
+    end
+end
+
+%% Find the gain from behavioral data
+
+if ~exist('gain','var')
+    [~,gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcp,'directions',[0,180],'pertWin',pertWin);
+end
+
+if testInitGain
+    dcpInitCohPert = load(dcpInitCohPertFile);
+    if ~exist('initGain','var')
+        [init,~] = initialCohPertBehavioralAnalysis(dcp{1}.sname,'dcp',dcpInitCohPert.dcp(1:end),...
+            'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
+        initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
     end
 end
 
@@ -92,10 +126,6 @@ if ~fileExist
         
         if ~isempty(initCoh.R) && (~isempty(dynCoh.R) || ~any(isnan(dynCoh.R(:))) && size(dynCoh.R,2) > 1)
             if length(initCoh.unitIndex) == length(dynCoh.unitIndex)
-                speeds = unique(initCoh.speeds);
-                cohs = unique(initCoh.coh);
-                sequences = unique(dynCoh.sequences);
-                perturbations = unique(dynCoh.perturbations);
                 
                 passCutoff(indx:indx+length(initCoh.passCutoff)-1) = initCoh.passCutoff | dynCoh.passCutoff;
                 
@@ -344,33 +374,38 @@ if ~fileExist
     dynCohT = dynCoh.coh;
     dynCohT = [60*ones(sum(dynCoh.neuron_t<0),5);dynCohT];
     % Linear model
-    Binit = nan(3,size(zInit,4),size(zInit,1));
-    Bdyn = nan(2,size(zInit,4),size(zDyn,1));
+    Binit = nan(4,size(zInit,4),size(zInit,1));
+    Bdyn = nan(3,size(zInit,4),size(zDyn,1));
     lagT = 100;
     [Cohs Spds] = meshgrid(cohs,speeds);
+    if testInitGain
+        tempGain = initGain(:,:,3);
+    else
+        tempGain = zeros(size(Spds));
+    end
     for uniti = 1:size(zInit,4)
         for ti = 1:size(zInit,1)
             ztemp = reshape(zInit(ti,:,:,uniti),[numel(Spds),1]);
-            Binit(:,uniti,ti) = regress(ztemp,[Spds(:),Cohs(:),ones(numel(Spds),1)]);
+            Binit(:,uniti,ti) = regress(ztemp,[Spds(:),Cohs(:),tempGain(:),ones(numel(Spds),1)]);
         end
         
-        for ti = 151:size(zDyn,1)
+        for ti = (lagT+1):size(zDyn,1)
             ztemp = reshape(zDyn(ti,:,uniti),[size(zDyn,2),1]);
             if length(unique(dynCohT(ti-lagT,:))) == 1
                 Bdyn(1,uniti,ti-lagT) = NaN;
-                Bdyn(2,uniti,ti-lagT) = mean(ztemp);
+                Bdyn(2:3,uniti,ti-lagT) = regress(ztemp,[gain(:,3),ones(numel(ztemp),1)]);
             else
                 warning('off','all')
-                Bdyn(:,uniti,ti-lagT) = regress(ztemp,[dynCohT(ti-lagT,:)',ones(numel(ztemp),1)]);
-                warning('on','all')
+                Bdyn(:,uniti,ti-lagT) = regress(ztemp,[dynCohT(ti-lagT,:)',gain(:,3),ones(numel(ztemp),1)]);
+                warning('on','all') 
             end
         end
         
     end
     
     Dtemp = nan(size(COEFF,1),size(COEFF,1));
-    BinitPCA = nan(3,size(Binit,2),size(Binit,3));
-    BdynPCA = nan(2,size(Bdyn,2),size(Bdyn,3));
+    BinitPCA = nan(4,size(Binit,2),size(Binit,3));
+    BdynPCA = nan(3,size(Bdyn,2),size(Bdyn,3));
     for n = 1:10
         Dtemp(:,:,n) = COEFF(:,n)*COEFF(:,n)';
     end
@@ -382,21 +417,21 @@ if ~fileExist
     maxNormIndx = find(normB == max(normB));
     BinitMax = BinitPCA(:,:,maxNormIndx);
     BinitTi = BinitPCA(:,:,initCoh.neuron_t==750);
-    BinitOrth = qr(BinitTi');
+    [BinitOrth,~] = qr(BinitTi');
     sz = size(Rinit2);
     Xinit = COEFF(:,1:10)'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])';
-    pInit = reshape((BinitOrth'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])')',[sz(1),sz(2),sz(3),3]);
+    pInit = reshape((BinitOrth(:,1:4)'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])')',[sz(1),sz(2),sz(3),4]);
     
     for ti = 1:size(zDyn,1)
         BdynPCA(:,:,ti) = permute(D*Bdyn(:,:,ti)',[2,1,3]);
         %     normB(ti) = norm(BdynPCA(:,:,ti));
     end
     BdynTi = BdynPCA(:,:,dynCoh.neuron_t==750);
-    BdynOrth = qr(BdynTi');
+    [BdynOrth,~] = qr(BdynTi');
     sz = size(Rdyn2);
     Xdyn = COEFF(:,1:10)'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])';
-    pDyn = reshape((BdynOrth'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),2]);
-    pDynCross = reshape((BinitOrth'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),3]);
+    pDyn = reshape((BdynOrth(:,1:3)'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),3]);
+    pDynCross = reshape((BinitOrth(:,1:4)'*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),4]);
     
     %% Regress targeted projection with coherence
     for ti = 1:size(pInit,1)
@@ -412,6 +447,52 @@ if ~fileExist
             betaDyn(:,ti,di) = regress(permute(pDynCross(ti,:,di),[2,1,3]),[dynCohT(ti-100,:)' ones(size(dynCoh.coh(ti-100,:)'))]);
         end
     end
+    
+    %% Target gain dimension
+%     
+%     % Linear model
+%     Bgain = nan(2,size(zInit,4),size(zInit,1));
+%     Bgain_dyn = nan(2,size(zInit,4),size(zDyn,1));
+%     lagT = 100;
+%     tempGain = initGain(:,:,3);
+%     for uniti = 1:size(zInit,4)
+%         for ti = 1:size(zInit,1)
+%             ztemp = reshape(zInit(ti,:,:,uniti),[numel(tempGain),1]);
+%             Bgain(:,uniti,ti) = regress(ztemp,[tempGain(:),ones(numel(tempGain),1)]);
+%         end
+%         
+%         for ti = 151:size(zDyn,1)
+%             ztemp = reshape(zDyn(ti,:,uniti),[size(zDyn,2),1]);
+%             Bgain_dyn(:,uniti,ti) = regress(ztemp,[gain(:,3),ones(numel(ztemp),1)]);
+%         end
+%         
+%     end
+%     
+%     Dtemp = nan(size(COEFF,1),size(COEFF,1));
+%     BgainPCA = nan(2,size(Bgain,2),size(Bgain,3));
+%     Bgain_dynPCA = nan(2,size(Bgain_dyn,2),size(Bgain_dyn,3));
+%     for n = 1:10
+%         Dtemp(:,:,n) = COEFF(:,n)*COEFF(:,n)';
+%     end
+%     D = sum(Dtemp,3);
+%     for ti = 1:size(zInit,1)
+%         BgaininitPCA(:,:,ti) = permute(D*Bgain(:,:,ti)',[2,1,3]);
+%         normB(ti) = norm(BgainPCA(:,:,ti));
+%     end
+%     maxNormIndx = find(normB == max(normB));
+%     BgainMax = BgainPCA(:,:,maxNormIndx);
+%     BgainTi = BgainPCA(:,:,initCoh.neuron_t==750);
+%     BOrth = qr(BinitTi');
+%     sz = size(Rinit2);
+%     pGain = reshape((BgainTi*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])')',[sz(1),sz(2),sz(3),2]);
+%     
+%     for ti = 1:size(zDyn,1)
+%         Bgain_dynPCA(:,:,ti) = permute(D*Bgain_dyn(:,:,ti)',[2,1,3]);
+%     end
+%     Bgain_dynTi = Bgain_dynPCA(:,:,dynCoh.neuron_t==750);
+%     sz = size(Rdyn2);
+%     pGain_dyn = reshape((Bgain_dynTi*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),2]);
+%     pGain_dynCross = reshape((BgainTi*reshape(zDyn,[prod(sz(1:2)),prod(sz(end))])')',[sz(1),sz(2),2]);
     
     %% Cross correllogram analysis
     if calcCC
@@ -539,11 +620,31 @@ plotVertical([450 750 1050]);
 xlabel('Time from motion onset (ms)')
 ylabel('Spikes/s')
 
-gvmrh = figure('Name',['Grand average']);
-if ~exist('gain','var')
-    [~,gain] = dynamicCohBehavioralAnalysis('ar','dcp',dcp,'directions',[0,180],'pertWin',pertWin);
-    figure(gvmrh);
+figure('Name','Grand average','Position',[486 733 1650 420])
+minMax = [Inf,0];
+for speedi = 1:length(speeds)
+    subplot(1,length(speeds),speedi)
+    for cohi = 1:length(cohs)
+        plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,speedi,cohi,:)),2)*1000,...
+            'Color',[speedColors(speedi,:), cohs(cohi)/100])
+        hold on
+    end
+    temp = ylim;
+    if minMax(1) > temp(1)
+        minMax(1) = temp(1);
+    end
+    if minMax(2) < temp(2)
+        minMax(2) = temp(2);
+    end
 end
+for speedi = 1:length(speeds)
+    subplot(1,length(speeds),speedi)
+    ylim(minMax)
+    xlabel('Time from motion onset (ms)')
+    ylabel('Spikes/s')
+end
+
+gvmrh = figure('Name',['Grand average']);
 dynRatesTemp = squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,:),[1,3]))*1000;
 for seqi = 1:length(sequences)
     plot(gain(seqi,2),dynRatesTemp(seqi),'d','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
@@ -558,23 +659,16 @@ for seqi = 1:length(sequences)
     plot(gain(seqi,4),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
 end
 if testInitGain
-    dcpInitCohPert = load('dcpObjectsPertTemp.mat');
-    if ~exist('initGain','var')
-        [init,~] = initialCohPertBehavioralAnalysis('ar','dcp',dcpInitCohPert.dcp(1:end),...
-            'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
-        initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
-        figure(gvmrh);
-    end
     for si = 1:length(speeds)
         initRatesTemp = squeeze(nanmean(a(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,si,:,:),[1,4]))*1000;
         plot(squeeze(initGain(si,:,3)),initRatesTemp,...
-            'o-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+            'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
     end
     if includeEarlyInitCohPertTime
         for si = 1:length(speeds)
             initRatesTemp = squeeze(nanmean(a(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),[1,4]))*1000;
             plot(squeeze(initGain(si,:,2)),initRatesTemp,...
-                'd-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+                'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
         end
     end
     
@@ -655,17 +749,13 @@ for i = 1:NumClusters
 
     subplot(3,1,3)
     for si = 1:length(speeds)
-        plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,si,2,:)),2)*1000,'Color',colors(si,:))
+        plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,si,2,:)),2)*1000,'Color',speedColors(si,:))
         hold on
     end
     xlabel('Time from motion onset (ms)')
     ylabel('Spikes/s')
     
     gvrh = figure('Name',['Cluster ' num2str(i)]);
-    if ~exist('gain','var')
-        [~,gain] = dynamicCohBehavioralAnalysis('ar','dcp',dcp,'directions',[0,180],'pertWin',pertWin);
-        figure(gvrh);
-    end
     dynRatesTemp = nanmean(squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,idx==i),1)),2)*1000;
     gainRegression.x(1:length(sequences),i) = dynRatesTemp;
     for seqi = 1:length(sequences)
@@ -683,25 +773,18 @@ for i = 1:NumClusters
         plot(gain(seqi,4),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
     end
     if testInitGain
-        dcpInitCohPert = load('dcpObjectsPertTemp.mat');
-        if ~exist('initGain','var')
-            [init,~] = initialCohPertBehavioralAnalysis('ar','dcp',dcpInitCohPert.dcp(1:end),...
-                'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
-            initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
-            figure(gvrh);
-        end
         for si = 1:length(speeds)
             initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,si,:,:),1)),2)*1000;
             gainRegression.x(3*length(sequences)+(si-1)*length(cohs)+1:3*length(sequences)+si*length(cohs),i) = initRatesTemp;
             plot(squeeze(initGain(si,:,3)),initRatesTemp,...
-                'o-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+                'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
         end
         if includeEarlyInitCohPertTime
             for si = 1:length(speeds)
                 initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),1)),2)*1000;
                 gainRegression.x(3*length(sequences)+3*length(cohs) + (si-1)*length(cohs)+1:3*length(sequences)+3*length(cohs)+si*length(cohs),i) = initRatesTemp;
                 plot(squeeze(initGain(si,:,2)),initRatesTemp,...
-                    'd-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
             end
         end
         
@@ -929,6 +1012,17 @@ for spi = 1:4
 end
 
 %% Coherence sensitivity vs functional mapping
+for typei = 1:NumClusters
+    typeAngle = wrapTo2Pi(atan2(Y(centInd == typei,2)-mean(Y(:,2)),Y(centInd == typei,1)-mean(Y(:,1))))/2+pi;
+    hue = typeAngle / (2 * pi);
+    saturation = ones(size(hue));
+    value = ones(size(hue));
+    hsv = cat(3, hue, saturation, value);
+    colorWheel(typei,:) = hsv2rgb(hsv);
+end
+colorWheel(colorWheel > 1) = 1;
+colorWheel(colorWheel < 0) = 0;
+
 regressionType = 'PCA';
 regressorIndex = 1;
 switch regressionType
@@ -1177,20 +1271,6 @@ for ti = 1:size(BinitPCA,3)
     end
 end
 
-%%
-colors = colormap('lines');
-initColors = 1-[20 20 20; 60 60 60; 100 100 100]/100;
-
-for typei = 1:NumClusters
-    typeAngle = wrapTo2Pi(atan2(Y(centInd == typei,2)-mean(Y(:,2)),Y(centInd == typei,1)-mean(Y(:,1))))/2+pi;
-    hue = typeAngle / (2 * pi);
-    saturation = ones(size(hue));
-    value = ones(size(hue));
-    hsv = cat(3, hue, saturation, value);
-    colorWheel(typei,:) = hsv2rgb(hsv);
-end
-colorWheel(colorWheel > 1) = 1;
-colorWheel(colorWheel < 0) = 0;
 
 %% PCA plotting
 
@@ -1214,8 +1294,25 @@ for ri = 1:reconstructionN
     ylabel(['PC ' num2str(ri)])
 end
 
+figure
+for si = 1:size(RlowD,2)
+    for ci = 1:size(RlowD,3)
+        plot3(RlowD(:,si,ci,1),RlowD(:,si,ci,2),RlowD(:,si,ci,3),'-','Color',[speedColors(si,:) cohs(ci)/100])
+        hold on
+        scatter3(RlowD(1,si,ci,1),RlowD(1,si,ci,2),RlowD(1,si,ci,3),100,speedColors(si,:),...
+            'filled','o','MarkerEdgeAlpha',cohs(ci)/100,'MarkerFaceAlpha',cohs(ci)/100)
+        scatter3(RlowD(end,si,ci,1),RlowD(end,si,ci,2),RlowD(end,si,ci,3),100,speedColors(si,:),...
+            'filled','s','MarkerEdgeAlpha',cohs(ci)/100,'MarkerFaceAlpha',cohs(ci)/100)
+    end
+end
+grid on
+xlabel('PC_1')
+ylabel('PC_2')
+zlabel('PC_3')
+view([-75 60])
+
 %% Plot targeted dimensionality reduction
-figure('Name','Input related activity','Position',[1139 909 1382 420])
+figure('Name','Input related activity','Position',[63 169 1606 1079])
 % subplot(2,2,1)
 % for cohi = 1:3
 %     plot(initCoh.neuron_t,pInit(:,2,cohi,2),'-','Color',initColors(cohi,:))
@@ -1260,10 +1357,10 @@ figure('Name','Input related activity','Position',[1139 909 1382 420])
 % end
 % axis tight
 
-subplot(2,3,1)
+subplot(3,3,1)
 for speedi = 1:3
     for cohi = 1:3
-        plot(initCoh.neuron_t,pInit(:,speedi,cohi,1),'-','Color',colors(speedi,:))
+        plot(initCoh.neuron_t,pInit(:,speedi,cohi,1),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
         hold on
     end
 end
@@ -1272,7 +1369,7 @@ ax(1,:) = axis;
 xlabel('Time from motion onset (ms)')
 ylabel('Speed related activity (a.u.)')
 
-subplot(2,3,2)
+subplot(3,3,2)
 for seqi = 1:5
     plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),pDynCross(:,seqi,1),'-','Color',colors(seqi,:))
     hold on
@@ -1282,9 +1379,9 @@ ax(2,:) = axis;
 xlabel('Time from motion onset (ms)')
 ylabel('Speed related activity (a.u.)')
 
-subplot(2,3,6)
+subplot(3,3,6)
 for seqi = 1:5
-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),pDyn(:,seqi,2),'-','Color',colors(seqi,:))
+    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),pDyn(:,seqi,1),'-','Color',colors(seqi,:))
     hold on
 end
 axis tight
@@ -1293,7 +1390,7 @@ ylabel('Coherence related activity (a.u.)')
 % ax(3,:) = axis;
 
 for subploti = 1:2
-    subplot(2,3,subploti)
+    subplot(3,3,subploti)
     axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
     if subploti == 1
         plotVertical(75);
@@ -1302,10 +1399,10 @@ for subploti = 1:2
     end
 end
 
-subplot(2,3,4)
+subplot(3,3,4)
 for cohi = 1:3
     for speedi = 1:length(speeds)
-        plot(initCoh.neuron_t,pInit(:,speedi,cohi,2),'-','Color',initColors(cohi,:))
+        plot(initCoh.neuron_t,pInit(:,speedi,cohi,2),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
         hold on
     end
 end
@@ -1314,7 +1411,7 @@ ax(1,:) = axis;
 xlabel('Time from motion onset (ms)')
 ylabel('Coherence related activity (a.u.)')
 
-subplot(2,3,5)
+subplot(3,3,5)
 for seqi = 1:5
     plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),pDynCross(:,seqi,2),'-','Color',colors(seqi,:))
     hold on
@@ -1325,7 +1422,7 @@ xlabel('Time from motion onset (ms)')
 ylabel('Coherence related activity (a.u.)')
 
 for subploti = 1:2
-    subplot(2,3,subploti+3)
+    subplot(3,3,subploti+3)
     axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
     if subploti == 1
         plotVertical(75);
@@ -1334,49 +1431,159 @@ for subploti = 1:2
     end
 end
 
-%% Targeted dimension activity vs gain
-gvth = figure('Name',['Cluster ' num2str(i)]);
-if ~exist('gain','var')
-    [~,gain] = dynamicCohBehavioralAnalysis('ar','dcp',dcp,'directions',[0,180],'pertWin',pertWin);
-    figure(gvth);
+subplot(3,3,7)
+for cohi = 1:3
+    for speedi = 1:length(speeds)
+        plot(initCoh.neuron_t,pInit(:,speedi,cohi,3),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
+        hold on
+    end
 end
-dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,2),1));
-for seqi = 1:length(sequences)
-    plot(gain(seqi,2),dynRatesTemp(seqi),'d','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+axis tight
+ax(1,:) = axis;
+xlabel('Time from motion onset (ms)')
+ylabel('Gain related activity (a.u.)')
+
+subplot(3,3,8)
+for seqi = 1:5
+    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),pDynCross(:,seqi,3),'-','Color',colors(seqi,:))
     hold on
 end
-dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,:,2),1));
-for seqi = 1:length(sequences)
-    plot(gain(seqi,3),dynRatesTemp(seqi),'o','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
-end
-dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 1000 & dynCoh.neuron_t <= 1100,:,2),1));
-for seqi = 1:length(sequences)
-    plot(gain(seqi,4),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
-end
-if testInitGain
-    dcpInitCohPert = load('dcpObjectsPertTemp.mat');
-    if ~exist('initGain','var')
-        [init,~] = initialCohPertBehavioralAnalysis('ar','dcp',dcpInitCohPert.dcp(1:end),...
-            'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
-        initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
-        figure(gvth);
+axis tight
+ax(2,:) = axis;
+xlabel('Time from motion onset (ms)')
+ylabel('Gain related activity (a.u.)')
+
+for subploti = 1:2
+    subplot(3,3,subploti+6)
+    axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+    if subploti == 1
+        plotVertical(75);
+    elseif subploti == 3
+        plotVertical(750);
     end
-    for si = 1:length(speeds)
-        initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,si,:,2),1));
-        plot(squeeze(initGain(si,:,3)),initRatesTemp,...
-            'o-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+end
+
+subplot(3,3,9)
+for seqi = 1:5
+    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),pDyn(:,seqi,2),'-','Color',colors(seqi,:))
+    hold on
+end
+axis tight
+xlabel('Time from motion onset (ms)')
+ylabel('Gain related activity (a.u.)')
+
+%% Targeted dimension subspace
+figure('Name','Targeted subspace')
+subplot(1,3,1)
+initTaccept = initCoh.neuron_t>=-100 & initCoh.neuron_t<=1350;
+dynTaccept = dynCoh.neuron_t>=-100 & dynCoh.neuron_t<=1350;
+for speedi = 1:3
+    for cohi = 1:3
+        plot(...
+            pInit(initTaccept,speedi,cohi,2),pInit(initTaccept,speedi,cohi,3),...
+            '-','Color',[speedColors(speedi,:) cohs(cohi)/100])
+        hold on
     end
-    if includeEarlyInitCohPertTime
+end
+grid on
+xlabel('Speed related activity')
+ylabel('Gain related activity')
+
+subplot(1,3,2)
+for seqi = 1:5
+    plot(...
+        pDynCross(dynTaccept,seqi,2),pDynCross(dynTaccept,seqi,3),...
+        '-','Color',colors(seqi,:))
+    hold on
+end
+grid on
+xlabel('Speed related activity')
+ylabel('Gain related activity')
+
+subplot(1,3,3)
+for seqi = 1:5
+    plot(pDyn(dynTaccept,seqi,1),pDyn(dynTaccept,seqi,2),'-','Color',colors(seqi,:))
+    hold on
+end
+xlabel('Coherence related activity')
+ylabel('Gain related activity')
+
+%% Targeted dimension activity vs gain
+dimNames = {'Speed','Coherence','Gain','Offset'};
+gvth = figure('Name',['Behavioral gain vs activity on targeted dimension (initCoh)'],'Position',[1956 59 570 1263]);
+for targetedDim = 1:3
+    tempData = [];
+    subplot(3,1,targetedDim)
+    dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,targetedDim),1));
+    for seqi = 1:length(sequences)
+        plot(gain(seqi,2),dynRatesTemp(seqi),'d','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+        hold on
+    end
+    tempData = [tempData; gain(:,2),dynRatesTemp(:)];
+    dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,:,targetedDim),1));
+    for seqi = 1:length(sequences)
+        plot(gain(seqi,3),dynRatesTemp(seqi),'o','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    end
+    tempData = [tempData; gain(:,3),dynRatesTemp(:)];
+    dynRatesTemp = squeeze(nanmean(pDynCross(dynCoh.neuron_t >= 1000 & dynCoh.neuron_t <= 1100,:,targetedDim),1));
+    for seqi = 1:length(sequences)
+        plot(gain(seqi,4),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    end
+       
+    if testInitGain
         for si = 1:length(speeds)
-            initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,2),1));
-            plot(squeeze(initGain(si,:,2)),initRatesTemp,...
-                'd-','Color',colors(si,:),'MarkerFaceColor',colors(si,:))
+            initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,si,:,targetedDim),1));
+            plot(squeeze(initGain(si,:,3)),initRatesTemp,...
+                'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+            tempData = [tempData; initGain(si,:,3)',initRatesTemp(:)];
         end
+        if includeEarlyInitCohPertTime
+            for si = 1:length(speeds)
+                initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,targetedDim),1));
+                plot(squeeze(initGain(si,:,2)),initRatesTemp,...
+                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];
+            end
+        end
+        
     end
-    
+    gain_projection_cc = corrcoef(tempData(:,1),tempData(:,2));
+    axis square
+    ax = axis;
+    text(0.9*ax(2),0.9*ax(4),['R^2 = ' num2str(gain_projection_cc(1,2).^2)])
+    xlabel('Behavioral gain (unitless)')
+    ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
 end
-xlabel('Behavioral gain (unitless)')
-ylabel('Projection on coherence axis')
+
+
+gvth2 = figure('Name',['Behavioral gain vs activity on targeted dimension (dynCoh)'],'Position',[1956 59 570 1263]);
+for targetedDim = 2:3
+    tempData = [];
+    subplot(3,1,targetedDim)
+    dynRatesTemp = squeeze(nanmean(pDyn(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,targetedDim-1),1));
+    for seqi = 1:length(sequences)
+        plot(gain(seqi,2),dynRatesTemp(seqi),'d','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+        hold on
+    end
+    tempData = [tempData; gain(:,2),dynRatesTemp(:)];
+    dynRatesTemp = squeeze(nanmean(pDyn(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,:,targetedDim-1),1));
+    for seqi = 1:length(sequences)
+        plot(gain(seqi,3),dynRatesTemp(seqi),'o','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    end
+    tempData = [tempData; gain(:,3),dynRatesTemp(:)];
+    dynRatesTemp = squeeze(nanmean(pDyn(dynCoh.neuron_t >= 1000 & dynCoh.neuron_t <= 1100,:,targetedDim-1),1));
+    for seqi = 1:length(sequences)
+        plot(gain(seqi,4),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    end
+    tempData = [tempData; gain(:,4),dynRatesTemp(:)];
+    
+    gain_projection_cc = corrcoef(tempData(:,1),tempData(:,2));
+    axis square
+    ax = axis;
+    text(0.9*ax(2),0.9*ax(4),['R^2 = ' num2str(gain_projection_cc(1,2).^2)])
+    xlabel('Behavioral gain (unitless)')
+    ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+end
 
 %% Strength of inputs in targeted dimension
 figure('Name','Motion input strength','Position',[1440 757 1086 572])

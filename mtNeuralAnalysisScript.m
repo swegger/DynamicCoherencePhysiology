@@ -23,6 +23,7 @@ for filei = 1:length(mt)
             Rtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
         end
     end
+    spref(filei) = speeds(Rtemp(mt{filei}.neuron_t == 50,:,cohs == 100) == max(Rtemp(mt{filei}.neuron_t == 50,:,cohs == 100)));
     R = cat(4,R,Rtemp);
     C = cat(3,C,Cnew);
 end
@@ -70,6 +71,20 @@ for ri = 1:reconstructionN
     ylabel(['PC ' num2str(ri)])
 end
 
+%% Weigthed average response
+for si = 1:length(speeds)
+    subplot(1,length(speeds),si)
+    for ci = 1:length(cohs)
+        plot(mt{1}.neuron_t,log2(spref)*permute(R(:,si,ci,:),[4,1,2,3]))
+        hold on
+    end
+    yls(si,:) = ylim;
+end
+
+for si = 1:length(speeds)
+    subplot(1,length(speeds),si)
+    ylim([min(yls(:,1)) max(yls(:,2))])
+end
 
 %%
 figure

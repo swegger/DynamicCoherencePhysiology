@@ -26,33 +26,74 @@ classdef mtObj < dcpObj
         % Constructor
             obj = obj@dcpObj(sname,datapath);
             obj.neuronName = neuronName;
-            obj.neuron_t = (-400:100:800) + 50;
             obj.unitIndex = 1;
         end
         
         %% mtObjTrials
         function obj = mtObjTrials(obj,trialNs)
             
-            % Find matches in .csv file
-            mtdata = load(obj.datapath);
-            matches = find(mtdata.sethdata.neuron == obj.neuronName);
-            
             ind = 0;
-            for ti = trialNs
+            
+            % Find matches in table
+            mtdata = load(obj.datapath);
+            fnames = fieldnames(mtdata);
+            
+            if any(strcmp(fnames,'sethdata'))
+                matches = find(mtdata.sethdata.neuron == obj.neuronName);
+            
+            
+                obj.neuron_t = (-400:100:800) + 50;
                 
-                if length(matches) > ti
-                    ind = ind+1;
-                    obj.coh(ind,1) = mtdata.sethdata.coh(matches(ti));
-                    obj.speeds(ind,1) = mtdata.sethdata.speed(matches(ti));
-                    if mtdata.sethdata.prefdir(matches(ti)) == 'true'
-                        obj.directions(ind,1) = 0;
-                    else
-                        obj.directions(ind,1) = 180;
+                neuronIDs = unique(mtdata.sethdata.neuron);
+                
+                for ti = trialNs
+                    
+                    if length(matches) > ti
+                        ind = ind+1;
+                        obj.coh(ind,1) = mtdata.sethdata.coh(matches(ti));
+                        obj.speeds(ind,1) = mtdata.sethdata.speed(matches(ti));
+                        if mtdata.sethdata.prefdir(matches(ti)) == 'true'
+                            obj.directions(ind,1) = 0;
+                        else
+                            obj.directions(ind,1) = 180;
+                        end
+                        obj.r(:,ind) = str2num(mtdata.sethdata.bins{matches(ti)}(5:end-1))';
                     end
-                    obj.r(:,ind) = str2num(mtdata.sethdata.bins{matches(ti)}(5:end-1))';
+                    
                 end
                 
+            elseif any(strcmp(fnames,'MTdataTable'))
+                matches = find(strcmp(mtdata.MTdataTable.neuron,obj.neuronName));
+                
+                datal = nan(size(mtdata.MTdataTable,1),1);
+                for i = 1:size(mtdata.MTdataTable,1)
+                    datal(i) = length(mtdata.MTdataTable.Var7{1});
+                end
+                
+                obj.neuron_t = mtdata.xaxis(1:min(datal));
+            
+                neuronIDs = unique(mtdata.MTdataTable.neuron);
+                
+                for ti = trialNs
+                    
+                    if length(matches) > ti && mtdata.MTdataTable.speedpulse{matches(ti)} == 0 && mtdata.MTdataTable.cohpulse{matches(ti)} == 0
+                        ind = ind+1;
+                        obj.coh(ind,1) = mtdata.MTdataTable.coherence(matches(ti));
+                        obj.speeds(ind,1) = mtdata.MTdataTable.speed{matches(ti)};
+                        if mtdata.MTdataTable.prefdir(matches(ti))
+                            obj.directions(ind,1) = 0;
+                        else
+                            obj.directions(ind,1) = 180;
+                        end
+                        obj.r(:,ind) = mtdata.MTdataTable.Var7{matches(ti)}(1:min(datal))';
+                    end
+                    
+                end
+                
+            else
+                error('Fields not recognized!')
             end
+            
         end
         
         
