@@ -1,17 +1,17 @@
-%% initiateCohObj
+%% contrastObj
 %
-%   Defines properties and methods of initiate coh trials object used for 
-%   analysis of DynamicCoherencePhysiology data.
+%   Defines properties and methods of contrast trials object used for 
+%   analysis of contrast and contex modulated data.
 %
 %   Defined as a subclass of the dcpObj
 %
 %%
 
-classdef initiateCohObj < dcpObj
+classdef contrastObj < dcpObj
     properties
-        objType = 'initiateCohObj';
-        coh;
-        cohTuning;
+        objType = 'contrastObj';
+        contrast;
+        contrastTuning;
         r;
         R;
         Rste;
@@ -38,25 +38,20 @@ classdef initiateCohObj < dcpObj
     
     methods
         %% Core methods
-        function obj = initiateCohObj(sname,datapath)
+        function obj = contrastObj(sname,datapath)
         %Constructor
             obj = obj@dcpObj(sname,datapath);
-            obj.cohTuning.parameters = nan(1,3);
+            obj.contrastTuning.parameters = nan(1,3);
         end 
         
-        %% initiateCohTrials
-        function obj = initiateCohTrials(obj,trialNs,acceptInitCohPert)
+        %% contrastTrials
+        function obj = contrastTrials(obj,trialNs)
         % Add direction preference trials to data object
-            if ~exist('acceptInitCohPert','var')
-                acceptInitCohPert = false;
-            end
-        
             files = dir(obj.datapath);
             
             % Determine the index of the first data file
             for fileInx = 1:length(files)
-                if length(files(fileInx).name) >= length(obj.sname) && ...
-                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
+                if length(files(fileInx).name) > 2
                     break
                 end
             end
@@ -67,143 +62,64 @@ classdef initiateCohObj < dcpObj
                     if length(files)-fileInx+1 > ti
                         
                         % Read file
-                        %disp([obj.datapath '/' files(ti+fileInx-1).name])
+%                         disp([obj.datapath '/' files(ti+fileInx-1).name])
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
                         
                         trialname = file.trialname;
-                        if ~isempty(trialname) && acceptInitCohPert && strcmp(trialname(1:7),'initCoh')
-                            ind = ind+1;
-                            % Update triali                            obj.trialNumbers(ind,1) = ti;
-                            obj.trialDataFiles{ind} = files(ti+fileInx-1).name;
-                            
-                            % Parse trial info
-                            [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.trialtype(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'h\d{3}');
-                            obj.coh(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'d\d{3}');
-                            obj.directions(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'s\d{3}');
-                            obj.speeds(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'x\d{3}');
-                            obj.locations(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            [startIndex,endIndex] = regexp(trialname,'y\d{3}');
-                            obj.locations(ind,2) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            % Add eye information
-                            obj.eye(:,ind).hpos = (file.data(1,:) - ...
-                                mean(file.data(1,obj.calib.t)))*obj.calib.posGain;
-                            obj.eye(:,ind).vpos = (file.data(2,:) - ...
-                                mean(file.data(2,obj.calib.t)))*obj.calib.posGain;
-                            
-                            obj.eye(:,ind).hvel = (file.data(3,:) - ...
-                                mean(file.data(3,obj.calib.t)))*obj.calib.speedGain;
-                            obj.eye(:,ind).vvel = (file.data(4,:) - ...
-                                mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
-                            
-                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
-                                file.data(4,:)*obj.calib.speedGain,...
-                                'accelerationThreshold',obj.calib.accThres,...
-                                'windowSize',40);
-                            obj.eye(:,ind).hvel(sacs) = NaN;
-                            obj.eye(:,ind).vvel(sacs) = NaN;
-                            obj.eye(:,ind).saccades = sacs;
-                            
-                            obj.rotation(ind,1) = file.key.iVelTheta/1000;
-                            
-                            obj.reward(ind,1) = file.key.iRewLen1;
-                            
-                            % Add spike times 
-                            if obj.spikesExtracted
-                                obj.spikeTimes{ind} = ...
-                                    file.sortedSpikes;  
-%                                 obj.spikeTimes{ind} = ...
-%                                     file.sortedSpikes(obj.unitIndex);                                
-                            else
-                                obj.spikeTimes{ind}{1} = file.spikes;                    
-                            end                           
-                            
-                            onTemp = [file.targets.on{2:end}];
-                            t_temp = min(onTemp):(max(onTemp)-1);
-                            
-                        elseif ~isempty(trialname) && strcmp(trialname(1:7),'initCoh') && ~strcmp(trialname(1:11),'initCohPert')
-                            ind = ind+1;
-                            % Update triali                            obj.trialNumbers(ind,1) = ti;
-                            obj.trialDataFiles{ind} = files(ti+fileInx-1).name;
-                            
-                            % Parse trial info
-                            [startIndex,endIndex] = regexp(trialname,'t\d{3}');
-                            obj.trialtype(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'h\d{3}');
-                            obj.coh(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'d\d{3}');
-                            obj.directions(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'s\d{3}');
-                            obj.speeds(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex));
-                            
-                            [startIndex,endIndex] = regexp(trialname,'x\d{3}');
-                            obj.locations(ind,1) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            [startIndex,endIndex] = regexp(trialname,'y\d{3}');
-                            obj.locations(ind,2) = ...
-                                str2double(trialname(startIndex+1:endIndex))-100;
-                            
-                            % Add eye information
-                            obj.eye(:,ind).hpos = (file.data(1,:) - ...
-                                mean(file.data(1,obj.calib.t)))*obj.calib.posGain;
-                            obj.eye(:,ind).vpos = (file.data(2,:) - ...
-                                mean(file.data(2,obj.calib.t)))*obj.calib.posGain;
-                            
-                            obj.eye(:,ind).hvel = (file.data(3,:) - ...
-                                mean(file.data(3,obj.calib.t)))*obj.calib.speedGain;
-                            obj.eye(:,ind).vvel = (file.data(4,:) - ...
-                                mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
-                            
-                            sacs = saccadeDetect(file.data(3,:)*obj.calib.speedGain,...
-                                file.data(4,:)*obj.calib.speedGain,...
-                                'accelerationThreshold',obj.calib.accThres,...
-                                'windowSize',40);
-                            obj.eye(:,ind).hvel(sacs) = NaN;
-                            obj.eye(:,ind).vvel(sacs) = NaN;
-                            obj.eye(:,ind).saccades = sacs;
-                            
-                            obj.rotation(ind,1) = file.key.iVelTheta/1000;
-                            
-                            obj.reward(ind,1) = file.key.iRewLen1;
-                            
-                            % Add spike times 
-                            if obj.spikesExtracted
-                                obj.spikeTimes{ind} = ...
-                                    file.sortedSpikes;  
-%                                 obj.spikeTimes{ind} = ...
-%                                     file.sortedSpikes(obj.unitIndex);                                
-                            else
-                                obj.spikeTimes{ind}{1} = file.spikes;                    
-                            end                           
-                            
-                            onTemp = [file.targets.on{2:end}];
-                            t_temp = min(onTemp):(max(onTemp)-1);
+                        if ~isempty(trialname) && strcmp(trialname(1:2),'p_') && strcmp(file.key.setName,'PursSpdTun')
+                            motionOnsetInd = file.targets.on{2}(1);
+                            offsetInd = file.targets.on{2}(2);
+                            if  size(file.data,2) >=  offsetInd
+                                ind = ind+1;
+                                % Update triali                            obj.trialNumbers(ind,1) = ti;
+                                obj.trialDataFiles{ind} = files(ti+fileInx-1).name;
+                                
+                                % Parse trial info
+                                [startIndex,endIndex] = regexp(trialname,'c\d{3}');
+                                obj.contrast(ind,1) = ...
+                                    str2double(trialname(startIndex+1:endIndex));
+                                
+                                [startIndex,endIndex] = regexp(trialname,'d\d{3}');
+                                obj.directions(ind,1) = ...
+                                    str2double(trialname(startIndex+1:endIndex));
+                                
+                                [startIndex,endIndex] = regexp(trialname,'sp\d{1,2}');
+                                obj.speeds(ind,1) = ...
+                                    str2double(trialname(startIndex+2:endIndex));
+                                                                
+                                % Add eye information
+                                obj.eye(:,ind).hpos = file.data(1,motionOnsetInd:offsetInd)*obj.calib.posGain;
+                                obj.eye(:,ind).vpos = file.data(2,motionOnsetInd:offsetInd)*obj.calib.posGain;
+                                
+                                obj.eye(:,ind).hvel = file.data(3,motionOnsetInd:offsetInd)*obj.calib.speedGain;
+                                obj.eye(:,ind).vvel = file.data(4,motionOnsetInd:offsetInd)*obj.calib.speedGain;
+                                
+                                sacs = saccadeDetect(file.data(3,motionOnsetInd:offsetInd)*obj.calib.speedGain,...
+                                    file.data(4,motionOnsetInd:offsetInd)*obj.calib.speedGain,...
+                                    'accelerationThreshold',obj.calib.accThres,...
+                                    'windowSize',40);
+                                obj.eye(:,ind).hvel(sacs) = NaN;
+                                obj.eye(:,ind).vvel(sacs) = NaN;
+                                obj.eye(:,ind).saccades = sacs;
+                                
+                                obj.rotation(ind,1) = file.key.iVelTheta/1000;
+                                
+                                obj.reward(ind,1) = file.key.iRewLen1;
+                                
+                                % Add spike times
+                                if obj.spikesExtracted
+                                    obj.spikeTimes{ind} = ...
+                                        file.sortedSpikes;
+                                    %                                 obj.spikeTimes{ind} = ...
+                                    %                                     file.sortedSpikes(obj.unitIndex);
+                                else
+                                    obj.spikeTimes{ind}{1} = file.spikes;
+                                end
+                                
+                                onTemp = [file.targets.on{2:end}];
+                                t_temp = 0:(offsetInd-motionOnsetInd);
+                            end
                         end
-                        
                     end
                 end
                 if exist('t_temp','var')
@@ -211,6 +127,32 @@ classdef initiateCohObj < dcpObj
                 else
                     obj.eye_t = [];
                 end
+        end
+        
+        %% Analysis methods
+        function [condInds, condLogical] = trialSortContrast(obj,directions,speeds,contrasts)
+        % Find indices of all trials with direction in directions, speed
+        % in speeds, and contrast in contrasts.
+            if isnan(directions)
+                dMask = true(size(obj.directions));
+            else
+                dMask = ismember(obj.directions,directions);
+            end
+            
+            if isnan(speeds)
+                sMask = true(size(obj.speeds));
+            else
+                sMask = ismember(obj.speeds,speeds);
+            end
+                        
+            if isnan(contrasts) 
+                cMask = true(size(obj.directions));
+            else
+                cMask = ismember(obj.contrast,contrasts);
+            end
+            
+            condLogical = prod([dMask,sMask,cMask],2,'native');
+            condInds = find(condLogical);
         end
         
         %% Behavioral analysis methods
@@ -717,7 +659,7 @@ classdef initiateCohObj < dcpObj
         end
                 
         %% Plotting methods
-        function [h,sh,colors] = initiateCohMeanEye(obj,dirs,normalize,window,figureType)
+        function [h,sh,colors] = blinkCohMeanEye(obj,dirs,normalize,window,sortMethod)
         % Plots mean eye speed for each sequence and target speed
             if ~exist('normalize','var')
                 normalize = true;
@@ -725,85 +667,350 @@ classdef initiateCohObj < dcpObj
             if ~exist('window','var')
                 window = [0 300];
             end
-            if ~exist('figureType','var')
-                figureType = 'matlab';
+            if ~exist('sortMethod','var')
+                sortMethod = 'speed';
             end
             h = figure;
             colors = colormap('lines');
             set(h,'Position',[345 557 1965 420]);
             speeds = unique(obj.speeds);
             cohs = unique(obj.coh);
-            for hi = 1:length(cohs)
-                sh(hi) = subplot(1,length(cohs),hi);
-                for si = 1:length(speeds)
-                    if normalize
-                        nrm = speeds(si);
-                    else
-                        nrm = 1;
-                    end
-                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(hi));
-                    switch figureType
-                        case 'fyp'
+            switch sortMethod
+                case 'speed'
+                    for hi = 1:length(cohs)
+                        sh(hi) = subplot(1,length(cohs),hi);
+                        for si = 1:length(speeds)
+                            if normalize
+                                nrm = speeds(si);
+                            else
+                                nrm = 1;
+                            end
+                            [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(hi),NaN,NaN,0);
                             plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
-                                'h',h,'sh',sh(hi),'color',colors(si,:),'plotPatch',false);
-                        case 'matlab'
-                            plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
-                                'h',h,'sh',sh(hi),'color',colors(si,:),'plotPatch',true);
-                        otherwise
-                            error(['Figure type ' figureType ' not recognized!'])
+                                'h',h,'sh',sh(hi),'color',colors(si,:));
+                        end
+                        axis tight
+                        ax(hi,:) = axis;
                     end
-                end
-                axis tight
-                ax(hi,:) = axis;
-            end
-            for hi = 1:length(cohs)
-                subplot(sh(hi))
-%                 axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
-                axis([window min(ax(:,3)) max(ax(:,4))])
-                plotVertical(150);
-                xlabel('Time from motion onset (ms)')
-                if normalize
-                    plotHorizontal(1);
-                    switch figureType
-                        case 'fyp'
-                            ylabel('Eye speed / Target speed')
-                            title([num2str(cohs(hi)) '% coherence'])
-                        case 'matlab'
+                    for hi = 1:length(cohs)
+                        subplot(sh(hi))
+                        %                 axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+                        axis([window min(ax(:,3)) max(ax(:,4))])
+                        plotVertical(150);
+                        xlabel('Time from motion onset (ms)')
+                        if normalize
+                            plotHorizontal(1);
                             ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
                             mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
                                 'interpreter','latex','yticks',[0.1 1])
-                        otherwise
-                            error(['Figure type ' figureType ' not recognized!'])
-                    end
-                else
-                    switch figureType
-                        case 'fyp'
-                            ylabel('Eye speed (deg/s)')
-                            title([num2str(cohs(hi)) '% coherence'])
-                        case 'matlab'
+                        else
                             ylabel('Eye speed (deg/s)')
                             mymakeaxis(gca,'xytitle',[num2str(cohs(hi)) '\% \textrm{coherence}'],...
                                 'interpreter','latex')
-                        otherwise
-                            error(['Figure type ' figureType ' not recognized!'])
-                    end                  
-                end
-            end
-            
-            switch figureType
-                case 'fyp'
-                    for si = 1:length(speeds)
-                        leg{si} = [num2str(speeds(si)) ' deg/s'];
+                        end
                     end
-                case 'matlab'
+                    
                     for li = 1:(2*length(speeds)+2)
                         leg{li} = '';
                     end
                     for si = 1:length(speeds)
                         leg{2*si} = [num2str(speeds(si)) ' deg/s'];
                     end
+                    legend(leg)
+                    
+                    
+                case 'coherence'
+                    for si = 1:length(speeds)
+                        sh(si) = subplot(1,length(speeds),si);
+                        for ci = 1:length(cohs)
+                            if normalize
+                                nrm = speeds(si);
+                            else
+                                nrm = 1;
+                            end
+                            [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci));
+                            plotMeanEyeSpeed(obj,condLogical,'normalizer',nrm,...
+                                'h',h,'sh',sh(si),'color',colors(ci,:));
+                        end
+                        axis tight
+                        ax(si,:) = axis;
+                    end
+                    for si = 1:length(speeds)
+                        subplot(sh(si))
+                        %                 axis([min(ax(:,1)) max(ax(:,2)) min(ax(:,3)) max(ax(:,4))])
+                        axis([window min(ax(:,3)) max(ax(:,4))])
+                        plotVertical(150);
+                        xlabel('Time from motion onset (ms)')
+                        if normalize
+                            plotHorizontal(1);
+                            ylabel('$\frac{\textrm{Eye speed}}{\textrm{Target speed}}$')
+                            mymakeaxis(gca,'xytitle',[num2str(speeds(si)) 'deg/s'],...
+                                'interpreter','latex','yticks',[0.1 1])
+                        else
+                            ylabel('Eye speed (deg/s)')
+                            mymakeaxis(gca,'xytitle',[num2str(speeds(si)) 'deg/s'],...
+                                'interpreter','latex')
+                        end
+                    end
+                    
+                    for li = 1:(2*length(cohs)+2)
+                        leg{li} = '';
+                    end
+                    for ci = 1:length(cohs)
+                        leg{2*ci} = [num2str(cohs(ci))];
+                    end
+                    legend(leg)                    
             end
-            legend(leg)
         end
+        
+        function [h,colors] = blinkCohResponse(obj,dirs)
+        % Plots mean response to perturbations
+            
+            h = figure;
+            colors = colormap('lines');
+            set(h,'Position',[345 557 1965 420]);
+            speeds = unique(obj.speeds);
+            cohs = unique(obj.coh);
+            blinks = unique(obj.blink);
+            
+            ind = 0;
+            for si = 1:length(speeds)
+                for bi = 1:length(blinks)
+                    ind = ind+1;
+                    subplot(length(speeds),length(blinks),ind)
+                    for ci = 1:length(cohs)
+                        [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,blinks(bi),0);
+                        temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                            vertcat(obj.eye(condLogical).vvel).^2);
+                        meanCond = nanmean(temp,1);
+                        
+                        plot(obj.eye_t,meanCond);
+                        hold on
+                    end
+                    
+                    axis tight
+                    
+                    plotVertical([500 700]);
+                    
+                    xlabel('Time from motion onset (ms)')
+                    ylabel('Response (deg/s)')
+                    
+                end
+            end
+        end
+        
+        
+        function [h,colors] = blinkCohResponseOccluder(obj,dirs)
+        % Plots mean response to perturbations
+            
+            h = figure;
+            colors = colormap('lines');
+            set(h,'Position',[345 557 1965 420]);
+            speeds = unique(obj.speeds);
+            cohs = unique(obj.coh);
+            occluders = unique(obj.occluder);
+            
+            ind = 0;
+            for si = 1:length(speeds)
+                for oi = 1:length(occluders)
+                    ind = ind+1;
+                    subplot(length(speeds),length(occluders),ind)
+                    for ci = 1:length(cohs)
+                        [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,0,occluders(oi));
+                        temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                            vertcat(obj.eye(condLogical).vvel).^2);
+                        meanCond = nanmean(temp,1);
+                        if ~isempty(meanCond)
+                            plot(obj.eye_t,meanCond);
+                        end
+                        hold on
+                    end
+                    
+                    if occluders(oi) == 1
+                        plotVertical([500 700]);
+                    elseif occluders(oi) == 2
+                        plotVertical([600-225 600+225]);
+                    end
+                    axis tight
+                    
+                    xlabel('Time from motion onset (ms)')
+                    ylabel('Response (deg/s)')
+                    
+                end
+            end
+        end
+        
+        function [h,colors] = blinkCohResponseDiff(obj,dirs)
+        % Plots mean response to perturbations
+            
+            h = figure;
+            colors = colormap('lines');
+            set(h,'Position',[345 557 1965 420]);
+            speeds = unique(obj.speeds);
+            cohs = unique(obj.coh);
+            blinks = unique(obj.blink);
+            
+            ind = 0;
+            for si = 1:length(speeds)
+                ind = ind+1;
+                subplot(length(speeds),1,ind)
+                for ci = 1:length(cohs)
+                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,1,0);
+                    temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                        vertcat(obj.eye(condLogical).vvel).^2);
+                    meanCond = nanmean(temp,1);
+                    
+                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,0,0);
+                    temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                        vertcat(obj.eye(condLogical).vvel).^2);
+                    meanControl = nanmean(temp,1);
+                    
+                    plot(obj.eye_t,meanCond-meanCond(obj.eye_t == 765));
+                    hold on
+                end
+                
+                axis tight
+                
+                plotHorizontal(0);
+                plotVertical([500 700]);
+                
+                xlabel('Time from motion onset (ms)')
+                ylabel('Response (deg/s)')
+            end
+        end
+        
+        function [h,colors] = blinkCohResponseNorm(obj,dirs,normalizationWindow)
+        % Plots mean response to perturbations
+            
+            h = figure;
+            colors = colormap('lines');
+            set(h,'Position',[340 202 786 763]);
+            speeds = unique(obj.speeds);
+            cohs = unique(obj.coh);
+            blinks = unique(obj.blink);
+            
+            if ~exist('normalizationWindow','var')
+                normalizationWindow = [NaN, NaN];
+            end
+            
+            ind = 0;
+            for si = 1:length(speeds)
+                ind = ind+1;
+                subplot(length(speeds),1,ind)
+                for ci = 1:length(cohs)
+                    [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,1,0);
+                    temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                        vertcat(obj.eye(condLogical).vvel).^2);
+                    meanCond = nanmean(temp,1);
+                    
+                    if ~any(isnan(normalizationWindow))
+                        meanCond = meanCond/mean(meanCond(obj.eye_t >= normalizationWindow(1) & obj.eye_t <= normalizationWindow(2)));
+                        plot(obj.eye_t,meanCond);                    
+                    else
+                        [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,0,0);
+                        temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                            vertcat(obj.eye(condLogical).vvel).^2);
+                        meanControl = nanmean(temp,1);
+                        plot(obj.eye_t,meanCond./meanControl);
+                    end
+                    hold on
+                end
+                
+                axis tight
+                
+                plotHorizontal(0);
+                plotVertical([500 700]);
+                plotVertical(normalizationWindow);
+                
+                xlabel('Time from motion onset (ms)')
+                ylabel('Response (deg/s)')
+            end
+        end
+        
+        function [h,colors] = blinkCohResponseOccluderNorm(obj,dirs,normalizationWindow)
+        % Plots mean response to perturbations
+            
+            h = figure;
+            colors = colormap('lines');
+            set(h,'Position',[340 202 786 763]);
+            speeds = unique(obj.speeds);
+            cohs = unique(obj.coh);
+            occluders = unique(obj.occluder);
+            
+            if ~exist('normalizationWindow','var')
+                normalizationWindow = [NaN, NaN];
+            end
+            
+            ind = 0;
+            for si = 1:length(speeds)
+                for oi = 1:length(occluders)
+                ind = ind+1;
+                subplot(length(speeds),length(occluders),ind)
+                    for ci = 1:length(cohs)
+                        [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,0,occluders(oi));
+                        temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                            vertcat(obj.eye(condLogical).vvel).^2);
+                        meanCond = nanmean(temp,1);
+                        
+                        if ~any(isnan(normalizationWindow))
+                            meanCond = meanCond/mean(meanCond(obj.eye_t >= normalizationWindow(1) & obj.eye_t <= normalizationWindow(2)));
+                            plot(obj.eye_t,meanCond);
+                        else
+                            [~,condLogical] = trialSort(obj,dirs,speeds(si),NaN,cohs(ci),NaN,NaN,0,0);
+                            temp = sqrt(vertcat(obj.eye(condLogical).hvel).^2 +...
+                                vertcat(obj.eye(condLogical).vvel).^2);
+                            meanControl = nanmean(temp,1);
+                            if ~isempty(meanCond)
+                                plot(obj.eye_t,meanCond./meanControl);
+                            end
+                        end
+                        hold on
+                    end
+                    
+                    
+                    if occluders(oi) == 1
+                        plotVertical([500 700]);
+                    elseif occluders(oi) == 2
+                        plotVertical([600-225 600+225]);
+                    end
+                    
+                    plotVertical(normalizationWindow);
+                    
+                    axis tight
+                    plotHorizontal(1);
+                    xlabel('Time from motion onset (ms)')
+                    ylabel('Response (deg/s)')
+                end
+                
+            end
+        end
+        
+        function [h,colors] = contrastResponse(obj,dirs,contrasts)
+            
+            speeds = unique(obj.speeds);
+             
+            h = figure;
+            colors = [1 0 0; 0 0 0; 0 1 0; 0 0 1];
+            set(h,'Position',[95 571 2435 382]);
+            
+            for si = 1:length(speeds)
+                subplot(1,length(speeds),si)
+                for ci = 1:length(contrasts)
+                    [~,condLogical{ci}] = trialSortContrast(obj,dirs,speeds(si),contrasts(ci));
+                    
+                    plot(obj.eye_t,sqrt(vertcat(obj.eye(condLogical{ci}).hvel).^2 + vertcat(obj.eye(condLogical{ci}).vvel).^2)','Color',[colors(ci,:) 0.1])
+                    hold on
+                end
+                
+                for ci = 1:length(contrasts)
+                    plot(obj.eye_t,nanmean(sqrt(vertcat(obj.eye(condLogical{ci}).hvel).^2 + vertcat(obj.eye(condLogical{ci}).vvel).^2)',2),'Color',colors(ci,:),'LineWidth',2)
+                end
+                
+                plotHorizontal(speeds(si));
+                xlabel('Time from motion onset (ms)')
+                ylabel('Eye speed (deg/s)')
+            end
+        end
+        
     end
 end

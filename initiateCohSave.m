@@ -19,6 +19,7 @@ addParameter(Parser,'rateCutoff',10);
 addParameter(Parser,'cutWindow',[1 1501]);
 addParameter(Parser,'t',-100:1600)
 addParameter(Parser,'saveType','default')
+addParameter(Parser,'acceptInitCohPert',false)
 
 parse(Parser,dcp,varargin{:})
 
@@ -31,12 +32,13 @@ rateCutoff = Parser.Results.rateCutoff;
 cutWindow = Parser.Results.cutWindow;
 t = Parser.Results.t;
 saveType = Parser.Results.saveType;
+acceptInitCohPert = Parser.Results.acceptInitCohPert;
 
 %% Make initCohObject for this file
 initCoh = initiateCohObj(dcp.sname,dcp.datapath);
 initCoh = assertSpikesExtracted(initCoh,dcp.spikesExtracted);
 initCoh = unitsIndex(initCoh);
-initCoh = initiateCohTrials(initCoh,trialList);
+initCoh = initiateCohTrials(initCoh,trialList,acceptInitCohPert);
 
 %% Evaluate preferred direction for each neuron
 % dirPref = dirPrefObj(dcp.sname,dcp.datapath);
@@ -76,6 +78,9 @@ end
 %% Save object to file
 if strcmp(initCoh.sname,'ar')
     initCoh.saveLocation = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/'...
+        initCoh.datapath(end-8:end-1) 'obj/initCoh' initCoh.datapath(end-8:end)];
+elseif strcmp(initCoh.sname,'fr')
+    initCoh.saveLocation = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Frederick/'...
         initCoh.datapath(end-8:end-1) 'obj/initCoh' initCoh.datapath(end-8:end)];
 end
 if ~exist(initCoh.saveLocation(1:end-17),'dir')

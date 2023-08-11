@@ -72,7 +72,7 @@ classdef dynamicCohObj < dcpObj
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
                         
                         trialname = file.trialname;
-                        if strcmp(trialname(1:6),'dynCoh')
+                        if ~isempty(trialname) && strcmp(trialname(1:6),'dynCoh')
                             ind = ind+1;
                             % Update trial
                             obj.trialNumbers(ind,1) = ti;
@@ -146,7 +146,7 @@ classdef dynamicCohObj < dcpObj
                             t_temp = min(onTemp):(max(onTemp)-1);
                             
                             
-                        elseif forceRead
+                        elseif ~isempty(trialname) && forceRead
                             ind = ind+1;
                             % Update trial
                             obj.trialNumbers(ind,1) = ti;

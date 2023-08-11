@@ -16,7 +16,7 @@ classdef dcpObj
         unitIndex
         chansIndex
         klustaID
-        
+
         trialNumbers;
         trialDataFiles;
         trialtype;
@@ -27,46 +27,46 @@ classdef dcpObj
         spikeTimes;
         location;
     end
-     
+
     properties (SetAccess = private)
         probe;
         unitTypes;
 %         dirPref;
-%         
+%
 %         speedPref;
-%         
+%
 %         initiateCoh;
-%         
+%
 %         washout;
-%         
+%
 %         dynamicCoh;
     end
-    
+
     methods
-        
+
         %% Core methods
         function obj = dcpObj(sname,datapath)
         %Constructor
             obj.sname = sname;
             obj.datapath = datapath;
-            
+
             % For affine transformation of eye signal data
             obj.calib.t = 1:150;
             obj.calib.posGain = 0.025;
             obj.calib.speedGain = 0.09189;
             obj.calib.accThres = 1.1;
             obj.calib.windowSize = 40;
-            
+
         end
-        
+
         function out = returnDatapath(obj)
             out = obj.datapath;
         end
-        
+
         function obj = assertSpikesExtracted(obj,assertion)
             obj.spikesExtracted = assertion;
         end
-        
+
         function obj = extractSpikingData(obj,plxname,plxdir,maestrodir,addSpike)
         % Add spiking data to Maestro data files
             if ~exist('addSpike','var')
@@ -85,7 +85,7 @@ classdef dcpObj
                 obj.spikesExtracted = true;
             end
         end
-        
+
         function obj = extractKKData(obj,kkname,kkdir,plxname,plxdir,maestrodir,addSpike,startChannel,acceptMU,checkReceipt)
         % Add spiking data to Maestro data files
             if ~exist('addSpike','var')
@@ -98,9 +98,9 @@ classdef dcpObj
                 acceptMU = false;
             end
             if ~exist('checkReceipt')
-                checckReceipt = false;
+                checkReceipt = false;
             end
-            
+
             if checkReceipt
                 receiptFile = dir([maestrodir '/spikesReceipt']);
                 if isempty(receiptFile)
@@ -109,13 +109,13 @@ classdef dcpObj
                     receiptExists = true;
                 end
             end
-            
+
             if obj.spikesExtracted
                 disp('Spikes already extracted and inserted into Maestro files.')
             elseif checkReceipt && receiptExists
                 disp('Spike receipt exists, spikes already extracted and inserted into Maestro files.')
                 obj.spikesExtracted = true;
-                
+
                 tsvFiles = dir([kkdir '/*.tsv']);
                 if length(tsvFiles) > 1
                     tsv = tdfread([kkdir '/cluster_info_' kkname(end-5) '.tsv']);
@@ -144,9 +144,9 @@ classdef dcpObj
                         extractKKSpikes(kkname,kkdir,plxname,plxdir,maestrodir,'addSpike',addSpike,...
                         'startChannel',startChannel,'acceptMU',acceptMU);
                     obj.klustaID = kkIndex;
-%                     obj = unitsIndex(obj);                    
+%                     obj = unitsIndex(obj);
 %                     obj = setUnitType(obj,kkdir,kkname,acceptMU);
-                    
+
                     % Write receipt
                     if ~isempty(kkIndex)
                         Ntrials = length(unitsData);
@@ -170,14 +170,14 @@ classdef dcpObj
                 obj.spikesExtracted = true;
             end
         end
-        
+
         function obj = setUnitType(obj,kkdir,kkname)
             if obj.spikesExtracted
-                
+
                 if isempty(obj.unitIndex)
                     obj = unitsIndex(obj);
                 end
-                
+
                 tsvFiles = dir([kkdir '/*.tsv']);
                 if length(tsvFiles) > 1
                     tsv = tdfread([kkdir '/cluster_info_' kkname(end-5) '.tsv']);
@@ -192,17 +192,17 @@ classdef dcpObj
                 obj.unitTypes = {''};
             end
         end
-        
+
         function obj = unitsIndex(obj,altName)
             % Allow for different base name
             if ~exist('altName','var')
                 altName = obj.sname;
             end
-            
+
             % Find indices in Maestro files that have spike times
             if obj.spikesExtracted
                 files = dir(obj.datapath);
-                
+
                 % Determine the index of the first data file
                 for fileInx = 1:length(files)
                     if length(files(fileInx).name) >= length(altName) && ...
@@ -210,7 +210,7 @@ classdef dcpObj
                         break
                     end
                 end
-                
+
                 indsList = [];
                 chansList = [];
                 for ti = fileInx:length(files)
@@ -227,35 +227,35 @@ classdef dcpObj
                 obj.unitIndex = 1;
             end
         end
-        
+
         function out = myBoxCar(obj,diffs,width)
             out = nan(size(diffs));
             out(abs(diffs) <= width) = 1;
             out(abs(diffs) > width) = 0;
         end
-        
+
         function r = calcRates(obj,width,varargin)
         % Calculate trial by trial rates using box car
-            
+
             % Parse inputs
             Parser = inputParser;
-            
+
             addRequired(Parser,'obj')
             addRequired(Parser,'width')
             addParameter(Parser,'units',NaN)
             addParameter(Parser,'t',-100:1600)
             addParameter(Parser,'trialN',NaN)
             addParameter(Parser,'t_offsets',NaN)
-            
+
             parse(Parser,obj,width,varargin{:})
-            
+
             obj = Parser.Results.obj;
             width = Parser.Results.width;
             units = Parser.Results.units;
             t = Parser.Results.t;
-            trialN = Parser.Results.trialN;     
+            trialN = Parser.Results.trialN;
             t_offsets = Parser.Results.t_offsets;
-            
+
             if any(isnan(trialN))
                 trialN = 1:numel(obj.spikeTimes);
             end
@@ -272,12 +272,12 @@ classdef dcpObj
 % %                     units = 1:numel(obj.unitIndex);
 %                 end
             end
-            t = t(:); 
-            
+            t = t(:);
+
             if isnan(t_offsets)
                 t_offsets = zeros(length(trialN),1);
             end
-            
+
             % Find smoothed rates
             f = @(diffs)obj.myBoxCar(diffs,width);
             r = nan(length(t),numel(trialN),numel(units));
@@ -295,27 +295,27 @@ classdef dcpObj
 %                 r(:,triali,:) = rTemp/width;
             end
         end
-        
+
         function counts = countSpikes(obj,win,varargin)
         % Calculate trial by trial counts in time window win
-            
+
             % Parse inputs
             Parser = inputParser;
-            
+
             addRequired(Parser,'obj')
             addRequired(Parser,'win')
             addParameter(Parser,'units',NaN)
             addParameter(Parser,'t',-100:1600)
             addParameter(Parser,'trialN',NaN)
-            
+
             parse(Parser,obj,win,varargin{:})
-            
+
             obj = Parser.Results.obj;
             win = Parser.Results.win;
             units = Parser.Results.units;
             t = Parser.Results.t;
-            trialN = Parser.Results.trialN;            
-            
+            trialN = Parser.Results.trialN;
+
             if any(isnan(trialN))
                 trialN = 1:numel(obj.spikeTimes);
             end
@@ -331,8 +331,8 @@ classdef dcpObj
 %                     units = unique(units);
 % %                     units = 1:numel(obj.unitIndex);
 %                 end
-            end 
-            
+            end
+
             % Find spikeCounts
             for triali = trialN
                 spikeTimes = obj.spikeTimes{triali}(1:2);
@@ -344,7 +344,7 @@ classdef dcpObj
                 end
             end
         end
-        
+
         function counts = conditionalCounts(obj,win,directions,speeds)
             countsAll = obj.countSpikes(win);
             if exist('countsAll','var')
@@ -357,7 +357,7 @@ classdef dcpObj
                 counts = zeros(1,sum(condLogical));
             end
         end
-        
+
         function [r,rste] = conditionalRates(obj,width,directions,speeds,t)
             if ~exist('t','var')
                 t = -100:1600;
@@ -368,7 +368,7 @@ classdef dcpObj
             r = mean(rAll(:,condLogical,:),2);
             rste = sqrt(var(rAll(:,condLogical,:),[],2)/sum(condLogical));
         end
-        
+
         function obj = tableImport(obj)
             fileName = [obj.sname obj.datapath(end-6:end)];
             tableFile = [obj.datapath(1:end-9) ...
@@ -485,7 +485,7 @@ classdef dcpObj
                     liveContact(3,4) = false;
                 end
                 liveTrode = sum(liveContact,2)>1;
-                
+
                 delims = regexpi(T.Location_x_y_z_{1},',');
                 if liveTrode(1)
                     indx = find(strcmp(fileName,T.Date));
@@ -500,7 +500,7 @@ classdef dcpObj
                     obj.location.z(1) = NaN;
                     obj.location.depth(1) = NaN;
                 end
-                
+
                 if liveTrode(2)
                     indx = find(strcmp(fileName,T.x1_2));
                     obj.location.x(2) = str2num(T.Location_x_y_z_{1}(1:delims(1)-1));
@@ -514,7 +514,7 @@ classdef dcpObj
                     obj.location.z(2) = NaN;
                     obj.location.depth(2) = NaN;
                 end
-                
+
                 if liveTrode(3)
                     indx = find(strcmp(fileName,T.x2_3));
                     obj.location.x(3) = str2num(T.Location_x_y_z_{1}(1:delims(1)-1));
@@ -528,7 +528,7 @@ classdef dcpObj
                     obj.location.z(3) = NaN;
                     obj.location.depth(3) = NaN;
                 end
-                
+
             elseif str2num(fileName(3:end-1)) >= 210000
                 if strcmp(T.Probe{1},'24V')
                     chanMap = [7 0; 6 1; 5 2; 4 3; 3 4; 2 5; 1 6; 0 7; 23 8; 22 9; 21 10; 20 11; 19 12; 18 13; 17 14; 16 15; 15 16; 14 17; 13 18; 12 19; 11 20; 10 21; 9 22; 8 23];
@@ -585,9 +585,9 @@ classdef dcpObj
                 obj.location.depth = str2num(T.Location_x_y_z_{indx-1})-...
                     str2num(T.Location_x_y_z_{find(strcmp(T.Location_x_y_z_,'Depth'))+1});
             end
-            
+
         end
-        
+
         function obj = addProbeInfo(obj)
             fileName = [obj.sname obj.datapath(end-6:end)];
             tableFile = [obj.datapath(1:end-9) ...
@@ -705,7 +705,7 @@ classdef dcpObj
                 end
                 obj.probe.type = 'tet';
                 obj.probe.liveContacts = liveContact;
-                
+
             elseif str2num(fileName(3:end-1)) >= 210000
                 if strcmp(T.Probe{1},'24V')
                     obj.probe.type = '24V';
@@ -716,25 +716,25 @@ classdef dcpObj
                 obj.probe.liveContacts = [true(1,4); false(3,4)];
             end
         end
-        
+
         function GetSize(this)
             props = properties(this);
             totSize = 0;
-            
+
             for ii=1:length(props)
                 currentProperty = getfield(this, char(props(ii)));
                 s = whos('currentProperty');
                 totSize = totSize + s.bytes;
             end
-            
+
             fprintf(1, '%d bytes\n', totSize);
         end
-        
+
         function mysaveobj(obj,destination)
             s = struct(obj);
             save(destination,'-struct','s')
         end
-        
+
         function [cc, shufflecc] = correlograms(obj,samplerate,unitsIndex,win,shuffleN)
         % Compute differences in spikes times from all recorded spikes
             if ~exist('shuffleN','var')
@@ -757,10 +757,10 @@ classdef dcpObj
                 plxfull = [plxpath '/' plxfile];
                 plxflg = exist(plxfull,'file');
             end
-            
+
             % Make edges from bin centers specified by win
             edges = [win-(win(2)-win(1))/2 win(end)+(win(2)-win(1))/2];
-            
+
             % Preallocate correlograms
             if isnan(shuffleN)
                 shufflecc = nan(length(win),length(unitsIndex),length(unitsIndex),1);
@@ -768,12 +768,12 @@ classdef dcpObj
                 shufflecc = zeros([length(win),length(unitsIndex),length(unitsIndex),shuffleN]);
             end
             cc = zeros([length(win),length(unitsIndex),length(unitsIndex)]);
-            
+
             if kkflg
                 % Get spike times and cell ID
                 spktimes = double(hdf5read(kkfull, '/channel_groups/0/spikes/time_samples'))/samplerate;
                 clusters = hdf5read(kkfull, '/channel_groups/0/spikes/clusters/main');
-                
+
                 spktimes = spktimes(ismember(clusters,unitsIndex));
                 clusters = clusters(ismember(clusters,unitsIndex));
             elseif plxflg
@@ -787,7 +787,7 @@ classdef dcpObj
                 spktimes = double(vertcat(unitsDataTmp{:}))/samplerate;
                 clusters = vertcat(clustersTmp{:});
             end
-            
+
             % Find differences and add to correlogram
             if plxflg || kkflg
                 for uniti = 1:length(unitsIndex)
@@ -799,7 +799,7 @@ classdef dcpObj
                             d = ts1(ti) - ts2;
                             tdiffs = histc(d,edges);
                             cc(:,uniti,unitj) = cc(:,uniti,unitj) + tdiffs(1:end-1);
-                            
+
                             if isnan(shuffleN)
                                 shufflediffs(:,uniti,unitj,:) = NaN;
                             else
@@ -827,9 +827,9 @@ classdef dcpObj
                     end
                 end
             end
-        
+
         end
-        
+
         function counts = spikeCount(obj,unitsIndex)
             dataShort = obj.datapath(end-6:end);
             if strcmp(obj.sname,'ar')
@@ -848,7 +848,7 @@ classdef dcpObj
                 plxfull = [plxpath '/' plxfile];
                 plxflg = exist(plxfull,'file');
             end
-            
+
             if kkflg
                 % Get spike times and cell ID
                 clusters = hdf5read(kkfull, '/channel_groups/0/spikes/clusters/main');
@@ -863,7 +863,7 @@ classdef dcpObj
                 end
                 clusters = vertcat(clustersTmp{:});
             end
-            
+
             if plxflg || kkflg
                 for uniti = 1:length(unitsIndex)
                     counts(uniti) = sum(clusters == unitsIndex(uniti));
@@ -871,12 +871,12 @@ classdef dcpObj
             else
                 counts = nan(length(unitsIndex));
             end
-            
+
         end
-        
+
         %% Analysis methods
         function [condInds, condLogical] = trialSort(obj,directions,speeds,locations,...
-                cohs,seqs,perts)
+                cohs,seqs,perts,blinks,occluders)
         % Find indices of all trials with direction  in directions, speed
         % in speeds, location in locations.
             if isnan(directions)
@@ -884,13 +884,13 @@ classdef dcpObj
             else
                 dMask = ismember(obj.directions,directions);
             end
-            
+
             if isnan(speeds)
                 sMask = true(size(obj.speeds));
             else
                 sMask = ismember(obj.speeds,speeds);
             end
-            
+
             if ~exist('locations','var') || any(isnan(locations))
                 lMask = true(size(obj.locations));
             else
@@ -899,38 +899,50 @@ classdef dcpObj
                         obj.locations(:,li),locations(:,li));
                 end
             end
-            
-            if ~exist('cohs','var') || isnan(cohs) 
+
+            if ~exist('cohs','var') || isnan(cohs)
                 cMask = true(size(obj.directions));
             else
                 cMask = ismember(obj.coh,cohs);
             end
-            
+
             if ~exist('seqs','var') || isnan(seqs)
                 qMask = true(size(obj.directions));
             else
                 qMask = ismember(obj.sequences,seqs);
             end
-            
+
             if ~exist('perts','var') || any(isnan(perts))
                 pMask = true(size(obj.directions));
             else
                 pMask = ismember(obj.perturbations,perts);
             end
-            
-            condLogical = prod([dMask,sMask,lMask,cMask,qMask,pMask],2,'native');
+
+            if ~exist('blinks','var') || any(isnan(blinks))
+                bMask = true(size(obj.directions));
+            else
+                bMask = ismember(obj.blink,blinks);
+            end
+
+            if ~exist('occluders','var') || any(isnan(occluders))
+                oMask = true(size(obj.directions));
+            else
+                oMask = ismember(obj.occluder,occluders);
+            end
+
+            condLogical = prod([dMask,sMask,lMask,cMask,qMask,pMask,bMask,oMask],2,'native');
             condInds = find(condLogical);
         end
-                
+
         function obj = dcpTrials(obj,trialNs,altName)
         % Add spike times from each data file
             if ~exist('altName','var')
                 altName = obj.sname;
             end
-        
+
             datapath = obj.returnDatapath;
             files = dir(datapath);
-            
+
             % Determine the index of the first data file
             for fileInx = 1:length(files)
                 if length(files(fileInx).name) >= length(altName) && ...
@@ -938,15 +950,15 @@ classdef dcpObj
                     break
                 end
             end
-            
+
                 ind = 0;
                 for ti = trialNs
-                    
+
                     if length(files)-fileInx+1 > ti
-                        
+
                         % Read file
                         file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
-                        
+
                         ind = ind+1;
                         % Add spike times
                         if obj.spikesExtracted
@@ -955,13 +967,13 @@ classdef dcpObj
                         else
                             obj.spikeTimes{ind}{1} = file.spikes;
                         end
-                        
-                        
+
+
                     end
                 end
         end
-        
-        
+
+
         function [mE,steE,E] = MeanEyeSpeed(obj,condInds,varargin)
         % Plots mean eye speed for a set of trials specified in condLogical
             % Parse inputs
@@ -970,21 +982,21 @@ classdef dcpObj
             addRequired(Parser,'condInds')
             addParameter(Parser,'t',NaN)
             addParameter(Parser,'normalizer',1)
-            
+
             parse(Parser,obj,condInds,varargin{:})
-            
+
             obj = Parser.Results.obj;
             condInds = Parser.Results.condInds;
             t = Parser.Results.t;
             normalizer = Parser.Results.normalizer;
-            
+
             E = (sqrt(vertcat(obj.eye(condInds).hvel).^2 + ...
                 vertcat(obj.eye(condInds).vvel).^2 ))/normalizer;
             mE = nanmean(E,1);
             steE = sqrt(nanvar(E,[],1)/length(condInds));
-            
+
         end
-        
+
         %% Plotting methods
         function h = rasterPlot(obj,trials,units,t_offsets)
         % Raster plot
@@ -1010,7 +1022,7 @@ classdef dcpObj
                 hold on
             end
         end
-        
+
         function h = plotMeanEyeVelocity(obj,condLogical,varargin)
         % Plots mean eye velocity for a set of trials specified in condLogical
             % Parse inputs
@@ -1021,16 +1033,16 @@ classdef dcpObj
             addParameter(Parser,'sh',NaN)
             addParameter(Parser,'t',NaN)
             addParameter(Parser,'color',NaN)
-            
+
             parse(Parser,obj,condLogical,varargin{:})
-            
+
             obj = Parser.Results.obj;
             condLogical = Parser.Results.condLogical;
             h = Parser.Results.h;
             sh = Parser.Results.sh;
             t = Parser.Results.t;
             color = Parser.Results.color;
-            
+
             if ishandle(h)
                 figure(h);
             else
@@ -1043,11 +1055,11 @@ classdef dcpObj
             E(:,:,2) = vertcat(obj.eye(~~condLogical).vvel);
             mE = nanmean(E,1);
             steE = sqrt(nanvar(E,[],1)/sum(condLogical));
-            
+
             if isnan(t)
                 t = 0:size(mE,2)-1;
             end
-            
+
             patchProps.FaceAlpha = 0.3;
             if ~any(isnan(color))
                 patchProps.FaceColor = color;
@@ -1064,8 +1076,8 @@ classdef dcpObj
             myPatch(t(:),Etemp(:),steEtemp(:),'patchProperties',patchProps);
             plot(t,mE(:,:,1),'Color',color,'LineWidth',2)
             plot(t,mE(:,:,2),'--','Color',color,'LineWidth',2)
-        end    
-        
+        end
+
         function h = plotMeanEyeSpeed(obj,condLogical,varargin)
         % Plots mean eye speed for a set of trials specified in condLogical
             % Parse inputs
@@ -1078,9 +1090,9 @@ classdef dcpObj
             addParameter(Parser,'color',NaN)
             addParameter(Parser,'normalizer',1)
             addParameter(Parser,'plotPatch',true)
-            
+
             parse(Parser,obj,condLogical,varargin{:})
-            
+
             obj = Parser.Results.obj;
             condLogical = Parser.Results.condLogical;
             h = Parser.Results.h;
@@ -1089,7 +1101,7 @@ classdef dcpObj
             color = Parser.Results.color;
             normalizer = Parser.Results.normalizer;
             plotPatch = Parser.Results.plotPatch;
-            
+
             if ishandle(h)
                 figure(h);
             else
@@ -1102,11 +1114,11 @@ classdef dcpObj
                 vertcat(obj.eye(~~condLogical).vvel).^2 ))/normalizer;
             mE = nanmean(E,1);
             steE = sqrt(nanvar(E,[],1)/sum(condLogical));
-            
+
             if isnan(t)
                 t = 0:length(mE)-1;
             end
-            
+
             if plotPatch
                 patchProps.FaceAlpha = 0.3;
                 if ~any(isnan(color))
@@ -1120,11 +1132,10 @@ classdef dcpObj
             hold on
             plot(t,mE,'Color',color,'LineWidth',2)
         end
-        
-        
-        
-        
-    end
-    
-end
 
+
+
+
+    end
+
+end

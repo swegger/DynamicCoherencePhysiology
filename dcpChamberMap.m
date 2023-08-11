@@ -237,7 +237,7 @@ sacPref = sacPrefObj(subject,...
         
         % Generate unit selection callback
         UnitsString = {};
-        if isempty(dcp{selectFile.Value}.unitIndex)
+        if isempty(dcp{selectFile.Value}.unitIndex) | ~iscell(dcp{selectFile.Value}.unitTypes)
             UnitsString{1} = 'None';
         else
             totalunits = length(dcp{selectFile.Value}.unitIndex);

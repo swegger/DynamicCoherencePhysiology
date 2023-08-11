@@ -297,7 +297,7 @@ gain(1).rmse = sqrt(mean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec
 
 %% Mean initiation response
 figure;
-speedColors = colormap('lines');
+speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
 cohColors = 1-repmat(cohs/100,[1,3]);
 close(gcf)
 figure('Name','Mean initCoh response')
@@ -372,7 +372,7 @@ ylabel('Initiation speed (deg/s)')
 
 %% Perturbation response
 h = figure;
-speedColors = colormap('lines');
+speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
 set(h,'Position', [347 292 962 937]);
 ind = 0;
 pertsTemp = perturbations(perturbations ~= 0);

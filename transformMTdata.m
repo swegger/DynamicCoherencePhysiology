@@ -43,7 +43,7 @@ clear mtdata
 
 neuronj = 0;
 for neuroni = 1:length(neuronIDs)
-    if strcmp(neuronIDs{neuroni}(1:2),sname)
+    if any(strcmp(neuronIDs{neuroni}(1:2),sname))
         neuronj = neuronj+1;
         mt{neuronj} = mtObj(sname,...
             [fileDirectory '/' file],...

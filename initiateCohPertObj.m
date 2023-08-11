@@ -817,5 +817,125 @@ classdef initiateCohPertObj < dcpObj
                 end
             end
         end
+    
+        %% Export methods
+        function fid = exportToBIN(obj,filename,varargin)
+        % Exports target speeds to binary file
+            
+            % Parse input
+            Parser = inputParser;
+            
+            addRequired(Parser,'obj')
+            addRequired(Parser,'filename')
+            addParameter(Parser,'trialNs',1:5000)
+            addParameter(Parser,'totalDuration',600)
+            addParameter(Parser,'includeFixationTime',false)
+            addParameter(Parser,'coherenceLevels',[20 60 100])
+            
+            parse(Parser,obj,filename,varargin{:})
+            
+            obj = Parser.Results.obj;
+            filename = Parser.Results.filename;
+            trialNs = Parser.Results.trialNs;
+            totalDuration = Parser.Results.totalDuration;
+            includeFixationTime = Parser.Results.includeFixationTime;
+            coherenceLevels = Parser.Results.coherenceLevels;
+            
+            % List of target names and target indicies
+            for ci = 1:length(coherenceLevels)
+                tgtNames{ci} = ['coh_' num2str(coherenceLevels(ci))];
+            end
+            
+            % Get list of potential files
+            files = dir(obj.datapath);
+            
+            % Determine the index of the first data file
+            for fileInx = 1:length(files)
+                if length(files(fileInx).name) >= length(obj.sname) && ...
+                        strcmp(files(fileInx).name(1:length(obj.sname)),obj.sname)
+                    break
+                end
+            end
+                
+                fid = fopen(filename,'w');
+                ind = 0;
+                for ti = trialNs
+                    
+                    if length(files)-fileInx+1 > ti
+                        
+                        % Read file
+                        file = readcxdata([obj.datapath '/' files(ti+fileInx-1).name]);
+                        
+                        trialname = file.trialname;
+                        if ~isempty(trialname) && strcmp(trialname(1:11),'initCohPert')
+                            ind = ind+1;
+                            
+                            % 1. Construct x velocity, y velocity and
+                            % coherence for trial
+                            tgtAccept = ismember({file.tgtdefns.name},tgtNames);
+                            if includeFixationTime
+                                XV = zeros(1,totalDuration);
+                                YV = zeros(1,totalDuration);
+                                XV(file.targets.tRecordOn:end) = sum(file.targets.hvel(tgtAccept,1:(totalDuration-file.targets.tRecordOn)),1);
+                                YV(file.targets.tRecordOn:end) = sum(file.targets.vvel(tgtAccept,1:(totalDuration-file.targets.tRecordOn)),1);
+                            else
+                                XV = zeros(1,totalDuration);
+                                YV = zeros(1,totalDuration);
+                                COH = zeros(1,size(file.data,2));
+                                
+                                allXV = file.targets.hvel + file.targets.patvelH;
+                                allYV = file.targets.vvel + file.targets.patvelV;
+                                XV = sum(allXV(tgtAccept,1:totalDuration),1);
+                                YV = sum(allYV(tgtAccept,1:totalDuration),1);
+                                for tgti = 2:length(file.targets.on)
+                                    if ~isempty(file.targets.on{tgti})
+                                        COH(file.targets.on{tgti}(1)+1:file.targets.on{tgti}(2)-1) = file.tgtdefns(tgti).params.iPctCoherent;
+                                    end
+                                end
+                                COH = COH(1:totalDuration);
+                                
+                                x = 1:totalDuration;
+                                eyeXV = (file.data(3,1:totalDuration) - ...
+                                    mean(file.data(3,obj.calib.t)))*obj.calib.speedGain;
+                                eyeYV = (file.data(4,1:totalDuration) - ...
+                                    mean(file.data(4,obj.calib.t)))*obj.calib.speedGain;
+                                
+                                sacs = saccadeDetect(file.data(3,1:totalDuration)*obj.calib.speedGain,...
+                                    file.data(4,1:totalDuration)*obj.calib.speedGain,...
+                                    'accelerationThreshold',obj.calib.accThres,...
+                                    'windowSize',40);
+                                if sacs(end)
+                                    % If last value of window includes a
+                                    % saccade, set eye XV and YV to the last
+                                    % smooth pursuit value
+                                    eyeXV(end) = eyeXV(find(~sacs,1,'last'));
+                                    eyeYV(end) = eyeYV(find(~sacs,1,'last'));
+                                    sacs(end) = false;
+                                end
+                                if sacs(1)
+                                    % If first value of window includes a
+                                    % saccade, set eye XV and YV to the
+                                    % first smooth pursuit value
+                                    eyeXV(1) = eyeXV(find(~sacs,1,'first'));
+                                    eyeYV(1) = eyeYV(find(~sacs,1,'first'));
+                                    sacs(1) = false;
+                                end 
+                                
+                                eyeXV(sacs) = interp1(x(~sacs),eyeXV(~sacs),x(sacs));
+                                eyeYV(sacs) = interp1(x(~sacs),eyeYV(~sacs),x(sacs));
+                            end
+                            
+                            D = [XV(:) YV(:) COH(:) eyeXV(:) eyeYV(:)];
+                            
+                            % 2. Write to data file
+                            fwrite(fid,D','double');
+                            
+                        end
+                    end
+                end
+                fwrite(fid,[ind,size(D)],'double')
+                fclose(fid)
+        
+        end
     end
 end

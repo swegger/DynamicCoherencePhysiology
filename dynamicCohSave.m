@@ -82,6 +82,9 @@ end
 if strcmp(dynCoh.sname,'ar')
     dynCoh.saveLocation = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/'...
         dynCoh.datapath(end-8:end-1) 'obj/dynCoh' dynCoh.datapath(end-8:end)];
+elseif strcmp(dynCoh.sname,'fr')
+    dynCoh.saveLocation = ['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Frederick/'...
+        dynCoh.datapath(end-8:end-1) 'obj/dynCoh' dynCoh.datapath(end-8:end)];
 end
 if ~exist(dynCoh.saveLocation(1:end-17),'dir')
     mkdir(dynCoh.saveLocation(1:end-17))
