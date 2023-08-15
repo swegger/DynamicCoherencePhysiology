@@ -421,7 +421,7 @@ if ~fileExist
     Dtemp = nan(size(COEFF,1),size(COEFF,1));
     BinitPCA = nan(4,size(Binit,2),size(Binit,3));
     BdynPCA = nan(3,size(Bdyn,2),size(Bdyn,3));
-    for n = 1:10
+    for n = 1:24
         Dtemp(:,:,n) = COEFF(:,n)*COEFF(:,n)';
     end
     D = sum(Dtemp,3);
@@ -1934,7 +1934,7 @@ title(dimensionLabels{3})
 linkaxes(optH,'xy')
 
 %% Plot behavioral gain vs activity along targeted dimensions
-dimNames = {'Speed','Coherence','Gain','Offset'};
+dimNames = {'Speed','Coherence','Gain','Offset'}
 gvthOpt = figure('Name',['Behavioral gain vs activity on optimized targeted dimension (initCoh)'],'Position',[1956 59 570 1263]);
 for targetedDim = 1:3
     tempData = [];
