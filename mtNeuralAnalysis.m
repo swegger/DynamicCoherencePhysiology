@@ -177,7 +177,7 @@ for ti = 1:length(pollTimes)
 end
 
 
-for ti = 1:length(pollTImes)
+for ti = 1:length(pollTimes)
     
     % Interpolate between coherence speed values from Behling experiments to the speed and coherence values used in Egger experiments
     temp = WA(mt{filei}.neuron_t == pollTimes(ti),:,:);
@@ -359,13 +359,13 @@ if pltFlg
     end
     
     figure('Name','Feedforward gain vs behavior','Position',[687 421 490*length(pollTimes) 788])
-    for ti = 1:sum(pollTimes<=450)
+    for ti = 1:length(pollTimes)
         subplot(2,length(pollTimes),ti)
         surf(Ss2,Cs2,squeeze(gainEstimate(ti,:,:)),'EdgeColor','none')
         hold on
-        if pollTimes <= 450
+%         if pollTimes <= 450
             scatter3(Ss2(:),Cs2(:),beta(ti,1)*reshape(beh.initGain(:,:,tIndex(ti)),[numel(Ss2),1]) + beta(ti,2))
-        end
+%         end
         
         xlabel('Target speed (deg/s)')
         ylabel('Target coherence (deg/s)')
@@ -375,9 +375,9 @@ if pltFlg
     for ti = 1:length(pollTimes)
         subplot(2,length(pollTimes),length(pollTimes)+ti)
         for ci = 1:length(cohsFEF)
-            if pollTimes(ti) == 150 || pollTimes(ti) == 450
+%             if pollTimes(ti) == 150 || pollTimes(ti) == 450
                 plot(beh.initGain(:,ci,tIndex(ti)),squeeze(gainEstimate(ti,:,ci)),'o-','Color',1-cohsFEF(ci)*ones(1,3)/100)
-            end
+%             end
             %         if pollTimes(ti) == 450 || pollTimes(ti) == 750 || pollTimes(ti) == 1050
             %             tempEsts = squeeze(gainEstimate(ti,speedsFEF == 10,ci))*ones(size(beh.gain(beh.cohDyn(:,ti) == cohsFEF(ci),tIndexDyn(ti))));
             %
@@ -429,13 +429,13 @@ if pltFlg
     end
     
     figure('Name','Feedforward gain vs behavior','Position',[687 421 490*length(pollTimes) 788])
-    for ti = 1:sum(pollTimes<=450)
+    for ti = 1:length(pollTimes)
         subplot(2,length(pollTimes),ti)
         surf(Ss2,Cs2,squeeze(gainEstimate2(ti,:,:)),'EdgeColor','none')
         hold on
-        if pollTimes <= 450
+%         if pollTimes <= 450
             scatter3(Ss2(:),Cs2(:),beta2(ti,1)*reshape(beh.initGain(:,:,tIndex(ti)),[numel(Ss2),1]) + beta(ti,2))
-        end
+%         end
         
         xlabel('Target speed (deg/s)')
         ylabel('Target coherence (deg/s)')
@@ -445,9 +445,9 @@ if pltFlg
     for ti = 1:length(pollTimes)
         subplot(2,length(pollTimes),length(pollTimes)+ti)
         for ci = 1:length(cohsFEF)
-            if pollTimes(ti) == 150 || pollTimes(ti) == 450
+%             if pollTimes(ti) == 150 || pollTimes(ti) == 450
                 plot(beh.initGain(:,ci,tIndex(ti)),squeeze(gainEstimate2(ti,:,ci)),'o-','Color',1-cohsFEF(ci)*ones(1,3)/100)
-            end
+%             end
             %         if pollTimes(ti) == 450 || pollTimes(ti) == 750 || pollTimes(ti) == 1050
             %             tempEsts = squeeze(gainEstimate(ti,speedsFEF == 10,ci))*ones(size(beh.gain(beh.cohDyn(:,ti) == cohsFEF(ci),tIndexDyn(ti))));
             %
