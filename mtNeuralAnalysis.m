@@ -17,7 +17,7 @@ addParameter(Parser,'cohs',[10 30 70 100])
 addParameter(Parser,'objectFile','allMT_20230419.mat')
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
-addParameter(Parser,'pollTimes',[150, 450, 750])
+addParameter(Parser,'pollTimes',[100, 750])
 addParameter(Parser,'behaviorFile','neuronTyping20221229.mat')
 addParameter(Parser,'tIndex',[2,3,4])
 addParameter(Parser,'pltFlg',true)
@@ -35,6 +35,10 @@ pollTimes = Parser.Results.pollTimes;
 behaviorFile = Parser.Results.behaviorFile;
 tIndex = Parser.Results.tIndex;
 pltFlg = Parser.Results.pltFlg;
+
+%% Colors
+speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speedsFEF),'sampleN',length(speedsFEF));
+initColors = 1-[20 20 20; 60 60 60; 100 100 100]/100;
 
 %% Load mtObjs
 load(objectFile)
@@ -173,7 +177,7 @@ for ti = 1:length(pollTimes)
 end
 
 
-for ti = 1:sum(pollTimes<=450)
+for ti = 1:length(pollTImes)
     
     % Interpolate between coherence speed values from Behling experiments to the speed and coherence values used in Egger experiments
     temp = WA(mt{filei}.neuron_t == pollTimes(ti),:,:);
@@ -188,11 +192,11 @@ for ti = 1:sum(pollTimes<=450)
 end
 
 %% Implement a pool of neurons with diverse integration behavior
-fefN = 500;
+fefN = 4000;
 leakRate = rand(fefN,1);
 fefBaseline = 10;
-randWeight = 10;
-structuredWeight = 1/10;
+randWeight = 40;
+structuredWeight = 1;
 dfef = zeros(fefN,size(interpolatedWA,1),size(interpolatedWA,2),size(interpolatedWA,3)); 
 fef = zeros(fefN,size(interpolatedWA,1),size(interpolatedWA,2),size(interpolatedWA,3));
 fef(:,mt{1}.neuron_t<=0,:,:) = fefBaseline;
@@ -203,7 +207,7 @@ mtWeights = (...
     mtWeights*randWeight + ...
     structuredWeight*repmat(log2(spref),[fefN,1]) .* repmat(randsample([-1 1],fefN,true)',[1,size(R,4)])...
     )/fefN;
-fefTau = 150/(mtNeuron_t(2)-mtNeuron_t(1));
+fefTau = 40/(mtNeuron_t(2)-mtNeuron_t(1));
 for ti = find(mt{1}.neuron_t==0):length(mt{1}.neuron_t)
     for si = 1:length(speedsFEF)
         for ci = 1:length(cohsFEF)
@@ -238,7 +242,7 @@ end
 % Determine how well gain dimension activity predicts behavioral gain
 % across time in initCoh task
 for di = 1:size(pBopt,1)
-    for ti = 1:sum(pollTimes<=450)
+    for ti = 1:length(pollTimes)
         for si = 1:length(speedsFEF)
             for ci = 1:length(cohsFEF)
                 gainPrediction(si,ci,ti+1,di) = pBopt(di,mtNeuron_t == pollTimes(ti),si,ci);
@@ -256,14 +260,17 @@ figure('Name','Model FEFsem activity','Position',[409 375 1914 420])
 samps = randsample(fefN,100);
 for si = 1:length(speedsFEF)
     subplot(1,length(speedsFEF)+1,si)
-    plot(mtNeuron_t(mtNeuron_t>=0),fef(samps,mtNeuron_t>=0,si,2)','Color',[0 0 0 0.2])
+    plot(mtNeuron_t(mtNeuron_t>=0),fef(samps,mtNeuron_t>=0,si,2)','Color',[speedColors(si,:) 0.2])
     hold on
     xlabel('Time from motion onset (ms)')
     ylabel('Model FEFsem response')
 end
 subplot(1,length(speedsFEF)+1,length(speedsFEF)+1)
-plot(fef(:,mtNeuron_t == 200,2,2),squeeze(fef(:,mtNeuron_t == 200,[1,3],2)),'o');
+plot(fef(:,mtNeuron_t == 200,2,2),squeeze(fef(:,mtNeuron_t == 200,1,2)),...
+    'o','Color',speedColors(1,:));
 hold on
+plot(fef(:,mtNeuron_t == 200,2,2),squeeze(fef(:,mtNeuron_t == 200,3,2)),...
+    'o','Color',speedColors(3,:));
 axis equal
 plotUnity;
 axis square
@@ -275,7 +282,7 @@ for si = 1:length(speedsFEF)
     for di = 1:size(pBopt,1)
         subplot(4,length(speedsFEF),si+(di-1)*length(speedsFEF))
         for ci = 1:length(cohsFEF)
-            plot(mtNeuron_t(mtNeuron_t>=0),pBopt(di,mtNeuron_t>=0,si,ci),'Color',1-cohsFEF(ci)*ones(1,3)/100)
+            plot(mtNeuron_t(mtNeuron_t>=0),pBopt(di,mtNeuron_t>=0,si,ci),'Color',[speedColors(si,:) cohsFEF(ci)/100])
             hold on
         end
         plotVertical(pollTimes);
@@ -285,14 +292,17 @@ for si = 1:length(speedsFEF)
 end
 
 figure('Name','Measured gain vs projection on each regression axis','Position',[409 375 1914 420])
-symbs = {'ro','go'};
+symbs = {'d-','o-'};
 for di = 1:size(pBopt,1)
     subplot(1,size(pBopt,1),di)
     for ti = 1:2
-        behTemp = beh.initGain(:,:,ti+1);
-        projTemp = gainPrediction(:,:,ti+1,di);
-        plot(behTemp(:),projTemp(:),symbs{ti})
-        hold on
+        for si = 1:length(speedsFEF)
+            behTemp = beh.initGain(si,:,ti+1);
+            projTemp = gainPrediction(si,:,ti+1,di);
+            plot(behTemp(:),projTemp(:),symbs{ti},...
+                'Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+            hold on
+        end
     end
     xlabel('Measured gain')
     ylabel(['Projection on ' dimLabels{di} ' axis'])
