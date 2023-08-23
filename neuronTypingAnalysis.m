@@ -35,6 +35,8 @@ addParameter(Parser,'cohs',[20; 60; 100])
 addParameter(Parser,'sequences',[1; 2; 3; 4; 5])
 addParameter(Parser,'perturbations',[0; 4; 6; 8])
 addParameter(Parser,'NumClusters',8)
+addParameter(Parser,'checkUnitType',false)
+addParameter(Parser,'rateCutoff',NaN)
 
 parse(Parser,varargin{:})
 
@@ -62,6 +64,8 @@ cohs = Parser.Results.cohs;
 sequences = Parser.Results.sequences;
 perturbations = Parser.Results.perturbations;
 NumClusters = Parser.Results.NumClusters;
+checkUnitType = Parser.Results.checkUnitType;
+rateCutoff = Parser.Results.rateCutoff;
 
 %% Colors
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
@@ -78,6 +82,7 @@ else
     fileExist = exist(resultsFile,'file');
     if fileExist
         load(resultsFile)
+        fileExist = true;
     else
         error(['File ' resultsFile ' does not exist in path.'])
     end
@@ -134,7 +139,10 @@ if ~fileExist
         % DynCoh data
         load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/dynCoh' ...
             dcp{filei}.datapath(end-8:end)])
-        
+        if ~isnan(rateCutoff)
+            initCoh = findActive(initCoh,rateCutoff,initCoh.cutWindow);
+            dynCoh = findActive(dynCoh,rateCutoff,dynCoh.cutWindow);
+        end
         if ~isempty(initCoh.R) && (~isempty(dynCoh.R) || ~any(isnan(dynCoh.R(:))) && size(dynCoh.R,2) > 1)
             if length(initCoh.unitIndex) == length(dynCoh.unitIndex)
                 
@@ -157,7 +165,12 @@ if ~fileExist
                 end
                 
                 % Get data for each neuron
-                for uniti = 1:length(initCoh.preferredDirectionRelative)
+                if checkUnitType && isprop(dcp{filei},'unitTypes')
+                    unitInd = find(strcmp(dcp{filei}.unitTypes,'good'));
+                else
+                    unitInd = 1:length(initCoh.preferredDirectionRelative);
+                end
+                for uniti = unitInd
                     ind = find(dir == initCoh.preferredDirectionRelative(uniti));
                     Rinit(:,:,:,indx) = initCoh.R(:,:,:,uniti,ind);
                     
@@ -467,6 +480,9 @@ if ~fileExist
     
     % Optimized decoder across time
     taccept = initCoh.neuron_t >= 150 & initCoh.neuron_t <= 1200;
+    bOpt = nan(4,size(zInit,4));
+    bOptIsolated = nan(2,size(zInit,4));
+    bOptDynCoh = nan(3,size(zDyn,3));
     for uniti = 1:size(zInit,4)
         temp = reshape(permute(zInit(taccept,:,:,uniti),[2,3,1]),[numel(Spds)*sum(taccept),1]);
         bOpt(:,uniti) = regress(temp,...
@@ -484,6 +500,9 @@ if ~fileExist
     
     
     % Find unit vector 
+    normBopt = nan(size(bOpt));
+    normBoptDynCoh = nan(size(bOptDynCoh));
+    normBoptIsolated = nan(size(bOptIsolated));
     for dimi = 1:size(bOpt,1)
         normBopt(dimi,:) = bOpt(dimi,:)/norm(bOpt(dimi,:));
     end
@@ -692,7 +711,7 @@ if testInitGain
     end
     if includeEarlyInitCohPertTime
         for si = 1:length(speeds)
-            initRatesTemp = squeeze(nanmean(a(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),[1,4]))*1000;
+            initRatesTemp = squeeze(nanmean(a(dynCoh.neuron_t >= 100 & dynCoh.neuron_t <= 200,si,:,:),[1,4]))*1000;
             plot(squeeze(initGain(si,:,2)),initRatesTemp,...
                 'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
         end
@@ -968,7 +987,7 @@ for i = 1:NumClusters
         end
         if includeEarlyInitCohPertTime
             for si = 1:length(speeds)
-                initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),1)),2)*1000;
+                initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 100 & dynCoh.neuron_t <= 200,si,:,:),1)),2)*1000;
                 gainRegression.x(3*length(sequences)+3*length(cohs) + (si-1)*length(cohs)+1:3*length(sequences)+3*length(cohs)+si*length(cohs),i) = initRatesTemp;
                 plot(squeeze(initGain(si,:,2)),initRatesTemp,...
                     'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
@@ -1093,7 +1112,7 @@ end
 figure('Name','Weighted average speed functions','Position',[661 549 1552 281])
 subplot(1,4,1)
 for ci = 1:length(cohs)
-    plot(speeds,sum(mean(Rinit_weighted_mean(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,:,ci,:),1),4)+gainRegression.B(end),...
+    plot(speeds,sum(mean(Rinit_weighted_mean(dynCoh.neuron_t >= 100 & dynCoh.neuron_t <= 200,:,ci,:),1),4)+gainRegression.B(end),...
         'o-','Color',initColors(ci,:),'MarkerFaceColor',initColors(ci,:))
     hold on
 end
@@ -1147,7 +1166,7 @@ end
 figure('Name','Weighted average coherence functions','Position',[661 549 1552 281])
 subplot(1,4,1)
 for si = 1:length(speeds)
-    plot(cohs,squeeze(sum(mean(Rinit_weighted_mean(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,:),1),4)+gainRegression.B(end)),...
+    plot(cohs,squeeze(sum(mean(Rinit_weighted_mean(dynCoh.neuron_t >= 100 & dynCoh.neuron_t <= 200,si,:,:),1),4)+gainRegression.B(end)),...
         'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
     hold on
 end
@@ -1726,7 +1745,7 @@ for targetedDim = 1:3
         end
         if includeEarlyInitCohPertTime
             for si = 1:length(speeds)
-                initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,targetedDim),1));
+                initRatesTemp = squeeze(nanmean(pInit(dynCoh.neuron_t >= 100 & dynCoh.neuron_t <= 200,si,:,targetedDim),1));
                 plot(squeeze(initGain(si,:,2)),initRatesTemp,...
                     'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
                 tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];
@@ -1934,7 +1953,7 @@ title(dimensionLabels{3})
 linkaxes(optH,'xy')
 
 %% Plot behavioral gain vs activity along targeted dimensions
-dimNames = {'Speed','Coherence','Gain','Offset'}
+dimNames = {'Speed','Coherence','Gain','Offset'};
 gvthOpt = figure('Name',['Behavioral gain vs activity on optimized targeted dimension (initCoh)'],'Position',[1956 59 570 1263]);
 for targetedDim = 1:3
     tempData = [];
@@ -1964,7 +1983,7 @@ for targetedDim = 1:3
         end
         if includeEarlyInitCohPertTime
             for si = 1:length(speeds)
-                initRatesTemp = squeeze(nanmean(pBopt(dynCoh.neuron_t >= 50 & dynCoh.neuron_t <= 150,si,:,targetedDim),1));
+                initRatesTemp = squeeze(nanmean(pBopt(dynCoh.neuron_t >= 100 & dynCoh.neuron_t <= 200,si,:,targetedDim),1));
                 plot(squeeze(initGain(si,:,2)),initRatesTemp,...
                     'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
                 tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];

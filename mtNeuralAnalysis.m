@@ -17,7 +17,7 @@ addParameter(Parser,'cohs',[10 30 70 100])
 addParameter(Parser,'objectFile','allMT_20230419.mat')
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
-addParameter(Parser,'pollTimes',[100, 750])
+addParameter(Parser,'pollTimes',[150, 750])
 addParameter(Parser,'behaviorFile','neuronTyping20221229.mat')
 addParameter(Parser,'tIndex',[2,3,4])
 addParameter(Parser,'pltFlg',true)
@@ -196,17 +196,19 @@ fefN = 4000;
 leakRate = rand(fefN,1);
 fefBaseline = 10;
 randWeight = 40;
-structuredWeight = 1;
+structuredWeight = 0;
+fractTuned = 0;
 dfef = zeros(fefN,size(interpolatedWA,1),size(interpolatedWA,2),size(interpolatedWA,3)); 
 fef = zeros(fefN,size(interpolatedWA,1),size(interpolatedWA,2),size(interpolatedWA,3));
 fef(:,mt{1}.neuron_t<=0,:,:) = fefBaseline;
-% interpolatedWAtemp = interpolatedWA - repmat(interpolatedWA(mt{1}.neuron_t==0,:,:),[size(interpolatedWA,1),1,1]);
 mtWeights = randn(fefN,size(R,4));
 % mtWeights = repmat(log2(spref),[fefN,1]) .* reshape(randsample([-1 1],fefN*size(R,4),true),[fefN,size(R,4)])/fefN;
 mtWeights = (...
     mtWeights*randWeight + ...
     structuredWeight*repmat(log2(spref),[fefN,1]) .* repmat(randsample([-1 1],fefN,true)',[1,size(R,4)])...
     )/fefN;
+speedTunedIndices = randsample(fefN,round(fractTuned*fefN));
+mtWeights(speedTunedIndices,:) = randWeight/10*repmat(log2(spref),[length(speedTunedIndices),1]) .* repmat(randsample([-1 1],length(speedTunedIndices),true)',[1,size(R,4)])/fefN;
 fefTau = 40/(mtNeuron_t(2)-mtNeuron_t(1));
 for ti = find(mt{1}.neuron_t==0):length(mt{1}.neuron_t)
     for si = 1:length(speedsFEF)
