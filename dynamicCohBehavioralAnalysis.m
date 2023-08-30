@@ -69,7 +69,7 @@ elseif isempty(dcp{1})
     end
 end
 
-%% Get data from initiateCoh experiments
+%% Get data from dynamicCoh experiments
 ind = 0;
 emptyT = true;
 while emptyT
@@ -330,7 +330,7 @@ for pi = pertInds
     end
     legend(legendEntry)
     xlabel('Time from motion onset (ms)')
-    ylabel('Perturbation response (deg/s)')
+    ylabel('Perturbation response / target speed')
 end
 ax = axis;
 text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
@@ -341,11 +341,12 @@ for pi = 1:3
     for seqi = 1:length(seqs)
         %     plot(dyn.eye.pert.coh(seqi,:)',dyn.eye.pert.res(seqi,:)'/0.2/2,...
         %         'o-','Color',colors(seqi,:))
-        errorbar(dyn.eye.pert.coh(seqi,pi+1)',gain(seqi,pi+1)',gainSTE(seqi,pi+1),...
+        errorbar(dyn.eye.pert.coh(seqi,pi+1)',gain(seqi,pi+1)',gainSTE(seqi,pi+1)*1.64,[],...
             symbols{pi},'Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:),'MarkerSize',8)
         hold on
     end
 end
+plotHorizontal(0);
 xlabel('Coherence')
 ylabel('Gain')
 ax = axis;
