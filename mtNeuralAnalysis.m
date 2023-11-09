@@ -192,11 +192,11 @@ for ti = 1:length(pollTimes)
 end
 
 %% Implement a pool of neurons with diverse integration behavior
-fefN = 4000;
-leakRate = rand(fefN,1);
+fefN = 1000;
+leakRate = rand(fefN,1); %0.2*ones(fefN,1);%
 fefBaseline = 10;
 randWeight = 40;
-structuredWeight = 0;
+structuredWeight = 0/mean(log2(spref));
 fractTuned = 0;
 dfef = zeros(fefN,size(interpolatedWA,1),size(interpolatedWA,2),size(interpolatedWA,3)); 
 fef = zeros(fefN,size(interpolatedWA,1),size(interpolatedWA,2),size(interpolatedWA,3));
@@ -257,7 +257,7 @@ for di = 1:size(pBopt,1)
     modelRval(di) = rval(1,2);
 end
 
-
+%% Learky integrator model results
 figure('Name','Model FEFsem activity','Position',[409 375 1914 420])
 samps = randsample(fefN,100);
 for si = 1:length(speedsFEF)
@@ -313,6 +313,35 @@ for di = 1:size(pBopt,1)
     text(ax(2)*0.9,(ax(4)-ax(3))*0.9+ax(3),['R = ' num2str(modelRval(di))],'HorizontalAlignment','right')
 end
 legend('Early','Late','Location','SouthEast')
+
+figure('Name','PCA')
+temp = [];
+for si = 1:length(speedsFEF)
+    for ci = 1:length(cohsFEF)
+        temp = cat(2,temp,fef(:,:,si,ci));
+    end
+end
+[COEFF, SCORE] = pca(temp');
+for si = 1:length(speedsFEF)
+    for ci = 1:length(cohsFEF)
+        A = COEFF(:,:)*fef(:,:,si,ci);
+        subplot(1,4,1)
+        plot3(A(1,:),A(2,:),A(3,:),'-','Color',[speedColors(si,:) cohsFEF(ci)/100])
+        hold on
+        
+        for dimi = 1:3
+            subplot(1,4,1+dimi)
+            plot(mtNeuron_t(mtNeuron_t>=0),A(dimi,mtNeuron_t>=0),'-','Color',[speedColors(si,:) cohsFEF(ci)/100])
+            hold on
+        end
+    end
+end
+subplot(1,4,1)
+grid on
+xlabel('PC_1')
+ylabel('PC_2')
+zlabel('PC_3')
+
 
 %% Plot
 
