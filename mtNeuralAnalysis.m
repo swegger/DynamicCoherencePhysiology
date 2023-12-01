@@ -262,6 +262,8 @@ figure('Name','Model FEFsem activity','Position',[409 375 1914 420])
 samps = randsample(fefN,100);
 for si = 1:length(speedsFEF)
     subplot(1,length(speedsFEF)+1,si)
+    fefnorm = (fef(samps,mtNeuron_t>=0,si,2)') ./ ...
+        repmat(max(fef(samps,mtNeuron_t>=0,si,2)',[],1),[sum(mtNeuron_t>=0),1]);
     plot(mtNeuron_t(mtNeuron_t>=0),fef(samps,mtNeuron_t>=0,si,2)','Color',[speedColors(si,:) 0.2])
     hold on
     xlabel('Time from motion onset (ms)')
