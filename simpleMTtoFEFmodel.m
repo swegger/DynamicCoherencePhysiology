@@ -59,7 +59,7 @@ initColors = 1-[20 20 20; 60 60 60; 100 100 100]/100;
 %% Load mtObjs
 load(objectFile)
 
-%% Get mean and covariance of each unit
+%% Get mean of each unit
 R = [];
 spref = [];
 for filei = 1:length(mt)
@@ -85,22 +85,26 @@ mtNeuron_t = mt{filei}.neuron_t;
 
 
 %% Interpolate between coherence speed values from Behling experiments to the speed and coherence values used in Egger experiments
-[Ss,Cs] = meshgrid(speeds,cohs);
-Ss = Ss';
-Cs = Cs';
-[Ss2,Cs2] = meshgrid(speedsFEF,cohsFEF);
-Ss2 = Ss2';
-Cs2 = Cs2';
-for neuroni = 1:size(R,4)
-    for ti = 1:size(R,1)
-        temp = R(ti,:,:,neuroni);
-        if sum(any(isnan(squeeze(temp)),2)) >= size(Ss,2)-1 || sum(any(isnan(squeeze(temp)),1)) >= size(Ss,1)-1
-            interpolatedR(ti,:,:,neuroni) = nan(size(Ss2));
-        else
-            interpolatedR(ti,:,:,neuroni) = interp2(Ss',Cs',squeeze(temp)',Ss2',Cs2','spline')';
-        end
-    end
-end
+[interpolatedR, Ss, Cs, Ss2, Cs2] = interpolateMT_BehlingToEgger(R,speeds,cohs,speedsFEF,cohsFEF);
+% [Ss,Cs] = meshgrid(speeds,cohs);
+% Ss = Ss';
+% Cs = Cs';
+% [Ss2,Cs2] = meshgrid(speedsFEF,cohsFEF);
+% Ss2 = Ss2';
+% Cs2 = Cs2';
+% for neuroni = 1:size(R,4)
+%     for ti = 1:size(R,1)
+%         temp = squeeze(R(ti,:,:,neuroni));
+%         if any(sum(~isnan(temp'),1)>2) && any(sum(~isnan(temp'),2)>2)       % Check if there at least two data points on each dimension for interpolation
+%             % Strip any row or column that doesnt' have at least 2 data points for interpolation
+%             interpolatedR(ti,:,:,neuroni) = interp2(Ss(sum(isnan(temp),2)<3,sum(isnan(temp),1)<3)',...
+%                 Cs(sum(isnan(temp),2)<3,sum(isnan(temp),1)<3)',...
+%                 temp(sum(isnan(temp),2)<3,sum(isnan(temp),1)<3)',Ss2',Cs2','spline')';
+%         else
+%              interpolatedR(ti,:,:,neuroni) = nan(size(Ss2));
+%         end
+%     end
+% end
 
 %% Load behavioral gain data
 beh = load(behaviorFile,'gain','initGain','dynCohT','dynCoh');
