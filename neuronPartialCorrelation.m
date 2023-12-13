@@ -17,6 +17,8 @@ addParameter(Parser,'cohs',[20; 60; 100])
 addParameter(Parser,'gains',[])
 addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'tWin',[750 750])
+addParameter(Parser,'tGainMeasurement',750)
+addParameter(Parser,'gainFitInd',1)
 
 parse(Parser,dcp,varargin{:})
 
@@ -28,6 +30,8 @@ cohs = Parser.Results.cohs;
 gains = Parser.Results.gains;
 directions = Parser.Results.directions;
 tWin = Parser.Results.tWin;
+tGainMeasurement = Parser.Results.tGainMeasurement;
+gainFitInd = Parser.Results.gainFitInd;
 
 %% Preliminary
 [Cohs, Spds] = meshgrid(cohs,speeds);
@@ -114,17 +118,18 @@ for uniti = 1:size(Rinit,4)
                 df(modeli) = numel(Cohs)*sum(taccept)-1-1;
                 
             case 'gain'
-                
                 if isempty(gains)
                     error('No gain data provided!')
                 else
+                    gtemp = gains(:,:,gainFitInd);
+                    
                     % Get firing rate data
                     r = Rinit(taccept,:,:,uniti);
-                    r = reshape(permute(r,[2,3,1]),[numel(gains)*sum(taccept),1]);
+                    r = reshape(permute(r,[2,3,1]),[numel(gtemp)*sum(taccept),1]);
                     mfit(modeli,uniti).R = r;
                     
                     % Build regressor matrix
-                    mfit(modeli,uniti).X = repmat([gains(:),ones(numel(gains),1)],[sum(taccept),1]);
+                    mfit(modeli,uniti).X = repmat([gtemp(:),ones(numel(gtemp),1)],[sum(taccept),1]);
                     df(modeli) = numel(Spds)*sum(taccept)-1-1;
                 end
                 
@@ -245,6 +250,7 @@ for uniti = 1:length(mFavored{2,1})
             hold on
         end
         axis tight
+        plotVertical(tWin);
         ylabel('Spikes/s')
         xlabel('Time from motion onset (ms)')
         title(['Speed = ' num2str(speeds(si))])
@@ -269,22 +275,24 @@ end
 linkaxes(axh2)
 
 figure
-subplot(1,2,1)
-for si = 1:length(speeds)
-    plot(gains(si,:),squeeze(grandAve(initCoh.neuron_t == 750,si,:)),...
-        'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
-    hold on
+for gi = 1:length(tGainMeasurement)
+    subplot(1,length(tGainMeasurement)+1,gi)
+    for si = 1:length(speeds)
+        plot(gains(si,:,gainFitInd),squeeze(grandAve(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
+            'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+        hold on
+    end
+    xlabel('Behavioral gain (unitless)')
+    ylabel('Mean spikes/s')
+    title(['For gain at t = ' num2str(tGainMeasurement(gi))])
 end
-xlabel('Behavioral gain (unitless)')
-ylabel('Mean spikes/s')
-title('At time of gain measurement')
 
-subplot(1,2,2)
+subplot(1,length(tGainMeasurement)+1,length(tGainMeasurement)+1)
 for si = 1:length(speeds)
-    plot(gains(si,:),squeeze(nanmean(grandAve(taccept,si,:),1)),...
+    plot(gains(si,:,gainFitInd),squeeze(nanmean(grandAve(taccept,si,:),1)),...
         'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
     hold on
 end
 xlabel('Behavioral gain (unitless)')
 ylabel('Mean spikes/s')
-title('At time of spiking data')
+title(['For gain at t = ' num2str(tWin)])

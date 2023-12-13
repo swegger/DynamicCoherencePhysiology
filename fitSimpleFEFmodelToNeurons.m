@@ -153,7 +153,7 @@ mtNeuron_t = mt{filei}.neuron_t;
 % end
 
 inputs = permute(interpolatedR,[4,1,2,3]);
-
+inputs = inputs(prod(any(isnan(inputs),2),[3,4])==0,:,:,:);
 
 %% Iterate across neurons and fit data
 
@@ -162,39 +162,213 @@ inputs = permute(interpolatedR,[4,1,2,3]);
 RtoFit = Rinit(iFEF,:,:,:);
 inputs = inputs(:,iMT,:,:);
 
+
+%% Fit dynamic model
 if any(isnan(P0))
-    P0 = [0.5,10,randn(1,size(inputs,1))];
+    P0 = [0.10,randn(1,size(inputs,1))/1000];
 end
 if any(isnan(lb))
-    lb = [0, 0, -Inf*ones(1,size(inputs,1))];
+    lb = [0, -Inf*ones(1,size(inputs,1))];
 end
 if any(isnan(ub))
-    ub = [1, 100, Inf*ones(1,size(inputs,1))];
+    ub = [100, Inf*ones(1,size(inputs,1))];
 end
+OPTIONS = optimset(@fmincon);
+OPTIONS.MaxFunEvals = 3e10;
 for neuroni = 1:size(RtoFit,4)
-    Rtemp = RtoFit(:,:,:,neuroni);
+    tic
+    disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
+    Rtemp = RtoFit(:,:,[1, length(cohsFEF)],neuroni);
     R0 = nanmean(Rtemp(1,:,:),[2,3]);
-    minimizer = @(P)minimizant(P,R0,tau,inputs,Rtemp);
-    [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub);
+    minimizer = @(P)minimizant(P,R0,tau,inputs(:,:,:,[1,length(cohsFEF)]),Rtemp);
+    [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
     
-    modelFEF.R0 = R0;
-    modelFEF.leakRate(neuroni) = P(1);
-    modelFEF.baseLine(neuroni) = P(2);
-    modelFEF.W(:,neuroni) = P(3:end);
+    modelFEF.R0(neuroni) = R0;
+    modelFEF.baseLine(neuroni) = P(1);
+    modelFEF.W(:,neuroni) = P(2:end);
     modelFEF.fval(:,neuroni) = fval;
+    modelFEF.exitflag(:,neuroni) = exitflag;
+    modelFEF.output(:,neuroni) = output;
+    modelFEF.lambda(:,neuroni) = lambda;
+    modelFEF.grad(:,neuroni) = grad;
+    modelFEF.hessian(:,:,neuroni) = hessian;
+    toc
 end
+
+%% Regression models
+
+% Build matrices
+Xfit = nan(size(inputs,2)*size(inputs,3)*(size(inputs,4)-1),size(inputs,1));
+Yfit = nan(size(RtoFit,1)*size(RtoFit,2)*(size(RtoFit,3)-1),size(RtoFit,4));
+
+idx = [1, 1];
+for si = 1:length(speedsFEF)
+    for ci = [1 length(cohsFEF)]
+        Xfit(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs(:,:,si,ci),[2,1]);
+        Yfit(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit(:,si,ci,:));
+        idx(1) = idx(1) + size(inputs,2);
+        idx(2) = idx(2) + size(RtoFit,1);
+    end
+end
+
+Xtest = nan(size(inputs,2)*size(inputs,3),size(inputs,1));
+Ytest = nan(size(RtoFit,1)*size(RtoFit,2),size(RtoFit,4));
+idx = [1, 1];
+for si = 1:length(speedsFEF)
+    Xtest(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs(:,:,si,2),[2,1]);
+    Ytest(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit(:,si,2,:));
+    idx(1) = idx(1) + size(inputs,2);
+    idx(2) = idx(2) + size(RtoFit,1);
+end
+
+% Regress
+ridgeLambda = logspace(-1,12,10);
+trainBeta = nan([size(Xfit,2),size(Yfit,2),length(ridgeLambda)]);
+for ri = 1:length(ridgeLambda)
+    trainBeta(:,:,ri) = inv(Xfit'*Xfit + ridgeLambda(ri)*eye(size(Xfit'*Xfit)))*Xfit'*Yfit;
+    trainYfit = Xfit*trainBeta(:,:,ri);
+    testYfit = Xtest*trainBeta(:,:,ri);
     
+    fitQ(ri,1) = sum( (Yfit(:) - trainYfit(:)).^2 );
+    fitQ(ri,2) = sum( (Ytest(:) - testYfit(:)).^2 );
+end
+Beta = trainBeta(:,:,fitQ(:,2)==min(fitQ(:,2)));
+
+% Predicted responses
+YhatTrain = Xfit*Beta;
+YhatTest = Xtest*Beta;
+
+% Reduced rank regression
+rankN = 80;
+[Uhat,Shat,Vhat] = svd(YhatTrain,0);
+BetaRRR = Beta*Vhat(:,1:rankN)*Vhat(:,1:rankN)';
+BetaNull = Beta*Vhat(:,end)*Vhat(:,end)';
+YrrrTrain = Xfit*BetaRRR;
+YnullTrain = Xfit*BetaNull;
+YrrrTest = Xtest*BetaRRR;
+YnullTest = Xtest*BetaNull;
+
+Rhat = nan(size(RtoFit));
+Rnull = nan(size(RtoFit));
+idx = 1;
+idxTest = 1;
+for si = 1:length(speedsFEF)
+    for ci = [1, length(cohsFEF)]
+        Rhat(:,si,ci,:) = YrrrTrain(idx:idx+size(RtoFit,1)-1,:);
+        Rnull(:,si,ci,:) = YnullTrain(idx:idx+size(RtoFit,1)-1,:);
+        idx = idx+size(RtoFit,1);
+    end
+    
+    ci = 2;
+    Rhat(:,si,ci,:) = YrrrTest(idxTest:idxTest+size(RtoFit,1)-1,:);
+    Rnull(:,si,ci,:) = YnullTest(idxTest:idxTest+size(RtoFit,1)-1,:);
+    idxTest = idxTest+size(RtoFit,1);
+end
+
+% Find correlation with held out data and do Fisher transformation
+rvals = corrcoef([Ytest YrrrTest]);
+RhatCC = diag(rvals(size(Ytest,2)+1:end,1:size(Ytest,2)));
+RhatZ = 0.5*log( (1+rhatvals)./(1-rhatvals) );
+
+
+%% Analysis
+
+% Sort MT dimension by speed preference, remove poor fit FEF units, and
+% remove leak rate
+[~,sortInd] = sort(spref(~isnan(interpolatedR(1,1,1,:))));
+spref2 = spref(~isnan(interpolatedR(1,1,1,:)));
+spref2 = spref2(sortInd);
+cutThreshold = quantile(modelFEF.fval,0.975);
+W = modelFEF.W(sortInd,modelFEF.fval<cutThreshold)' ./ ...
+    repmat(modelFEF.leakRate(modelFEF.fval<cutThreshold)',[1,size(modelFEF.W,1)]);
+
+% Normalize by maximium value of W for each FEF neuron
+wmax = max(W,[],2);
+Weff = W./repmat(wmax,[1,size(W,2)]);
+
+% SVD
+[U,S,V] = svd(Weff);
+
+%% Plotting
+
+%% Fit quality
+figure
+for neuroni = size(RtoFit,4)
+    tempFEF = RtoFit(:,:,:,neuroni);
+    test = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),tau,inputs);
+    for ci = 1:length(cohsFEF)
+        subplot(1,length(cohsFEF),ci)
+        for si = 1:length(speedsFEF)
+            plot(tempFEF(:,si,ci)*1000,test(:,si,ci)*1000,'o','Color',speedColors(si,:))
+            hold on
+        end
+    end
+end
+
+for ci = 1:length(cohsFEF)
+    subplot(1,length(cohsFEF),ci)
+%     axis(1000*[min(RtoFit(:))-0.1*min(RtoFit(:)), max(RtoFit(:))+0.01*max(RtoFit(:)), ...
+%         min(RtoFit(:))-0.1*min(RtoFit(:)), max(RtoFit(:))+0.01*max(RtoFit(:))])
+    axis square
+    plotUnity;
+    xlabel('FEF data (sp/s)')
+    ylabel('Fit data (sp/s)')
+end
+
+%% Reduced rank regression analysis
+figure
+for ci = 1:length(cohsFEF)
+    subplot(1,length(cohsFEF),ci)
+    for si = 1:length(speedsFEF)
+        plot(squeeze(RtoFit(:,si,ci,:))*1000,squeeze(Rhat(:,si,ci,:))*1000,'o','Color',speedColors(si,:))
+        hold on
+    end
+    plotUnity;
+    xlabel('FEF data (sp/s)')
+    ylabel('RRR prediction (sp/s)')
+    
+end
+
+figure
+plot(RhatZ,'o')
+hold on
+plotHorizontal(2.34/sqrt(size(Ytest,1)-size(Xfit,2)));       % Approximate pval of 0.01
+xlabel('FEF neuron #')
+ylabel('Fisher transformed r-values')
+
+%%
+figure('Name','MT output channels found by RRR','Position',[674 218 1837 1104])
+rankN = 5;
+for ri = 1:rankN
+    for ci = 1:length(cohsFEF)
+        subplot(rankN,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
+        for si = 1:length(speedsFEF)
+            MToutputChan(:,si,ci,ri) = inputs(:,:,si,ci)'*Beta*Vhat(:,ri);
+            plot(MToutputChan(:,si,ci,ri),'Color',speedColors(si,:))
+            hold on
+        end
+        xlabel('Time from motion onset (steps)')
+        ylabel(['Output along dimension#' num2str(ri)])
+        tempLims(ci,:) = ylim;
+    end
+    
+    for ci = 1:length(cohsFEF)
+        subplot(rankN,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
+        ylim([min(tempLims(:,1)) max(tempLims(:,2))])
+    end
+end
+
 %% Functions
 
 %% Function to fit
-function R = SimpleFEFmodel(leakRate,W,baseLine,R0,tau,inputs)
+function R = SimpleFEFmodel(W,baseLine,R0,tau,inputs)
     sz = size(inputs);
     R = nan(sz(2:4));
     R(1,:,:) = repmat(R0,[1,sz(3),sz(4)]);
     for ti = 2:sz(2)
         for si = 1:sz(3)
             for ci = 1:sz(4)
-                dR(ti,si,ci) = -leakRate.*(R(ti-1,si,ci)-baseLine) + W*inputs(:,ti,si,ci);
+                dR(ti,si,ci) = (R(ti-1,si,ci)-baseLine) + W*inputs(:,ti,si,ci);
                 R(ti,si,ci) = R(ti-1,si,ci) + dR(ti,si,ci)/tau;
             end
         end
@@ -202,8 +376,7 @@ function R = SimpleFEFmodel(leakRate,W,baseLine,R0,tau,inputs)
     
  %% Objective
 function out = minimizant(P,R0,tau,inputs,R)
-    leakRate = P(1);
-    baseLine = P(2);
-    W = P(3:end);
-    Rest = SimpleFEFmodel(leakRate,W,baseLine,R0,tau,inputs);
+    baseLine = P(1);
+    W = P(2:end);
+    Rest = SimpleFEFmodel(W,baseLine,R0,tau,inputs);
     out = sum((R(:) - Rest(:)).^2);
