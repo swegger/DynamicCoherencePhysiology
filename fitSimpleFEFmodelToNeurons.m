@@ -181,7 +181,7 @@ if any(isnan(ub))
 end
 OPTIONS = optimset(@fmincon);
 OPTIONS.MaxFunEvals = 3e10;
-for neuroni = 1:1%size(RtoFit,4)
+for neuroni = 1:size(RtoFit,4)
     tic
     disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
     Rtemp = RtoFit(:,:,[1, length(cohsFEF)],neuroni);
@@ -211,8 +211,8 @@ end
 spref2 = spref(~isnan(interpolatedR(1,1,1,:)));
 spref2 = spref2(sortInd);
 cutThreshold = quantile(modelFEF.fval,0.975);
-W = modelFEF.W(sortInd,modelFEF.fval<cutThreshold)' ./ ...
-    repmat(modelFEF.leakRate(modelFEF.fval<cutThreshold)',[1,size(modelFEF.W,1)]);
+% W = modelFEF.W(sortInd,modelFEF.fval<cutThreshold)' ./ ...
+%     repmat(modelFEF.leakRate(modelFEF.fval<cutThreshold)',[1,size(modelFEF.W,1)]);
 
 % Normalize by maximium value of W for each FEF neuron
 wmax = max(W,[],2);
