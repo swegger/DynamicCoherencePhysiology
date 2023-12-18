@@ -6,6 +6,7 @@ function modelFEF = fitSimpleFEFmodelToNeurons(dcp,varargin)
 
 %% Defaults
 plotOpts_default.On = false;
+saveOpts_default.On = false;
 
 %% Parse inputs
 Parser = inputParser;
@@ -25,6 +26,7 @@ addParameter(Parser,'tWin',[0 900])
 addParameter(Parser,'tau',20)
 addParameter(Parser,'lambdaRidge',0)
 addParameter(Parser,'plotOpts',plotOpts_default)
+addParameter(Parser,'saveOpts',saveOpts_default)
 
 parse(Parser,dcp,varargin{:})
 
@@ -43,6 +45,7 @@ tWin = Parser.Results.tWin;
 tau = Parser.Results.tau;
 lambdaRidge = Parser.Results.lambdaRidge;
 plotOpts = Parser.Results.plotOpts;
+saveOpts = Parser.Results.saveOpts;
 
 %% Preliminary
 
@@ -245,6 +248,13 @@ if plotOpts.On
     end
 
 end
+
+
+%% Saving
+if saveOpts.On
+    save(saveOpts.location);
+end
+
 %% Functions
 
 %% Function to fit
