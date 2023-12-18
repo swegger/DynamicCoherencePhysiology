@@ -25,6 +25,7 @@ addParameter(Parser,'lb',NaN)
 addParameter(Parser,'tWin',[0 900])
 addParameter(Parser,'tau',20)
 addParameter(Parser,'lambdaRidge',0)
+addParameter(Parser,'sprefFromFit',true)
 addParameter(Parser,'plotOpts',plotOpts_default)
 addParameter(Parser,'saveOpts',saveOpts_default)
 
@@ -44,6 +45,7 @@ lb = Parser.Results.lb;
 tWin = Parser.Results.tWin;
 tau = Parser.Results.tau;
 lambdaRidge = Parser.Results.lambdaRidge;
+sprefFromFit = Parser.Results.sprefFromFit;
 plotOpts = Parser.Results.plotOpts;
 saveOpts = Parser.Results.saveOpts;
 

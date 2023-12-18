@@ -20,6 +20,7 @@ addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'rankN',80)
 addParameter(Parser,'ridgeLambda',logspace(-1,12,10))
+addParameter(Parser,'sprefFromFit',true)
 addParameter(Parser,'plotOpts',plotOpts_default)
 
 parse(Parser,dcp,varargin{:})
@@ -34,6 +35,7 @@ cohsFEF = Parser.Results.cohsFEF;
 directions = Parser.Results.directions;
 rankN = Parser.Results.rankN;
 ridgeLambda = Parser.Results.ridgeLambda;
+sprefFromFit = Parser.Results.sprefFromFit;
 plotOpts = Parser.Results.plotOpts;
 
 %% Preliminary
