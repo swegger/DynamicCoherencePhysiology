@@ -63,10 +63,7 @@ cellID = nan(1000,100,3);
 indx = 1;
 for filei = 1:length(dcp)
     disp(['File ' num2str(filei) ' of ' num2str(length(dcp))])
-    
-    % Add probe info
-    dcp{filei} = addProbeInfo(dcp{filei});
-    
+        
     % InitCoh data
     load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/initCoh' ...
         dcp{filei}.datapath(end-8:end)])
