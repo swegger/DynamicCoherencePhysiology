@@ -151,5 +151,69 @@ classdef mtObj < dcpObj
             phi = min(FF,[],1);
             varCE = V - repmat(phi,[size(M,1),1]).*M;
         end
+        
+        
+        
+        function [mu,sig,r,normR,fitInfo] = fitSpeedTuning(obj,varargin)
+            
+            % Defaults
+            
+            % Parse inputs
+            Parser = inputParser;
+            
+            addRequired(Parser,'obj')
+            addParameter(Parser,'tWin',[40 120])
+            addParameter(Parser,'P0',[16,1])
+            addParameter(Parser,'ub',[254 128])
+            addParameter(Parser,'lb',[0 0])
+            
+            parse(Parser,obj,varargin{:})
+            
+            obj = Parser.Results.obj;
+            tWin = Parser.Results.tWin;
+            P0 = Parser.Results.P0;
+            ub = Parser.Results.ub;
+            lb = Parser.Results.lb;
+            
+            % Get data to fit
+            r = sum(obj.r(obj.neuron_t >= tWin(1) & obj.neuron_t <= tWin(2),:),1)';
+            cohs = obj.coh;
+            speeds = obj.speeds;
+            
+            % Quick sort by speed and coherence to normalize to the mean
+            % response at the best speed separately for each coherence
+            % level;
+            c = unique(cohs);
+            s = unique(speeds);
+            for hi = 1:length(c)
+                for si = 1:length(s)
+                    meanr(hi,si) = nanmean(r(cohs == c(hi) & speeds == s(si)));
+                end
+            end
+            prefSpeed = s( sum(meanr,1) == max(sum(meanr,1)) );
+            normR = r;
+            for hi = 1:length(c)
+                normR(cohs == c(hi)) = normR(cohs == c(hi))./meanr(hi,s==prefSpeed);
+            end
+            
+            % Now fit a speed tuning curve to the data across coherence
+            % levels
+            minimizant = @(P)minimizer(obj,P,speeds,normR);
+            [P, fitInfo.fval, fitInfo.exitflag, fitInfo.output, fitInfo.lambda, fitInfo.grad, fitInfo.hessian] = ...
+                fmincon(minimizant,P0,[],[],[],[],lb,ub);
+            mu = P(1);
+            sig = P(2);
+        end
+        
+        function rhat = speedTuning(obj,speeds,mu,sig)
+            rhat = exp( -(log2(speeds./mu).^2)/(2*sig^2) );
+        end
+        
+        function out = minimizer(obj,P,speeds,r)
+            mu = P(1);
+            sig = P(2);
+            rhat = speedTuning(obj,speeds,mu,sig);
+            out = sum( (r - rhat).^2 );
+        end
     end
 end
