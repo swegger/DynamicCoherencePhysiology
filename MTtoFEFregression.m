@@ -21,6 +21,7 @@ addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'rankN',80)
 addParameter(Parser,'ridgeLambda',logspace(-1,12,10))
 addParameter(Parser,'sprefFromFit',true)
+addParameter(Parser,'checkMTFit',false)
 addParameter(Parser,'plotOpts',plotOpts_default)
 
 parse(Parser,dcp,varargin{:})
@@ -36,6 +37,7 @@ directions = Parser.Results.directions;
 rankN = Parser.Results.rankN;
 ridgeLambda = Parser.Results.ridgeLambda;
 sprefFromFit = Parser.Results.sprefFromFit;
+checkMTFit = Parser.Results.checkMTFit;
 plotOpts = Parser.Results.plotOpts;
 
 %% Preliminary
@@ -124,7 +126,7 @@ for filei = 1:length(mt)
         [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei});
         spref = [spref mu];
         
-        if checkFit
+        if checkMTFit
             s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
             h = figure;
             semilogx(mt{filei}.speeds,normR,'o')

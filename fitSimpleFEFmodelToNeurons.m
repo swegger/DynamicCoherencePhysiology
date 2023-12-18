@@ -26,6 +26,7 @@ addParameter(Parser,'tWin',[0 900])
 addParameter(Parser,'tau',20)
 addParameter(Parser,'lambdaRidge',0)
 addParameter(Parser,'sprefFromFit',true)
+addParameter(Parser,'checkMTFit',false)
 addParameter(Parser,'plotOpts',plotOpts_default)
 addParameter(Parser,'saveOpts',saveOpts_default)
 
@@ -46,6 +47,7 @@ tWin = Parser.Results.tWin;
 tau = Parser.Results.tau;
 lambdaRidge = Parser.Results.lambdaRidge;
 sprefFromFit = Parser.Results.sprefFromFit;
+checkMTFit = Parser.Results.checkMTFit;
 plotOpts = Parser.Results.plotOpts;
 saveOpts = Parser.Results.saveOpts;
 
@@ -132,7 +134,7 @@ for filei = 1:length(mt)
         [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei});
         spref = [spref mu];
         
-        if checkFit
+        if checkMTFit
             s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
             h = figure;
             semilogx(mt{filei}.speeds,normR,'o')
