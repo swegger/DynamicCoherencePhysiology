@@ -18,6 +18,7 @@ addParameter(Parser,'cohs',[10 30 70 100])
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'directions',[0 180])
+addParameter(Parser,'tWin',[0 900])
 addParameter(Parser,'rankN',80)
 addParameter(Parser,'ridgeLambda',logspace(-1,12,10))
 addParameter(Parser,'sprefFromFit',true)
@@ -34,6 +35,7 @@ cohs = Parser.Results.cohs;
 speedsFEF = Parser.Results.speedsFEF;
 cohsFEF = Parser.Results.cohsFEF;
 directions = Parser.Results.directions;
+tWin = Parser.Results.tWin;
 rankN = Parser.Results.rankN;
 ridgeLambda = Parser.Results.ridgeLambda;
 sprefFromFit = Parser.Results.sprefFromFit;
@@ -294,5 +296,23 @@ if plotOpts.On
             ylim([min(tempLims(:,1)) max(tempLims(:,2))])
         end
     end
+    
+    %% Weights along 1st reduced rank dimension as a function of preferred speed
+    figure
+    semilogx(spref2(spref2>1),A(spref2>1),'o')
+    hold on
+    s = logspace(0,log10(250),30);
+    plot(s,mhat*sqrt(log(s.^2)),'r')
+    plot(s,-mhat*sqrt(log(s.^2)),'r')
+    
+    plot(s,sigWeights*ones(length(s),1),'k')
+    plot(s,-sigWeights*ones(length(s),1),'k')
+    
+    xlim([1 256])
+    ax = axis;
+    text(2,0.95*ax(4),['\delta LL = ' num2str(LLsignal_dependent_noise-LLstandard_noise)])
+    
+    xlabel('Preferred speed (deg/s)')
+    ylabel('Weight')
     
 end
