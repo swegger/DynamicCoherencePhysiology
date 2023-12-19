@@ -211,8 +211,7 @@ end
 spref2 = spref(~isnan(interpolatedR(1,1,1,:)));
 spref2 = spref2(sortInd);
 cutThreshold = quantile(modelFEF.fval,0.975);
-W = modelFEF.W(sortInd,modelFEF.fval<cutThreshold)' ./ ...
-    repmat(modelFEF.leakRate(modelFEF.fval<cutThreshold)',[1,size(modelFEF.W,1)]);
+W = modelFEF.W;
 
 % Normalize by maximium value of W for each FEF neuron
 wmax = max(W,[],2);
