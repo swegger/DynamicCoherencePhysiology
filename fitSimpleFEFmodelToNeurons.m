@@ -167,7 +167,7 @@ inputs = inputs(prod(any(isnan(inputs),2),[3,4])==0,:,:,:);
 [~,iFEF,iMT] = intersect(fef_t,mtNeuron_t);
 RtoFit = Rinit(iFEF,:,:,:);
 inputs = inputs(:,iMT,:,:);
-
+dt = mtNeuron_t(2)-mtNeuron_t(1);
 
 %% Fit dynamic model
 if any(isnan(P0))
@@ -186,7 +186,7 @@ for neuroni = 1:size(RtoFit,4)
     disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
     Rtemp = RtoFit(:,:,[1, length(cohsFEF)],neuroni);
     R0 = nanmean(Rtemp(1,:,:),[2,3]);
-    minimizer = @(P)minimizant(P,R0,tau,inputs(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge);
+    minimizer = @(P)minimizant(P,R0,tau/dt,inputs(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge);
     [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
     
     modelFEF.R0(neuroni) = R0;
@@ -201,6 +201,8 @@ for neuroni = 1:size(RtoFit,4)
     toc
 end
 
+modelFEF.tau = tau;
+modelFEF.dt = dt;
 
 
 %% Analysis

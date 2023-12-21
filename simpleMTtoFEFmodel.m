@@ -26,6 +26,9 @@ addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'pollTimes',[150, 750])
 addParameter(Parser,'behaviorFile','neuronTyping20221229.mat')
 addParameter(Parser,'tIndex',[2,3,4])
+addParameter(Parser,'sprefFromFit',true)
+addParameter(Parser,'checkMTFit',false)
+addParameter(Parser,'weightModel','lowRankDataDriven')
 addParameter(Parser,'pltFlg',true)
 
 parse(Parser,varargin{:})
@@ -46,6 +49,9 @@ cohsFEF = Parser.Results.cohsFEF;
 pollTimes = Parser.Results.pollTimes;
 behaviorFile = Parser.Results.behaviorFile;
 tIndex = Parser.Results.tIndex;
+sprefFromFit = Parser.Results.sprefFromFit;
+checkMTFit = Parser.Results.checkMTFit;
+weightModel = Parser.Results.weightModel;
 pltFlg = Parser.Results.pltFlg;
 
 if any(isnan(leakRate(:)))
@@ -74,10 +80,28 @@ for filei = 1:length(mt)
             Rtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
         end
     end
-    %if ~any(isnan(Rtemp(:)))
+    
+    
+    if sprefFromFit
+        [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei});
+        spref = [spref mu];
+        
+        if checkMTFit
+            s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
+            h = figure;
+            semilogx(mt{filei}.speeds,normR,'o')
+            hold on
+            semilogx(s,speedTuning(mt{filei},s,mu,sig))
+            ax = axis;
+            text(ax(1),0.95*ax(4),['\mu = ' num2str(mu) ', \sig = ' num2str(sig)])
+            input('Press enter to continue ')
+            close(h);
+        end
+    else
         spref = [spref speeds(nansum(Rtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100)) == ...
             max(nansum(Rtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100))))];
-        R = cat(4,R,Rtemp);
+    end
+    R = cat(4,R,Rtemp);
     %end
 end
 
@@ -113,17 +137,34 @@ for ti = 1:length(pollTimes)
 end
 
 %% Implement a pool of neurons with integration behavior defined by leakRate
-structuredWeight = structuredWeight/mean(log2(spref));
 dfef = zeros(fefN,size(interpolatedR,1),size(interpolatedR,2),size(interpolatedR,3)); 
 fef = zeros(fefN,size(interpolatedR,1),size(interpolatedR,2),size(interpolatedR,3));
-fef(:,mt{1}.neuron_t<=0,:,:) = fefBaseline;
-mtWeights = randn(fefN,size(R,4));
-mtWeights = (...
-    mtWeights*randWeight + ...
-    structuredWeight*repmat(log2(spref),[fefN,1]) .* repmat(randsample([-1 1],fefN,true)',[1,size(R,4)])...
-    )/fefN;
-speedTunedIndices = randsample(fefN,round(fractTuned*fefN));
-mtWeights(speedTunedIndices,:) = randWeight/10*repmat(log2(spref),[length(speedTunedIndices),1]) .* repmat(randsample([-1 1],length(speedTunedIndices),true)',[1,size(R,4)])/fefN;
+
+switch weightModel
+    case 'randomStructuredMix'
+        structuredWeight = structuredWeight/mean(log2(spref));
+        fef(:,mt{1}.neuron_t<=0,:,:) = fefBaseline;
+        mtWeights = randn(fefN,size(R,4));
+        mtWeights = (...
+            mtWeights*randWeight + ...
+            structuredWeight*repmat(log2(spref),[fefN,1]) .* repmat(randsample([-1 1],fefN,true)',[1,size(R,4)])...
+            )/fefN;
+        speedTunedIndices = randsample(fefN,round(fractTuned*fefN));
+        
+        mtWeights(speedTunedIndices,:) = randWeight/10*repmat(log2(spref),[length(speedTunedIndices),1]) .* repmat(randsample([-1 1],length(speedTunedIndices),true)',[1,size(R,4)])/fefN;
+
+    case 'lowRankDataDriven'
+        rankN = 100;
+        for ri = 1:rankN
+            rightHand(:,ri) = zeros(size(R,4),1);
+            rightHand(spref > 1,ri) = sqrt(log(spref(spref>1).^2))'.*randn(sum(spref>1),1);
+            leftHand(:,ri) = randn(fefN,1);
+            weightsTemp(:,:,ri) = leftHand(:,ri)*rightHand(:,ri)';
+        end
+        mtWeights = sum(weightsTemp,3)/rankN/fefN;
+               
+end
+
 fefTau = 40/(mtNeuron_t(2)-mtNeuron_t(1));
 for ti = find(mt{1}.neuron_t==0):length(mt{1}.neuron_t)
     for si = 1:length(speedsFEF)
