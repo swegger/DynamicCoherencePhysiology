@@ -35,7 +35,7 @@ initColors = 1-[20 20 20; 60 60 60; 100 100 100]/100;
 %% Find model result files
 switch subject
     case 'ar'
-        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20231219*.mat');
+        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20231221*.mat');
 end
 
 for filei = 1:length(files)
@@ -81,14 +81,18 @@ Weff = W./repmat(wmax,[1,size(W,2)]);
 [U,S,V] = svd(Weff);
 
 % Approach from the important dimensions in Rhat
+Y = nan(size(R,1)*size(R,2)*size(R,3),size(R,4));
 Yhat = nan(size(Rhat,1)*size(Rhat,2)*size(Rhat,3),size(Rhat,4));
 idx = 1;
 for si = 1:size(Rhat,2)
     for ci = 1:size(Rhat,3)
+        Y(idx:idx+size(R,1)-1,:) = R(:,si,ci,:);
         Yhat(idx:idx+size(Rhat,1)-1,:) = Rhat(:,si,ci,:);
         idx = idx+size(Rhat,1);
     end
 end
+[Uy,Sy,Vy] = svd(Y,0);
+Wy = W*Vy;
 [Uhat,Shat,Vhat] = svd(Yhat,0);
 What = W*Vhat;                      % Now ordering weight matrix by the important dimensions in Rhat (e.g. reduced rank regression approach)
 

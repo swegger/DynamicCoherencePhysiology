@@ -171,13 +171,13 @@ dt = mtNeuron_t(2)-mtNeuron_t(1);
 
 %% Fit dynamic model
 if any(isnan(P0))
-    P0 = [0.10,randn(1,size(inputs,1))/1000];
+    P0 = [20/dt,0.10,randn(1,size(inputs,1))/1000];
 end
 if any(isnan(lb))
-    lb = [0, -Inf*ones(1,size(inputs,1))];
+    lb = [1, 0, -Inf*ones(1,size(inputs,1))];
 end
 if any(isnan(ub))
-    ub = [100, Inf*ones(1,size(inputs,1))];
+    ub = [Inf, 100, Inf*ones(1,size(inputs,1))];
 end
 OPTIONS = optimset(@fmincon);
 OPTIONS.MaxFunEvals = 3e10;
@@ -186,12 +186,13 @@ for neuroni = 1:size(RtoFit,4)
     disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
     Rtemp = RtoFit(:,:,[1, length(cohsFEF)],neuroni);
     R0 = nanmean(Rtemp(1,:,:),[2,3]);
-    minimizer = @(P)minimizant(P,R0,tau/dt,inputs(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge);
+    minimizer = @(P)minimizant(P,R0,inputs(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge);
     [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
     
+    modelFEF.tau(neuroni) = P(1)*dt;
     modelFEF.R0(neuroni) = R0;
-    modelFEF.baseLine(neuroni) = P(1);
-    modelFEF.W(:,neuroni) = P(2:end);
+    modelFEF.baseLine(neuroni) = P(2);
+    modelFEF.W(:,neuroni) = P(3:end);
     modelFEF.fval(:,neuroni) = fval;
     modelFEF.exitflag(:,neuroni) = exitflag;
     modelFEF.output(:,neuroni) = output;
@@ -201,7 +202,6 @@ for neuroni = 1:size(RtoFit,4)
     toc
 end
 
-modelFEF.tau = tau;
 modelFEF.dt = dt;
 
 
@@ -274,8 +274,9 @@ function R = SimpleFEFmodel(W,baseLine,R0,tau,inputs)
     end
     
  %% Objective
-function out = minimizant(P,R0,tau,inputs,R,lambda)
-    baseLine = P(1);
-    W = P(2:end);
+function out = minimizant(P,R0,inputs,R,lambda)
+    tau = P(1);
+    baseLine = P(2);
+    W = P(3:end);
     Rest = SimpleFEFmodel(W,baseLine,R0,tau,inputs);
     out = sum((R(:) - Rest(:)).^2) + lambda*sum(W.^2);
