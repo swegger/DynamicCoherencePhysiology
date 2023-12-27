@@ -181,6 +181,7 @@ if any(isnan(ub))
 end
 OPTIONS = optimset(@fmincon);
 OPTIONS.MaxFunEvals = 3e10;
+OPTIONS.MaxIterations = 1e10;
 for neuroni = 1:size(RtoFit,4)
     tic
     disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
