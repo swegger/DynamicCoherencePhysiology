@@ -229,7 +229,7 @@ if plotOpts.On
     figure
     for neuroni = size(RtoFit,4)
         tempFEF = RtoFit(:,:,:,neuroni);
-        test = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),tau,inputs);
+        test = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modeolFEF.dt,inputs);
         for ci = 1:length(cohsFEF)
             subplot(1,length(cohsFEF),ci)
             for si = 1:length(speedsFEF)
