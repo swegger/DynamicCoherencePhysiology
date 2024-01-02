@@ -40,10 +40,13 @@ end
 
 for filei = 1:length(files)
     temp = load([files(filei).folder '/' files(filei).name]);
+    if length(temp.modelFEF.tau) == 1
+        temp.modelFEF.tau = temp.modelFEF.tau*ones(size(temp.modelFEF.baseLine));
+    end
     Rtemp = squeeze(temp.RtoFit(:,:,2,:));
     for neuroni = 1:size(Rtemp,3)
         tempHat = SimpleFEFmodel(temp.modelFEF.W(:,neuroni)',...
-            temp.modelFEF.baseLine(neuroni),temp.modelFEF.R0(neuroni),temp.tau,temp.inputs);
+            temp.modelFEF.baseLine(neuroni),temp.modelFEF.R0(neuroni),temp.modelFEF.tau(neuroni)/temp.modelFEF.dt,temp.inputs);
         RhatTemp(:,:,neuroni) = tempHat(:,:,2);
     end
     sse(filei) = sum((Rtemp(:) - RhatTemp(:)).^2);
@@ -68,6 +71,13 @@ t = temp.mt{1}.neuron_t(temp.iMT);
 spref = temp.spref;
 spref = spref(~isnan(temp.interpolatedR(1,1,1,:)));
 [~,prefSort] = sort(spref);
+
+%%
+
+for si = 1:length(speedsFEF)
+    rvalAll = corrcoef([squeeze(R(:,si,2,:)) squeeze(Rhat(:,si,2,:))]);
+    rvals(:,si) = diag(rvalAll(size(R,4)+1:end,1:size(R,4)));
+end
 
 %% Analysis
 
@@ -117,6 +127,32 @@ plotVertical(lambdaRidge(sseMins));
 xlabel('Ridge regression coefficient')
 ylabel('Sum of squared errors (spikes/sec)^2')
 
+
+%% Best and worst fits (on average across held-out data)
+mrvals = mean(rvals,2);
+[~,mrsort] = sort(mrvals);
+
+figure
+for ni = 1:5
+    subplot(2,5,ni)
+    plot(t,R(:,:,2,mrsort(ni))*1000)
+    hold on
+    plot(t,Rhat(:,:,2,mrsort(ni))*1000,'k')
+    xlabel('Time from motion onset (ms)')
+    ylabel('Spikes/s')
+    title(['Rank = ' num2str(ni)])
+end
+
+for ni = 1:5
+    subplot(2,5,ni+5)
+    plot(t,R(:,:,2,mrsort(end-ni+1))*1000)
+    hold on
+    plot(t,Rhat(:,:,2,mrsort(end-ni+1))*1000,'k')
+    xlabel('Time from motion onset (ms)')
+    ylabel('Spikes/s')
+    title(['Rank = ' num2str(length(mrsort)-ni+1)])
+end
+
 %% Prediction of held-out data
 figure
 subplot(1,3,1)
@@ -144,8 +180,6 @@ ylabel('Mean spikes/s (across neurons)')
 subplot(1,3,3)
 title('R^2 by neuron')
 for si = 1:length(speedsFEF)
-    rvalAll = corrcoef([squeeze(R(:,si,2,:)) squeeze(Rhat(:,si,2,:))]);
-    rvals(:,si) = diag(rvalAll(size(R,4)+1:end,1:size(R,4)));
     plot(rvals(:,si).^2,'o-','Color',speedColors(si,:))
     hold on
 end
@@ -198,6 +232,73 @@ for ri = 1:rankN
 end
 xlabel('FEF neuron #')
 ylabel('FEF unit weight')
+
+%% Analysis of weight matrix in space that best describes predicted responses
+figure
+subplot(1,3,1)
+plot(cumsum(diag(Shat.^2))./sum(diag(Shat.^2)),'o')
+axis tight
+xlabel('Dimensions')
+ylabel('Cumulative variance explained')
+
+subplot(1,3,2)
+rankN = 5;
+for ri = 1:rankN
+    semilogx(spref(prefSort),What(prefSort,ri),'o')
+    hold on
+end
+xlim([1 300])
+xlabel('Speed preference (deg/s)')
+ylabel('MT unit weight')
+
+subplot(1,3,3)
+[~,rvalsort] = sort(rvals(:,3));
+for ri = 1:rankN
+    plot(Vhat(rvalsort,ri),'o')
+    hold on
+end
+xlabel('FEF neuron #')
+ylabel('FEF unit weight')
+
+figure
+ci = 2;
+for ri = 1:rankN
+    subplot(rankN,4,1+(ri-1)*4)
+    for si = 1:length(speedsFEF)
+        plot(t,-(squeeze(R(:,si,ci,:))*Vhat(:,ri) - modelFEF.baseLine*Vhat(:,ri)),'Color',speedColors(si,:))
+        hold on
+        plot(t,-(squeeze(Rhat(:,si,ci,:))*Vhat(:,ri) - modelFEF.baseLine*Vhat(:,ri)),'--','Color',speedColors(si,:))
+    end
+    xlabel('Time from motion onset (ms)')
+    ylabel(['Decay dynamics along dim ' num2str(ri)])
+    
+    subplot(rankN,4,2+(ri-1)*4)
+    for si = 1:length(speedsFEF)
+        plot(t,What(:,ri)'*inputs(:,:,si,ci),'Color',speedColors(si,:))
+        hold on
+    end
+    xlabel('Time from motion onset (ms)')
+    ylabel(['MT inputs along dim ' num2str(ri)])
+    
+    subplot(rankN,4,3+(ri-1)*4)
+    for si = 1:length(speedsFEF)
+        plot(t,-(squeeze(R(:,si,ci,:))*Vhat(:,ri) - modelFEF.baseLine*Vhat(:,ri))' + What(:,ri)'*inputs(:,:,si,ci),'Color',speedColors(si,:))
+        hold on
+        plot(t,-(squeeze(Rhat(:,si,ci,:))*Vhat(:,ri) - modelFEF.baseLine*Vhat(:,ri))' + What(:,ri)'*inputs(:,:,si,ci),'--','Color',speedColors(si,:))
+    end
+    xlabel('Time from motion onset (ms)')
+    ylabel(['dr/dt along dim ' num2str(ri)])
+    
+    subplot(rankN,4,4+(ri-1)*4)
+    for si = 1:length(speedsFEF)
+        plot(t,squeeze(R(:,si,ci,:))*Vhat(:,ri),'Color',speedColors(si,:))
+        hold on
+        plot(t,squeeze(Rhat(:,si,ci,:))*Vhat(:,ri),'--','Color',speedColors(si,:))
+    end
+    xlabel('Time from motion onset (ms)')
+    ylabel(['Response along dim ' num2str(ri)])
+    
+end
 
 %% Functions
 

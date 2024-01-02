@@ -214,6 +214,10 @@ for di = 1:size(pBopt,1)
     modelRval(di) = rval(1,2);
 end
 
+%% Reduced dimensionality analysis
+WbetaSpace = betaFEFOrth(:,1:4)'*mtWeights;
+
+
 %% Plot
 
 if pltFlg
