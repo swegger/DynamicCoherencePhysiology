@@ -35,7 +35,7 @@ initColors = 1-[20 20 20; 60 60 60; 100 100 100]/100;
 %% Find model result files
 switch subject
     case 'ar'
-        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20231221*.mat');
+        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20231227*.mat');
 end
 
 for filei = 1:length(files)
@@ -80,12 +80,15 @@ for si = 1:length(speedsFEF)
 end
 
 %% Analysis
+inputSigma = squeeze(std(temp.interpolatedR,[],[1,2,3]));
+inputSigma = inputSigma(~isnan(temp.interpolatedR(1,1,1,:)));
 
 W = modelFEF.W;
+Wz = W.*repmat(inputSigma,[1,size(W,2)]);
 
 % Normalize by maximium value of W for each FEF neuron
-wmax = max(abs(W),[],2);
-Weff = W./repmat(wmax,[1,size(W,2)]);
+wmax = max(abs(Wz),[],2);
+Weff = Wz./repmat(wmax,[1,size(W,2)]);
 
 % SVD
 [U,S,V] = svd(Weff);
@@ -102,9 +105,9 @@ for si = 1:size(Rhat,2)
     end
 end
 [Uy,Sy,Vy] = svd(Y,0);
-Wy = W*Vy;
+Wy = Wz*Vy;
 [Uhat,Shat,Vhat] = svd(Yhat,0);
-What = W*Vhat;                      % Now ordering weight matrix by the important dimensions in Rhat (e.g. reduced rank regression approach)
+What = Wz*Vhat;                      % Now ordering weight matrix by the important dimensions in Rhat (e.g. reduced rank regression approach)
 
 
 %% Plot results
@@ -215,7 +218,7 @@ xlabel('Dimensions')
 ylabel('Cumulative variance explained')
 
 subplot(2,2,3)
-rankN = 10;
+rankN = 1;
 for ri = 1:rankN
     semilogx(spref(prefSort),U(prefSort,ri),'o')
     hold on
@@ -242,7 +245,7 @@ xlabel('Dimensions')
 ylabel('Cumulative variance explained')
 
 subplot(1,3,2)
-rankN = 5;
+rankN = 1;
 for ri = 1:rankN
     semilogx(spref(prefSort),What(prefSort,ri),'o')
     hold on

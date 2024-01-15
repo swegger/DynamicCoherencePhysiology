@@ -166,6 +166,9 @@ classdef mtObj < dcpObj
             addParameter(Parser,'P0',[16,1])
             addParameter(Parser,'ub',[254 128])
             addParameter(Parser,'lb',[0 0])
+            addParameter(Parser,'c',NaN)
+            addParameter(Parser,'s',NaN)
+            addParameter(Parser,'d',0)
             
             parse(Parser,obj,varargin{:})
             
@@ -174,24 +177,37 @@ classdef mtObj < dcpObj
             P0 = Parser.Results.P0;
             ub = Parser.Results.ub;
             lb = Parser.Results.lb;
+            c = Parser.Results.c;
+            s = Parser.Results.s;
+            d = Parser.Results.d;
             
             % Get data to fit
             r = sum(obj.r(obj.neuron_t >= tWin(1) & obj.neuron_t <= tWin(2),:),1)';
             cohs = obj.coh;
             speeds = obj.speeds;
+            directions = obj.directions;
             
             % Quick sort by speed and coherence to normalize to the mean
             % response at the best speed separately for each coherence
             % level;
-            c = unique(cohs);
-            s = unique(speeds);
+            if any(isnan(c))
+                c = unique(cohs);
+            end
+            if any(isnan(s))
+                s = unique(speeds);
+            end
+            if any(isnan(d))
+                d = unique(directions);
+            end
             for hi = 1:length(c)
                 for si = 1:length(s)
-                    meanr(hi,si) = nanmean(r(cohs == c(hi) & speeds == s(si)));
+                    meanr(hi,si) = nanmean(r(cohs == c(hi) & speeds == s(si) & any(directions(:) == d(:)',2)));
                 end
             end
-            prefSpeed = s( sum(meanr,1) == max(sum(meanr,1)) );
-            normR = r;
+            prefSpeed = s( nansum(meanr,1) == max(nansum(meanr,1)) );
+            normR = r(any(cohs(:) == c(:)',2) & any(directions(:) == d(:)',2));
+            speeds = speeds(any(cohs(:) == c(:)',2) & any(directions(:) == d(:)',2));
+            cohs = cohs(any(cohs(:) == c(:)',2) & any(directions(:) == d(:)',2));
             for hi = 1:length(c)
                 normR(cohs == c(hi)) = normR(cohs == c(hi))./meanr(hi,s==prefSpeed);
             end
@@ -213,7 +229,7 @@ classdef mtObj < dcpObj
             mu = P(1);
             sig = P(2);
             rhat = speedTuning(obj,speeds,mu,sig);
-            out = sum( (r - rhat).^2 );
+            out = nansum( (r - rhat).^2 );
         end
     end
 end

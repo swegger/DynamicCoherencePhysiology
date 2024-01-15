@@ -6,6 +6,13 @@ function Beta = MTtoFEFregression(dcp,varargin)
 
 %% Defaults
 plotOpts_default.On = false;
+speedPrefOpts_default.tWin = [40,120];
+speedPrefOpts_default.P0 = [16,1];
+speedPrefOpts_default.ub = [254,128];
+speedPrefOpts_default.lb = [0, 0];
+speedPrefOpts_default.c = NaN;
+speedPrefOpts_default.s = NaN;
+speedPrefOpts_default.d = 0;
 
 %% Parse inputs
 Parser = inputParser;
@@ -15,6 +22,8 @@ addParameter(Parser,'sourceDirectory','/mnt/Lisberger/Experiments/DynamicCoheren
 addParameter(Parser,'objectFile','allMT_20230419.mat')
 addParameter(Parser,'speeds',[2,4,8,16,32])
 addParameter(Parser,'cohs',[10 30 70 100])
+addParameter(Parser,'directionsMT',0)
+addParameter(Parser,'opponentMT',false)
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'directions',[0 180])
@@ -23,6 +32,9 @@ addParameter(Parser,'rankN',80)
 addParameter(Parser,'ridgeLambda',logspace(-1,12,10))
 addParameter(Parser,'sprefFromFit',true)
 addParameter(Parser,'checkMTFit',false)
+addParameter(Parser,'speedPrefOpts',speedPrefOpts_default)
+addParameter(Parser,'zMeanWin',[-Inf,Inf])
+addParameter(Parser,'zSTDwin',[-Inf,Inf])
 addParameter(Parser,'plotOpts',plotOpts_default)
 
 parse(Parser,dcp,varargin{:})
@@ -32,6 +44,8 @@ sourceDirectory = Parser.Results.sourceDirectory;
 objectFile = Parser.Results.objectFile;
 speeds = Parser.Results.speeds;
 cohs = Parser.Results.cohs;
+directionsMT = Parser.Results.directionsMT;
+opponentMT= Parser.Results.opponentMT;
 speedsFEF = Parser.Results.speedsFEF;
 cohsFEF = Parser.Results.cohsFEF;
 directions = Parser.Results.directions;
@@ -40,6 +54,9 @@ rankN = Parser.Results.rankN;
 ridgeLambda = Parser.Results.ridgeLambda;
 sprefFromFit = Parser.Results.sprefFromFit;
 checkMTFit = Parser.Results.checkMTFit;
+speedPrefOpts = Parser.Results.speedPrefOpts;
+zMeanWin = Parser.Results.zMeanWin;
+zSTDwin = Parser.Results.zSTDwin;
 plotOpts = Parser.Results.plotOpts;
 
 %% Preliminary
@@ -106,47 +123,56 @@ cellID = cellID(passCutoff,:,:);
 %% Get MT data and organize as an input
 
 % Load mtObjs
-load(objectFile)
+mtResults = load(objectFile);
 
 % Get mean of each unit
-MT = [];
-spref = [];
-for filei = 1:length(mt)
-    disp(['File ' num2str(filei) ' of ' num2str(length(mt))])
-    
-    MTtemp = nan(length(mt{filei}.neuron_t),length(speeds),length(cohs));
-    
-    
-    for si = 1:length(speeds)
-        for ci = 1:length(cohs)
-            [~,condLogical] = trialSort(mt{filei},0,speeds(si),NaN,cohs(ci));
-            MTtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
-        end
-    end
-    
-    if sprefFromFit
-        [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei});
-        spref = [spref mu];
-        
-        if checkMTFit
-            s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
-            h = figure;
-            semilogx(mt{filei}.speeds,normR,'o')
-            hold on
-            semilogx(s,speedTuning(mt{filei},s,mu,sig))
-            ax = axis;
-            text(ax(1),0.95*ax(4),['\mu = ' num2str(mu) ', \sig = ' num2str(sig)])
-            input('Press enter to continue ')
-            close(h);
-        end
-    else
-        spref = [spref speeds(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100)) == ...
-            max(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100))))];
-    end
-    MT = cat(4,MT,MTtemp);
-end
 
-mtNeuron_t = mt{filei}.neuron_t;
+[MT, spref, swidth, dirMT] = getMTdata(mtResults.mt,...
+    'speedsMT',speeds,'cohsMT',cohs,'directionsMT',directionsMT,...
+    'opponentMT',opponentMT,'sprefFromFit',sprefFromFit,'checkMTFit',checkMTFit,...
+    'speedPrefOpts',speedPrefOpts);
+
+% MT = [];
+% spref = [];
+% for filei = 1:length(mt)
+%     disp(['File ' num2str(filei) ' of ' num2str(length(mt))])
+%     
+%     MTtemp = nan(length(mt{filei}.neuron_t),length(speeds),length(cohs));
+%     
+%     
+%     for si = 1:length(speeds)
+%         for ci = 1:length(cohs)
+%             [~,condLogical] = trialSort(mt{filei},0,speeds(si),NaN,cohs(ci));
+%             MTtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
+%         end
+%     end
+%     
+%     if sprefFromFit
+%         [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei},'P0',speedPrefOpts.P0,...
+%             'ub',speedPrefOpts.ub,'lb',speedPrefOpts.lb,...
+%             'c',speedPrefOpts.c,'s',speedPrefOpts.s,'d',speedPrefOpts.d,...
+%             'tWin',speedPrefOpts.tWin);
+%         spref = [spref mu];
+%         
+%         if checkMTFit
+%             s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
+%             h = figure;
+%             semilogx(mt{filei}.speeds(any(mt{filei}.coh(:) == speedPrefOpts.c(:)',2) & any(mt{filei}.directions(:) == speedPrefOpts.d(:)',2)),normR,'o')
+%             hold on
+%             semilogx(s,speedTuning(mt{filei},s,mu,sig))
+%             ax = axis;
+%             text(ax(1),0.95*ax(4),['\mu = ' num2str(mu) ', \sig = ' num2str(sig)])
+%             input('Press enter to continue ')
+%             close(h);
+%         end
+%     else
+%         spref = [spref speeds(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100)) == ...
+%             max(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100))))];
+%     end
+%     MT = cat(4,MT,MTtemp);
+% end
+
+mtNeuron_t = mtResults.mt{filei}.neuron_t;
 
 
 % Interpolate between coherence speed values from Behling experiments to the speed and coherence values used in Egger experiments
@@ -159,6 +185,10 @@ inputs = inputs(prod(any(isnan(inputs),2),[3,4])==0,:,:,:);
 [~,iFEF,iMT] = intersect(fef_t,mtNeuron_t);
 RtoFit = Rinit(iFEF,:,:,:);
 inputs = inputs(:,iMT,:,:);
+t = mtNeuron_t(iMT);
+inputs_z = (inputs-mean(inputs(:,t>zMeanWin(1) & t<=zMeanWin(2),:,:,:),[2,3,4]))./...
+    std(inputs(:,t>zSTDwin(1) & t<=zSTDwin(2),:,:),[],[2,3,4]);
+RtoFit_z = (RtoFit-mean(RtoFit,[1,2,3]))./std(RtoFit,[],[1,2,3]);
 
 %% Regression models
 
@@ -169,8 +199,8 @@ Yfit = nan(size(RtoFit,1)*size(RtoFit,2)*(size(RtoFit,3)-1),size(RtoFit,4));
 idx = [1, 1];
 for si = 1:length(speedsFEF)
     for ci = [1 length(cohsFEF)]
-        Xfit(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs(:,:,si,ci),[2,1]);
-        Yfit(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit(:,si,ci,:));
+        Xfit(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs_z(:,:,si,ci),[2,1]);
+        Yfit(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit_z(:,si,ci,:));
         idx(1) = idx(1) + size(inputs,2);
         idx(2) = idx(2) + size(RtoFit,1);
     end
@@ -180,8 +210,8 @@ Xtest = nan(size(inputs,2)*size(inputs,3),size(inputs,1));
 Ytest = nan(size(RtoFit,1)*size(RtoFit,2),size(RtoFit,4));
 idx = [1, 1];
 for si = 1:length(speedsFEF)
-    Xtest(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs(:,:,si,2),[2,1]);
-    Ytest(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit(:,si,2,:));
+    Xtest(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs_z(:,:,si,2),[2,1]);
+    Ytest(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit_z(:,si,2,:));
     idx(1) = idx(1) + size(inputs,2);
     idx(2) = idx(2) + size(RtoFit,1);
 end
@@ -223,7 +253,7 @@ for si = 1:length(speedsFEF)
     end
     
     ci = 2;
-    Rhat(:,si,ci,:) = YhatTest(idxTest:idxTest+size(RtoFit,1)-1,:);
+    Rhat(:,si,ci,:) = YrrrTest(idxTest:idxTest+size(RtoFit,1)-1,:);
     Rnull(:,si,ci,:) = YnullTest(idxTest:idxTest+size(RtoFit,1)-1,:);
     idxTest = idxTest+size(RtoFit,1);
 end
@@ -233,23 +263,24 @@ rvals = corrcoef([Ytest YhatTest]);
 RhatCC = diag(rvals(size(Ytest,2)+1:end,1:size(Ytest,2)));
 RhatZ = 0.5*log( (1+RhatCC)./(1-RhatCC) );
 
-A = Beta*Vhat(:,1);
+A = Beta*Vhat;
 [~,sortInd] = sort(spref(~isnan(interpolatedR(1,1,1,:))));
 spref2 = spref(~isnan(interpolatedR(1,1,1,:)));
 spref2 = spref2(sortInd);
-A = A(sortInd);
+A = A(sortInd,:);
 
 %% Analysis of variance
 % Signal dependent noise model: Gaussian of the form exp(-w^2/(2*m*ln(s^2))/sqrt(2*pi*m*ln(s^2))
-mhat = sqrt(sum(A(spref2 > 1).^2./log(spref2(spref2>1)'.^2))./length(spref2(spref2>1))); % ML estimator of m 
-LLsignal_dependent_noise = sum( -log( sqrt(2*pi*log(spref2(spref2>1)'.^2)) ) -...
-    log(mhat) - A(spref2>1).^2./(2*mhat^2*log(spref2(spref2>1)'.^2)) );
+rankN = 1;
+mhat = sqrt(sum(A(spref2 >= 1,1:rankN).^2./log(spref2(spref2>=1)'.^2),[1,2])./length(spref2(spref2>=1))); % ML estimator of m 
+LLsignal_dependent_noise = sum( -log( sqrt(2*pi*log(spref2(spref2>=1)'.^2)) ) -...
+    log(mhat) - A(spref2>=1,1:rankN).^2./(2*mhat^2*log(spref2(spref2>=1)'.^2)) ,[1,2]);
 
 
 % Standard Gaussian noise
-sigWeights = sqrt(mean(A(spref2>1).^2));
+sigWeights = sqrt(mean(A(spref2>=1,1:rankN).^2,[1,2]));
 LLstandard_noise = sum( -log( sqrt(2*pi) ) -...
-    log(sigWeights) - A(spref2>1).^2./(2*sigWeights^2) );
+    log(sigWeights) - A(spref2>=1,1:rankN).^2./(2*sigWeights^2) ,[1,2]);
 
 %% Plotting
 if plotOpts.On
@@ -259,12 +290,12 @@ if plotOpts.On
     for ci = 1:length(cohsFEF)
         subplot(1,length(cohsFEF),ci)
         for si = 1:length(speedsFEF)
-            plot(squeeze(RtoFit(:,si,ci,:))*1000,squeeze(Rhat(:,si,ci,:))*1000,'o','Color',speedColors(si,:))
+            plot(squeeze(RtoFit_z(:,si,ci,:)),squeeze(Rhat(:,si,ci,:)),'o','Color',speedColors(si,:))
             hold on
         end
         plotUnity;
-        xlabel('FEF data (sp/s)')
-        ylabel('RRR prediction (sp/s)')
+        xlabel('FEF data (z-score)')
+        ylabel('RRR prediction (z-score)')
         
     end
     
@@ -276,18 +307,17 @@ if plotOpts.On
     ylabel('Fisher transformed r-values')
     
     %%
-    figure('Name','MT output channels found by RRR','Position',[674 218 1837 1104])
-    rankN = 5;
+    figure('Name','MT input channels found by RRR','Position',[674 218 1837 1104])
     for ri = 1:rankN
         for ci = 1:length(cohsFEF)
             subplot(rankN,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
             for si = 1:length(speedsFEF)
-                MToutputChan(:,si,ci,ri) = inputs(:,:,si,ci)'*Beta*Vhat(:,ri);
+                MToutputChan(:,si,ci,ri) = inputs_z(:,:,si,ci)'*Beta*Vhat(:,ri);
                 plot(MToutputChan(:,si,ci,ri),'Color',speedColors(si,:))
                 hold on
             end
             xlabel('Time from motion onset (steps)')
-            ylabel(['Output along dimension#' num2str(ri)])
+            ylabel(['Input along dimension#' num2str(ri)])
             tempLims(ci,:) = ylim;
         end
         
@@ -299,20 +329,26 @@ if plotOpts.On
     
     %% Weights along 1st reduced rank dimension as a function of preferred speed
     figure
-    semilogx(spref2(spref2>1),A(spref2>1),'o')
+    subplot(1,2,1)
+    semilogx(spref2(spref2>=1),A(spref2>=1,1:rankN),'o')
     hold on
-    s = logspace(0,log10(250),30);
-    plot(s,mhat*sqrt(log(s.^2)),'r')
-    plot(s,-mhat*sqrt(log(s.^2)),'r')
+    s = logspace(log10(speedPrefOpts.lb(1)),log10(speedPrefOpts.ub(1)),30);
+    if LLsignal_dependent_noise > LLstandard_noise
+        plot(s,mhat*sqrt(log(s.^2)),'r')
+        plot(s,-mhat*sqrt(log(s.^2)),'r')
+    end
     
     plot(s,sigWeights*ones(length(s),1),'k')
     plot(s,-sigWeights*ones(length(s),1),'k')
     
-    xlim([1 256])
+    xlim([speedPrefOpts.lb(1), speedPrefOpts.ub(1)])
     ax = axis;
     text(2,0.95*ax(4),['\delta LL = ' num2str(LLsignal_dependent_noise-LLstandard_noise)])
     
     xlabel('Preferred speed (deg/s)')
     ylabel('Weight')
+    
+    subplot(1,2,2)
+    plot(Vhat(:,1:rankN),'o')
     
 end

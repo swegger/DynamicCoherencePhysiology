@@ -7,6 +7,13 @@ function modelFEF = fitSimpleFEFmodelToNeurons(dcp,varargin)
 %% Defaults
 plotOpts_default.On = false;
 saveOpts_default.On = false;
+speedPrefOpts_default.tWin = [40,120];
+speedPrefOpts_default.P0 = [16,1];
+speedPrefOpts_default.ub = [254,128];
+speedPrefOpts_default.lb = [0, 0];
+speedPrefOpts_default.c = NaN;
+speedPrefOpts_default.s = NaN;
+speedPrefOpts_default.d = 0;
 
 %% Parse inputs
 Parser = inputParser;
@@ -16,6 +23,8 @@ addParameter(Parser,'sourceDirectory','/mnt/Lisberger/Experiments/DynamicCoheren
 addParameter(Parser,'objectFile','allMT_20230419.mat')
 addParameter(Parser,'speeds',[2,4,8,16,32])
 addParameter(Parser,'cohs',[10 30 70 100])
+addParameter(Parser,'directionsMT',0)
+addParameter(Parser,'opponentMT',false)
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'directions',[0 180])
@@ -27,6 +36,9 @@ addParameter(Parser,'tau',20)
 addParameter(Parser,'lambdaRidge',0)
 addParameter(Parser,'sprefFromFit',true)
 addParameter(Parser,'checkMTFit',false)
+addParameter(Parser,'speedPrefOpts',speedPrefOpts_default)
+addParameter(Parser,'zMeanWin',[-Inf,Inf])
+addParameter(Parser,'zSTDwin',[-Inf,Inf])
 addParameter(Parser,'plotOpts',plotOpts_default)
 addParameter(Parser,'saveOpts',saveOpts_default)
 
@@ -37,6 +49,8 @@ sourceDirectory = Parser.Results.sourceDirectory;
 objectFile = Parser.Results.objectFile;
 speeds = Parser.Results.speeds;
 cohs = Parser.Results.cohs;
+directionsMT = Parser.Results.directionsMT;
+opponentMT= Parser.Results.opponentMT;
 speedsFEF = Parser.Results.speedsFEF;
 cohsFEF = Parser.Results.cohsFEF;
 directions = Parser.Results.directions;
@@ -48,6 +62,9 @@ tau = Parser.Results.tau;
 lambdaRidge = Parser.Results.lambdaRidge;
 sprefFromFit = Parser.Results.sprefFromFit;
 checkMTFit = Parser.Results.checkMTFit;
+speedPrefOpts = Parser.Results.speedPrefOpts;
+zMeanWin = Parser.Results.zMeanWin;
+zSTDwin = Parser.Results.zSTDwin;
 plotOpts = Parser.Results.plotOpts;
 saveOpts = Parser.Results.saveOpts;
 
@@ -112,47 +129,52 @@ cellID = cellID(passCutoff,:,:);
 %% Get MT data and organize as an input
 
 % Load mtObjs
-load(objectFile)
+mtResults = load(objectFile);
 
 % Get mean of each unit
-MT = [];
-spref = [];
-for filei = 1:length(mt)
-    disp(['File ' num2str(filei) ' of ' num2str(length(mt))])
-    
-    MTtemp = nan(length(mt{filei}.neuron_t),length(speeds),length(cohs));
-    
-    
-    for si = 1:length(speeds)
-        for ci = 1:length(cohs)
-            [~,condLogical] = trialSort(mt{filei},0,speeds(si),NaN,cohs(ci));
-            MTtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
-        end
-    end
-    
-    if sprefFromFit
-        [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei});
-        spref = [spref mu];
-        
-        if checkMTFit
-            s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
-            h = figure;
-            semilogx(mt{filei}.speeds,normR,'o')
-            hold on
-            semilogx(s,speedTuning(mt{filei},s,mu,sig))
-            ax = axis;
-            text(ax(1),0.95*ax(4),['\mu = ' num2str(mu) ', \sig = ' num2str(sig)])
-            input('Press enter to continue ')
-            close(h);
-        end
-    else
-        spref = [spref speeds(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100)) == ...
-            max(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100))))];
-    end
-    MT = cat(4,MT,MTtemp);
-end
+[MT, spref, swidth, dirMT] = getMTdata(mtResults.mt,...
+    'speedsMT',speeds,'cohsMT',cohs,'directionsMT',directionsMT,...
+    'opponentMT',opponentMT,'sprefFromFit',sprefFromFit,'checkMTFit',checkMTFit,...
+    'speedPrefOpts',speedPrefOpts);
 
-mtNeuron_t = mt{filei}.neuron_t;
+% MT = [];
+% spref = [];
+% for filei = 1:length(mt)
+%     disp(['File ' num2str(filei) ' of ' num2str(length(mt))])
+%     
+%     MTtemp = nan(length(mt{filei}.neuron_t),length(speeds),length(cohs));
+%     
+%     
+%     for si = 1:length(speeds)
+%         for ci = 1:length(cohs)
+%             [~,condLogical] = trialSort(mt{filei},0,speeds(si),NaN,cohs(ci));
+%             MTtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
+%         end
+%     end
+%     
+%     if sprefFromFit
+%         [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei});
+%         spref = [spref mu];
+%         
+%         if checkMTFit
+%             s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
+%             h = figure;
+%             semilogx(mt{filei}.speeds,normR,'o')
+%             hold on
+%             semilogx(s,speedTuning(mt{filei},s,mu,sig))
+%             ax = axis;
+%             text(ax(1),0.95*ax(4),['\mu = ' num2str(mu) ', \sig = ' num2str(sig)])
+%             input('Press enter to continue ')
+%             close(h);
+%         end
+%     else
+%         spref = [spref speeds(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100)) == ...
+%             max(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100))))];
+%     end
+%     MT = cat(4,MT,MTtemp);
+% end
+
+mtNeuron_t = mtResults.mt{filei}.neuron_t;
 
 
 % Interpolate between coherence speed values from Behling experiments to the speed and coherence values used in Egger experiments
@@ -168,6 +190,10 @@ inputs = inputs(prod(any(isnan(inputs),2),[3,4])==0,:,:,:);
 RtoFit = Rinit(iFEF,:,:,:);
 inputs = inputs(:,iMT,:,:);
 dt = mtNeuron_t(2)-mtNeuron_t(1);
+t = mtNeuron_t(iMT);
+inputs_z = (inputs-mean(inputs(:,t>zMeanWin(1) & t<=zMeanWin(2),:,:,:),[2,3,4]))./...
+    std(inputs(:,t>zSTDwin(1) & t<=zSTDwin(2),:,:),[],[2,3,4]);
+RtoFit_z = (RtoFit-mean(RtoFit,[1,2,3]))./std(RtoFit,[],[1,2,3]);
 
 %% Fit dynamic model
 if any(isnan(P0))
@@ -186,9 +212,9 @@ OPTIONS = optimoptions('fmincon','MaxFunEvals',3e10,'MaxIterations',1e10);
 for neuroni = 1:size(RtoFit,4)
     tic
     disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
-    Rtemp = RtoFit(:,:,[1, length(cohsFEF)],neuroni);
+    Rtemp = RtoFit_z(:,:,[1, length(cohsFEF)],neuroni);
     R0 = nanmean(Rtemp(1,:,:),[2,3]);
-    minimizer = @(P)minimizant(P,R0,inputs(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge);
+    minimizer = @(P)minimizant(P,R0,inputs_z(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge);
     [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
     
     modelFEF.tau(neuroni) = P(1)*dt;
