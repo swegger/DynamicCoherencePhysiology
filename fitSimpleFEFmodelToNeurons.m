@@ -198,13 +198,14 @@ inputs_z = (inputs-mean(inputs(:,t>zMeanWin(1) & t<=zMeanWin(2),:,:,:),[2,3,4]))
 RtoFit_z = (RtoFit-mean(RtoFit,[1,2,3]))./std(RtoFit,[],[1,2,3]);
 
 %% Fit dynamic model
-if ~isa(weightPrior,'function_handle')
+if isa(weightPrior,'function_handle')
     W0 = weightPrior(spref);
 elseif isnan(weightPrior)
     W0 = zeros(size(spref));
 else
     W0 = weightPrior;
 end
+
 if any(isnan(P0))
     P0 = [20/dt,0.10,randn(1,size(inputs,1))/1000];
 end
