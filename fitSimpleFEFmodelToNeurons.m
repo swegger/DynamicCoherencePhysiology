@@ -207,13 +207,13 @@ else
 end
 
 if any(isnan(P0))
-    P0 = [20/dt,0.10,randn(1,size(inputs,1))/1000];
+    P0 = [60/dt,0.10,randn(1,size(inputs,1))/1000];
 end
 if any(isnan(lb))
-    lb = [15/dt, -100, -Inf*ones(1,size(inputs,1))];
+    lb = [60/dt, -100, -Inf*ones(1,size(inputs,1))];
 end
 if any(isnan(ub))
-    ub = [25/dt, 100, Inf*ones(1,size(inputs,1))];
+    ub = [60/dt, 100, Inf*ones(1,size(inputs,1))];
 end
 % OPTIONS = optimset(@fmincon);
 % OPTIONS.MaxFunEvals = 3e10;
