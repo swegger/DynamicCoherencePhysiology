@@ -184,6 +184,7 @@ mtNeuron_t = mtResults.mt{filei}.neuron_t;
 
 inputs = permute(interpolatedR,[4,1,2,3]);
 inputs = inputs(prod(any(isnan(inputs),2),[3,4])==0,:,:,:);
+spref2 = spref(prod(any(isnan(inputs),2),[3,4])==0);
 
 %% Iterate across neurons and fit data
 
@@ -199,9 +200,9 @@ RtoFit_z = (RtoFit-mean(RtoFit,[1,2,3]))./std(RtoFit,[],[1,2,3]);
 
 %% Fit dynamic model
 if isa(weightPrior,'function_handle')
-    W0 = weightPrior(spref);
+    W0 = weightPrior(spref2);
 elseif isnan(weightPrior)
-    W0 = zeros(size(spref));
+    W0 = zeros(size(spref2));
 else
     W0 = weightPrior;
 end

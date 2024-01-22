@@ -550,7 +550,7 @@ for ri = 1:rankN
     
 end
 
-%% Analysis of weight matrix in space that best describes predicted responses
+%% Analysis of weight matrix in space that best describes speed/coherence/gain
 figure
 Wsubspace = W*BinitOrth(:,1:4)*BinitOrth(:,1:4)';
 baseLineSubspace = baseLine*BinitOrth(:,1:4)*BinitOrth(:,1:4)';
@@ -584,6 +584,26 @@ plot(baseLineSubspace(rvalsort),1:size(W,2),'o')
 axis tight
 ylabel('Neuron #')
 xlabel('Baseline along targeted dimensions')
+
+figure
+for dimi = 1:size(BinitTi,1)
+    subplot(size(BinitTi,1),2,1+(dimi-1)*2)
+    WsubspaceR = W*BinitOrth(:,dimi);
+    baseLineSubspaceR = baseLine*BinitOrth(:,dimi)*BinitOrth(:,dimi)';
+    semilogx(spref,WsubspaceR(prefSort),'o')
+    axis tight
+    xlim([0.1 128])
+    xlabel('Speed preference (deg/s)')
+    ylabel(['Weight along dimension #' num2str(dimi)])
+    title(['Dimension #' num2str(dimi)])
+    
+    subplot(size(BinitTi,1),2,2+(dimi-1)*2)
+    plot(rvalsort,BinitTi(dimi,rvalsort),'o')
+    axis tight
+    xlabel('FEF Neuron # (sorted by rvalue of model fit)')
+    ylabel(['Weight along dimension #' num2str(dimi)])
+end
+
 
 
 figure
