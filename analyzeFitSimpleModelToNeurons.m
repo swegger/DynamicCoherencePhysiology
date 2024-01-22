@@ -275,7 +275,7 @@ end
 %% Find model result files
 switch subject
     case 'ar'
-        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20240116*.mat');
+        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20240119*.mat');
 end
 
 for filei = 1:length(files)

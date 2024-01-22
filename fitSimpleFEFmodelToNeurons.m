@@ -39,6 +39,7 @@ addParameter(Parser,'checkMTFit',false)
 addParameter(Parser,'speedPrefOpts',speedPrefOpts_default)
 addParameter(Parser,'zMeanWin',[-Inf,Inf])
 addParameter(Parser,'zSTDwin',[-Inf,Inf])
+addParameter(Parser,'weightPrior',NaN)
 addParameter(Parser,'plotOpts',plotOpts_default)
 addParameter(Parser,'saveOpts',saveOpts_default)
 
@@ -65,6 +66,7 @@ checkMTFit = Parser.Results.checkMTFit;
 speedPrefOpts = Parser.Results.speedPrefOpts;
 zMeanWin = Parser.Results.zMeanWin;
 zSTDwin = Parser.Results.zSTDwin;
+weightPrior = Parser.Results.weightPrior;
 plotOpts = Parser.Results.plotOpts;
 saveOpts = Parser.Results.saveOpts;
 
@@ -196,6 +198,13 @@ inputs_z = (inputs-mean(inputs(:,t>zMeanWin(1) & t<=zMeanWin(2),:,:,:),[2,3,4]))
 RtoFit_z = (RtoFit-mean(RtoFit,[1,2,3]))./std(RtoFit,[],[1,2,3]);
 
 %% Fit dynamic model
+if ~isa(weightPrior,'function_handle')
+    W0 = weightPrior(spref);
+elseif isnan(weightPrior)
+    W0 = zeros(size(spref));
+else
+    W0 = weightPrior;
+end
 if any(isnan(P0))
     P0 = [20/dt,0.10,randn(1,size(inputs,1))/1000];
 end
@@ -214,7 +223,7 @@ for neuroni = 1:size(RtoFit,4)
     disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
     Rtemp = RtoFit_z(:,:,[1, length(cohsFEF)],neuroni);
     R0 = nanmean(Rtemp(1,:,:),[2,3]);
-    minimizer = @(P)minimizant(P,R0,inputs_z(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge);
+    minimizer = @(P)minimizant(P,R0,inputs_z(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge,W0);
     [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
     
     modelFEF.tau(neuroni) = P(1)*dt;
@@ -302,9 +311,9 @@ function R = SimpleFEFmodel(W,baseLine,R0,tau,inputs)
     end
     
  %% Objective
-function out = minimizant(P,R0,inputs,R,lambda)
+function out = minimizant(P,R0,inputs,R,lambda,W0)
     tau = P(1);
     baseLine = P(2);
     W = P(3:end);
     Rest = SimpleFEFmodel(W,baseLine,R0,tau,inputs);
-    out = sum((R(:) - Rest(:)).^2) + lambda*sum(W.^2);
+    out = sum((R(:) - Rest(:)).^2) + lambda*sum((W-W0).^2);
