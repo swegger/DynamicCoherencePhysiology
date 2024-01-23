@@ -40,6 +40,8 @@ addParameter(Parser,'speedPrefOpts',speedPrefOpts_default)
 addParameter(Parser,'zMeanWin',[-Inf,Inf])
 addParameter(Parser,'zSTDwin',[-Inf,Inf])
 addParameter(Parser,'weightPrior',NaN)
+addParameter(Parser,'tauLB',NaN)
+addParameter(Parser,'tauUB',NaN)
 addParameter(Parser,'plotOpts',plotOpts_default)
 addParameter(Parser,'saveOpts',saveOpts_default)
 
@@ -67,9 +69,17 @@ speedPrefOpts = Parser.Results.speedPrefOpts;
 zMeanWin = Parser.Results.zMeanWin;
 zSTDwin = Parser.Results.zSTDwin;
 weightPrior = Parser.Results.weightPrior;
+tauLB = Parser.Results.tauLB;
+tauUB = Parser.Results.tauUB;
 plotOpts = Parser.Results.plotOpts;
 saveOpts = Parser.Results.saveOpts;
 
+if isnan(tauLB)
+    tauLB = 1;
+end
+if isnan(tauUB)
+    tauUB = Inf;
+end
 %% Preliminary
 
 % Colors
@@ -208,13 +218,13 @@ else
 end
 
 if any(isnan(P0))
-    P0 = [60/dt,0.10,randn(1,size(inputs,1))/1000];
+    P0 = [tauLB/dt,0.10,randn(1,size(inputs,1))/1000];
 end
 if any(isnan(lb))
-    lb = [60/dt, -100, -Inf*ones(1,size(inputs,1))];
+    lb = [tauLB/dt, -100, -Inf*ones(1,size(inputs,1))];
 end
 if any(isnan(ub))
-    ub = [60/dt, 100, Inf*ones(1,size(inputs,1))];
+    ub = [tauUB/dt, 100, Inf*ones(1,size(inputs,1))];
 end
 % OPTIONS = optimset(@fmincon);
 % OPTIONS.MaxFunEvals = 3e10;
