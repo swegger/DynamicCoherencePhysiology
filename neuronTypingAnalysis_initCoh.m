@@ -25,6 +25,7 @@ addParameter(Parser,'pertWin',250)
 addParameter(Parser,'resultsFile','none')
 addParameter(Parser,'testInitGain',true)
 addParameter(Parser,'dcpInitCohPertFile','dcpObjectsPertTemp.mat')
+addParameter(Parser,'initCohPertFile',[])
 addParameter(Parser,'initSpeed',10)
 addParameter(Parser,'includeEarlyInitCohPertTime',false)
 addParameter(Parser,'speeds',[5; 10; 20])
@@ -33,6 +34,8 @@ addParameter(Parser,'perturbations',[0; 4; 6; 8])
 addParameter(Parser,'NumClusters',8)
 addParameter(Parser,'checkUnitType',false)
 addParameter(Parser,'rateCutoff',NaN)
+addParameter(Parser,'saveFigures',false)
+addParameter(Parser,'saveResults',false)
 
 parse(Parser,varargin{:})
 
@@ -52,12 +55,15 @@ testInitGain = Parser.Results.testInitGain;
 initSpeed = Parser.Results.initSpeed;
 includeEarlyInitCohPertTime = Parser.Results.includeEarlyInitCohPertTime;
 dcpInitCohPertFile = Parser.Results.dcpInitCohPertFile;
+initCohPertFile = Parser.Results.initCohPertFile;
 speeds = Parser.Results.speeds;
 cohs = Parser.Results.cohs;
 perturbations = Parser.Results.perturbations;
 NumClusters = Parser.Results.NumClusters;
 checkUnitType = Parser.Results.checkUnitType;
 rateCutoff = Parser.Results.rateCutoff;
+saveFigures = Parser.Results.saveFigures;
+saveResults = Parser.Results.saveResults;
 
 %% Colors
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
@@ -80,10 +86,14 @@ end
 %% Find the gain from behavioral data
 if testInitGain
     disp('Determining gain from initiate coherence trials...')
-    dcpInitCohPert = load(dcpInitCohPertFile);
     if ~exist('initGain','var')
-        [init,~] = initialCohPertBehavioralAnalysis(dcp{1}.sname,'dcp',dcpInitCohPert.dcp(1:end),...
-            'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
+        if ~isempty(initCohPertFile) && isfile(initCohPertFile)
+            load(initCohPertFile,'init')
+        else
+            dcpInitCohPert = load(dcpInitCohPertFile);
+            [init,~] = initialCohPertBehavioralAnalysis(dcp{1}.sname,'dcp',dcpInitCohPert.dcp(1:end),...
+                'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
+        end
         initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
     end
 end
@@ -95,86 +105,95 @@ if ~fileExist
     disp('Neural analysis loop...')
     
     %% Get mean and covariance of each unit
-    passCutoff = nan(1000,1);
-    Rinit = nan(1701,3,3,1000);
-    locations = nan(1000,3);
-    cellID = nan(1000,100,3);
-    indx = 1;
-    for filei = 1:length(dcp)
-        disp(['File ' num2str(filei) ' of ' num2str(length(dcp))])
-        
-        % Add probe info
-        dcp{filei} = addProbeInfo(dcp{filei});
-        
-        % InitCoh data
-        load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/initCoh' ...
-            dcp{filei}.datapath(end-8:end)])
-        
-        if ~isnan(rateCutoff)
-            initCoh = findActive(initCoh,rateCutoff,initCoh.cutWindow);
-        end
-        
-        if ~isempty(initCoh.R)
-            
-            passCutoff(indx:indx+length(initCoh.passCutoff)-1) = initCoh.passCutoff;
-            
-            
-            e = sqrt(vertcat(initCoh.eye(:).hvel).^2 + vertcat(initCoh.eye(:).vvel).^2)';
-            eInit = nanmean(e(initCoh.eye_t >= initWin(1) & initCoh.eye_t <= initWin(2),:),1);
-            
-            % Get data for each neuron
-            if checkUnitType && isprop(dcp{filei},'unitTypes')
-                unitInd = find(strcmp(dcp{filei}.unitTypes,'good'));
-            else
-                unitInd = 1:length(initCoh.preferredDirectionRelative);
-            end
-            for uniti = unitInd
-                ind = find(dir == initCoh.preferredDirectionRelative(uniti));
-                Rinit(:,:,:,indx) = initCoh.R(:,:,:,uniti,ind);
-                
-                for j = 1:length(initCoh.unitIndex)
-                    cellID(indx,j,1) = filei;
-                    cellID(indx,j,2) = initCoh.unitIndex(uniti);
-                    cellID(indx,j,3) = initCoh.unitIndex(j);
-                end
-                
-                if isempty(initCoh.location)
-                    x = NaN;
-                    y = NaN;
-                    z = NaN;
-                elseif length(initCoh.location.x)==24
-                    siteIndex = chanMap(initCoh.chansIndex(uniti) == chanMap(:,1),2);
-                    x = initCoh.location.x(siteIndex);
-                    y = initCoh.location.y(siteIndex);
-                    depth = -initCoh.location.depth(siteIndex);
-                elseif length(initCoh.location.x) > 1
-                    siteIndex = floor(initCoh.chansIndex(uniti)/4)+1;
-                    tempIndex = find(~isnan(initCoh.location.x));
-                    if siteIndex>length(tempIndex)
-                        x = NaN;
-                        y = NaN;
-                        depth = NaN;
-                    else
-                        x = initCoh.location.x(tempIndex(siteIndex));
-                        y = initCoh.location.y(tempIndex(siteIndex));
-                        depth = -initCoh.location.depth(tempIndex(siteIndex));
-                    end
-                else
-                    x = initCoh.location.x;
-                    y = initCoh.location.y;
-                    depth = -initCoh.location.depth;
-                end
-                locations(indx,:) = [x,y,depth];
-                
-                indx = indx+1;
-            end
-        end
-    end
+    [Rinit, ~, cellID, passCutoff, locations] = collateFiringRates(dcp,...
+        'sourceDirectory',sourceDirectory,'dir',dir,'chanMap',chanMap,...
+        'rateCutoff',rateCutoff,'checkUnitType',checkUnitType,...
+        'initCohCollate',true,'dynCohCollate',false);
     
-    Rinit = Rinit(:,:,:,1:indx-1);
-    locations = locations(1:indx-1,:);
-    passCutoff = logical(passCutoff(1:indx-1));
-    cellID = cellID(1:indx-1,:,:);
+    temp = load([sourceDirectory '/' dcp{1}.datapath(end-8:end-1) 'obj/initCoh' ...
+             dcp{1}.datapath(end-8:end)]);
+    initCoh_t = temp.initCoh.neuron_t;
+    
+%     passCutoff = nan(1000,1);
+%     Rinit = nan(1701,3,3,1000);
+%     locations = nan(1000,3);
+%     cellID = nan(1000,100,3);
+%     indx = 1;
+%     for filei = 1:length(dcp)
+%         disp(['File ' num2str(filei) ' of ' num2str(length(dcp))])
+%         
+%         % Add probe info
+%         dcp{filei} = addProbeInfo(dcp{filei});
+%         
+%         % InitCoh data
+%         load([sourceDirectory '/' dcp{filei}.datapath(end-8:end-1) 'obj/initCoh' ...
+%             dcp{filei}.datapath(end-8:end)])
+%         
+%         if ~isnan(rateCutoff)
+%             initCoh = findActive(initCoh,rateCutoff,initCoh.cutWindow);
+%         end
+%         
+%         if ~isempty(initCoh.R)
+%             
+%             passCutoff(indx:indx+length(initCoh.passCutoff)-1) = initCoh.passCutoff;
+%             
+%             
+%             e = sqrt(vertcat(initCoh.eye(:).hvel).^2 + vertcat(initCoh.eye(:).vvel).^2)';
+%             eInit = nanmean(e(initCoh.eye_t >= initWin(1) & initCoh.eye_t <= initWin(2),:),1);
+%             
+%             % Get data for each neuron
+%             if checkUnitType && isprop(dcp{filei},'unitTypes')
+%                 unitInd = find(strcmp(dcp{filei}.unitTypes,'good'));
+%             else
+%                 unitInd = 1:length(initCoh.preferredDirectionRelative);
+%             end
+%             for uniti = unitInd
+%                 ind = find(dir == initCoh.preferredDirectionRelative(uniti));
+%                 Rinit(:,:,:,indx) = initCoh.R(:,:,:,uniti,ind);
+%                 
+%                 for j = 1:length(initCoh.unitIndex)
+%                     cellID(indx,j,1) = filei;
+%                     cellID(indx,j,2) = initCoh.unitIndex(uniti);
+%                     cellID(indx,j,3) = initCoh.unitIndex(j);
+%                 end
+%                 
+%                 if isempty(initCoh.location)
+%                     x = NaN;
+%                     y = NaN;
+%                     z = NaN;
+%                 elseif length(initCoh.location.x)==24
+%                     siteIndex = chanMap(initCoh.chansIndex(uniti) == chanMap(:,1),2);
+%                     x = initCoh.location.x(siteIndex);
+%                     y = initCoh.location.y(siteIndex);
+%                     depth = -initCoh.location.depth(siteIndex);
+%                 elseif length(initCoh.location.x) > 1
+%                     siteIndex = floor(initCoh.chansIndex(uniti)/4)+1;
+%                     tempIndex = find(~isnan(initCoh.location.x));
+%                     if siteIndex>length(tempIndex)
+%                         x = NaN;
+%                         y = NaN;
+%                         depth = NaN;
+%                     else
+%                         x = initCoh.location.x(tempIndex(siteIndex));
+%                         y = initCoh.location.y(tempIndex(siteIndex));
+%                         depth = -initCoh.location.depth(tempIndex(siteIndex));
+%                     end
+%                 else
+%                     x = initCoh.location.x;
+%                     y = initCoh.location.y;
+%                     depth = -initCoh.location.depth;
+%                 end
+%                 locations(indx,:) = [x,y,depth];
+%                 
+%                 indx = indx+1;
+%             end
+%         end
+%     end
+%     
+%     Rinit = Rinit(:,:,:,1:indx-1);
+%     locations = locations(1:indx-1,:);
+%     passCutoff = logical(passCutoff(1:indx-1));
+%     cellID = cellID(1:indx-1,:,:);
     
     %% Remove data that doesn't pass cutoff
     Rinit = Rinit(:,:,:,passCutoff);
@@ -286,7 +305,7 @@ if ~fileExist
     end
     maxNormIndx = find(normB == max(normB));
     BinitMax = BinitPCA(:,:,maxNormIndx);
-    BinitTi = BinitPCA(:,:,initCoh.neuron_t==750);
+    BinitTi = BinitPCA(:,:,initCoh_t==750);
     [BinitOrth,~] = qr(BinitTi');
     sz = size(Rinit2);
     Xinit = COEFF(:,1:10)'*reshape(zInit,[prod(sz(1:3)),prod(sz(end))])';
@@ -295,7 +314,7 @@ if ~fileExist
     %% Find targeted dimensions that optimize the representation across time
     
     % Optimized decoder across time
-    taccept = initCoh.neuron_t >= 150 & initCoh.neuron_t <= 1200;
+    taccept = initCoh_t >= 150 & initCoh_t <= 1200;
     bOpt = nan(4,size(zInit,4));
     bOptIsolated = nan(2,size(zInit,4));
     for uniti = 1:size(zInit,4)
@@ -329,15 +348,27 @@ if ~fileExist
     
 end
 
+%% Save results file
+if saveResults
+    
+    saveLocation = ['/home/seth/Projects/DynamicCoherencePhysiology/' dcp{1}.sname ...
+        '/initCohDynCohComp'];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    save([saveLocation '/neuronTyping_initCoh' datestr(now,'yyyymmdd')],'-v7.3')
+    
+end
+
 %% Simple avaraging
-a = Rinit(initCoh.neuron_t<=1350,:,:,:);
+a = Rinit(initCoh_t<=1350,:,:,:);
 
 figure('Name','Grand average','Position',[486 733 516 420])
 minMax = [Inf,0];
 for speedi = 1:length(speeds)
     subplot(length(speeds),1,speedi)
     for cohi = 1:length(cohs)
-        plot(initCoh.neuron_t(initCoh.neuron_t<=1350),nanmean(squeeze(a(:,speedi,cohi,:)),2)*1000,...
+        plot(initCoh_t(initCoh_t<=1350),nanmean(squeeze(a(:,speedi,cohi,:)),2)*1000,...
             'Color',[speedColors(speedi,:), cohs(cohi)/100])
         hold on
     end
@@ -360,14 +391,14 @@ speedi = find(speeds == 10);
 
 gvmrh = figure('Name',['Grand average']);
 for si = 1:length(speeds)
-    initRatesTemp = squeeze(nanmean(a(initCoh.neuron_t >= 700 & initCoh.neuron_t <= 800,si,:,:),[1,4]))*1000;
+    initRatesTemp = squeeze(nanmean(a(initCoh_t >= 700 & initCoh_t <= 800,si,:,:),[1,4]))*1000;
     plot(squeeze(initGain(si,:,3)),initRatesTemp,...
         'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
     hold on
 end
 if includeEarlyInitCohPertTime
     for si = 1:length(speeds)
-        initRatesTemp = squeeze(nanmean(a(initCoh.neuron_t >= 100 & initCoh.neuron_t <= 200,si,:,:),[1,4]))*1000;
+        initRatesTemp = squeeze(nanmean(a(initCoh_t >= 100 & initCoh_t <= 200,si,:,:),[1,4]))*1000;
         plot(squeeze(initGain(si,:,2)),initRatesTemp,...
             'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
     end
@@ -381,20 +412,20 @@ ylabel('Spikes/s')
 gainRegression.y = [];
 gainRegression.x = nan(length(speeds)*length(cohs),NumClusters);
 for i = 1:NumClusters
-    a = Rinit(initCoh.neuron_t<=1350,:,:,idx == i);
+    a = Rinit(initCoh_t<=1350,:,:,idx == i);
     
     figure('Name',['Cluster ' num2str(i)])    
     subplot(2,1,1)
-    plot(initCoh.neuron_t(initCoh.neuron_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,1,:)),2)*1000,'Color',initColors(1,:))
+    plot(initCoh_t(initCoh_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,1,:)),2)*1000,'Color',initColors(1,:))
     hold on
-    plot(initCoh.neuron_t(initCoh.neuron_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,2,:)),2)*1000,'Color',initColors(2,:))
-    plot(initCoh.neuron_t(initCoh.neuron_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,3,:)),2)*1000,'Color',initColors(3,:))
+    plot(initCoh_t(initCoh_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,2,:)),2)*1000,'Color',initColors(2,:))
+    plot(initCoh_t(initCoh_t<=1350),nanmean(squeeze(a(:,speeds == initSpeed,3,:)),2)*1000,'Color',initColors(3,:))
     xlabel('Time from motion onset (ms)')
     ylabel('Spike/s')
 
     subplot(2,1,2)
     for si = 1:length(speeds)
-        plot(initCoh.neuron_t(initCoh.neuron_t<=1350),nanmean(squeeze(a(:,si,2,:)),2)*1000,'Color',speedColors(si,:))
+        plot(initCoh_t(initCoh_t<=1350),nanmean(squeeze(a(:,si,2,:)),2)*1000,'Color',speedColors(si,:))
         hold on
     end
     xlabel('Time from motion onset (ms)')
@@ -402,7 +433,7 @@ for i = 1:NumClusters
     
     gvrh = figure('Name',['Cluster ' num2str(i)]);
     for si = 1:length(speeds)
-        initRatesTemp = nanmean(squeeze(nanmean(a(initCoh.neuron_t >= 700 & initCoh.neuron_t <= 800,si,:,:),1)),2)*1000;
+        initRatesTemp = nanmean(squeeze(nanmean(a(initCoh_t >= 700 & initCoh_t <= 800,si,:,:),1)),2)*1000;
         gainRegression.x((si-1)*length(cohs)+1:si*length(cohs),i) = initRatesTemp;
         plot(squeeze(initGain(si,:,3)),initRatesTemp,...
             'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
@@ -410,7 +441,7 @@ for i = 1:NumClusters
     end
     if includeEarlyInitCohPertTime
         for si = 1:length(speeds)
-            initRatesTemp = nanmean(squeeze(nanmean(a(initCoh.neuron_t >= 100 & initCoh.neuron_t <= 200,si,:,:),1)),2)*1000;
+            initRatesTemp = nanmean(squeeze(nanmean(a(initCoh_t >= 100 & initCoh_t <= 200,si,:,:),1)),2)*1000;
             gainRegression.x(3*length(cohs) + (si-1)*length(cohs)+1:3*length(cohs)+si*length(cohs),i) = initRatesTemp;
             plot(squeeze(initGain(si,:,2)),initRatesTemp,...
                 'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
@@ -480,7 +511,7 @@ for ri = 1:reconstructionN
     for si = 1:size(RlowD,2)
         subplot(size(RlowD,2),reconstructionN,ri+(si-1)*reconstructionN)
         for ci = 1:size(RlowD,3)
-            plot(initCoh.neuron_t,RlowD(:,si,ci,ri),'Color',initColors(ci,:))
+            plot(initCoh_t,RlowD(:,si,ci,ri),'Color',initColors(ci,:))
             hold on
         end
         templims(si,:) = axis;
@@ -517,7 +548,7 @@ figure('Name','Input related activity','Position',[63 169 1606 1079])
 subplot(3,1,1)
 for speedi = 1:3
     for cohi = 1:3
-        plot(initCoh.neuron_t,pInit(:,speedi,cohi,1),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
+        plot(initCoh_t,pInit(:,speedi,cohi,1),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
         hold on
     end
 end
@@ -529,7 +560,7 @@ ylabel('Speed related activity (a.u.)')
 subplot(3,1,2)
 for cohi = 1:3
     for speedi = 1:length(speeds)
-        plot(initCoh.neuron_t,pInit(:,speedi,cohi,2),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
+        plot(initCoh_t,pInit(:,speedi,cohi,2),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
         hold on
     end
 end
@@ -541,7 +572,7 @@ ylabel('Coherence related activity (a.u.)')
 subplot(3,1,3)
 for cohi = 1:3
     for speedi = 1:length(speeds)
-        plot(initCoh.neuron_t,pInit(:,speedi,cohi,3),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
+        plot(initCoh_t,pInit(:,speedi,cohi,3),'-','Color',[speedColors(speedi,:) cohs(cohi)/100])
         hold on
     end
 end
@@ -557,7 +588,7 @@ for targetedDim = 1:3
     tempData = [];
     subplot(3,1,targetedDim)
     for si = 1:length(speeds)
-        initRatesTemp = squeeze(nanmean(pInit(initCoh.neuron_t >= 700 & initCoh.neuron_t <= 800,si,:,targetedDim),1));
+        initRatesTemp = squeeze(nanmean(pInit(initCoh_t >= 700 & initCoh_t <= 800,si,:,targetedDim),1));
         plot(squeeze(initGain(si,:,3)),initRatesTemp,...
             'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
         hold on
@@ -569,7 +600,7 @@ for targetedDim = 1:3
     end
     if includeEarlyInitCohPertTime
         for si = 1:length(speeds)
-            initRatesTemp = squeeze(nanmean(pInit(initCoh.neuron_t >= 100 & initCoh.neuron_t <= 200,si,:,targetedDim),1));
+            initRatesTemp = squeeze(nanmean(pInit(initCoh_t >= 100 & initCoh_t <= 200,si,:,targetedDim),1));
             plot(squeeze(initGain(si,:,2)),initRatesTemp,...
                 'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
             tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];
@@ -591,7 +622,7 @@ for di = 1:3
     optH(di) = subplot(3,1,di);
     for si = 1:length(speeds)
         for ci = 1:length(cohs)
-            plot(initCoh.neuron_t,pBopt(:,si,ci,di),'-','Color',[speedColors(si,:) cohs(ci)/100])
+            plot(initCoh_t,pBopt(:,si,ci,di),'-','Color',[speedColors(si,:) cohs(ci)/100])
             hold on
         end
     end
@@ -611,7 +642,7 @@ for targetedDim = 1:3
     tempData = [];
     subplot(3,1,targetedDim)
     for si = 1:length(speeds)
-        initRatesTemp = squeeze(nanmean(pBopt(initCoh.neuron_t >= 700 & initCoh.neuron_t <= 800,si,:,targetedDim),1));
+        initRatesTemp = squeeze(nanmean(pBopt(initCoh_t >= 700 & initCoh_t <= 800,si,:,targetedDim),1));
         plot(squeeze(initGain(si,:,3)),initRatesTemp,...
             'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
         hold on
@@ -619,7 +650,7 @@ for targetedDim = 1:3
     end
     if includeEarlyInitCohPertTime
         for si = 1:length(speeds)
-            initRatesTemp = squeeze(nanmean(pBopt(initCoh.neuron_t >= 100 & initCoh.neuron_t <= 200,si,:,targetedDim),1));
+            initRatesTemp = squeeze(nanmean(pBopt(initCoh_t >= 100 & initCoh_t <= 200,si,:,targetedDim),1));
             plot(squeeze(initGain(si,:,2)),initRatesTemp,...
                 'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
             tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];
@@ -663,7 +694,7 @@ if NumDimensions > 2
 
     subplot(2,3,[3,6])
     for i = 1:NumClusters
-        plot(initCoh.neuron_t,...
+        plot(initCoh_t,...
             nanmean(squeeze(Rinit(:,3,3,idx == i))./...
             repmat(max(squeeze(Rinit(:,3,3,idx==i)),[],1),[size(Rinit,1) 1]),2))
         hold on
@@ -685,7 +716,7 @@ else
 
     subplot(4,2,[5,6])
     for i = 1:NumClusters
-        plot(initCoh.neuron_t,...
+        plot(initCoh_t,...
             nanmean(squeeze(Rinit(:,3,3,idx == i))./...
             repmat(max(squeeze(Rinit(:,3,3,idx==i)),[],1),[size(Rinit,1) 1]),2),...
             'Color',colorWheel(i,:))
@@ -703,7 +734,7 @@ for i = 1:NumClusters
         for ci = 1:size(Rinit,3)
             tempR = nanmean(squeeze(Rinit(:,si,ci,idx == i))./...
                 repmat(max(squeeze(Rinit(:,si,ci,idx==i)),[],1),[size(Rinit,1) 1]),2);
-            plot(initCoh.neuron_t,...
+            plot(initCoh_t,...
                 tempR,...
                 'Color',initColors(ci,:))
             hold on
@@ -730,9 +761,9 @@ for i = 1:NumClusters
 %         nanmean(squeeze(Rdyn(:,5,idx == i))./...
 %         repmat(max(squeeze(Rdyn(:,5,idx==i)),[],1),[size(Rdyn,1) 1]),2),...
 %         'Color',colorWheel(i,:))
-    plot(initCoh.neuron_t(initCoh.neuron_t<=1350),...
-        nanmean((squeeze(Rinit(initCoh.neuron_t<=1350,3,3,idx == i))-nanmean(squeeze(Rinit(initCoh.neuron_t<=1350,2,3,idx == i)),1))./...
-        repmat(nanstd(squeeze(Rinit(initCoh.neuron_t<=1350,2,3,idx==i)),[],1),[size(Rinit(initCoh.neuron_t<=1350,:,:,:),1) 1]),2),...
+    plot(initCoh_t(initCoh_t<=1350),...
+        nanmean((squeeze(Rinit(initCoh_t<=1350,3,3,idx == i))-nanmean(squeeze(Rinit(initCoh_t<=1350,2,3,idx == i)),1))./...
+        repmat(nanstd(squeeze(Rinit(initCoh_t<=1350,2,3,idx==i)),[],1),[size(Rinit(initCoh_t<=1350,:,:,:),1) 1]),2),...
         'Color',colorWheel(i,:))
     xlabel('Time from motion onset (ms)')
     ylabel('z-score')
@@ -743,7 +774,7 @@ thetas = atan2(Y(:,2)-mean(Y(:,2)),Y(:,1)-mean(Y(:,1)));
 [~,thetaSort] = sort(thetas);
 
 figure
-imagesc(initCoh.neuron_t,1:size(zInit,1),squeeze(zInit(:,2,2,thetaSort))')
+imagesc(initCoh_t,1:size(zInit,3),squeeze(zInit(:,2,2,thetaSort))')
 xlabel('Time from motion onset (ms)')
 ylabel('Sorted neuron #')
 
@@ -763,7 +794,7 @@ for exUnit = 1:nExamps
     subplot(nExamps,2,1+(exUnit-1)*2)
     for ni = 1:Kneighbors
         zR = (squeeze(Rinit(:,3,3,neighbors(exUnit,ni)))-mean(squeeze(Rinit(:,3,3,neighbors(exUnit,ni)))))/std(squeeze(Rinit(:,3,3,neighbors(exUnit,ni))));
-        plot(initCoh.neuron_t,zR,'Color',speedColors(3,:))
+        plot(initCoh_t,zR,'Color',speedColors(3,:))
         hold on
     end
     xlabel('Time from motion onset (ms)')

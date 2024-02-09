@@ -27,6 +27,7 @@ addParameter(Parser,'pertWin',250)
 addParameter(Parser,'resultsFile','none')
 addParameter(Parser,'testInitGain',true)
 addParameter(Parser,'dcpInitCohPertFile','dcpObjectsPertTemp.mat')
+addParameter(Parser,'initCohPertFile',[])
 addParameter(Parser,'dcpDynCohFile',[])
 addParameter(Parser,'initSpeed',10)
 addParameter(Parser,'includeEarlyInitCohPertTime',false)
@@ -37,6 +38,8 @@ addParameter(Parser,'perturbations',[0; 4; 6; 8])
 addParameter(Parser,'NumClusters',8)
 addParameter(Parser,'checkUnitType',false)
 addParameter(Parser,'rateCutoff',NaN)
+addParameter(Parser,'saveFigures',false)
+addParameter(Parser,'saveResults',false)
 
 parse(Parser,varargin{:})
 
@@ -58,6 +61,7 @@ testInitGain = Parser.Results.testInitGain;
 initSpeed = Parser.Results.initSpeed;
 includeEarlyInitCohPertTime = Parser.Results.includeEarlyInitCohPertTime;
 dcpInitCohPertFile = Parser.Results.dcpInitCohPertFile;
+initCohPertFile = Parser.Results.initCohPertFile;
 dcpDynCohFile = Parser.Results.dcpDynCohFile;
 speeds = Parser.Results.speeds;
 cohs = Parser.Results.cohs;
@@ -66,6 +70,8 @@ perturbations = Parser.Results.perturbations;
 NumClusters = Parser.Results.NumClusters;
 checkUnitType = Parser.Results.checkUnitType;
 rateCutoff = Parser.Results.rateCutoff;
+saveFigures = Parser.Results.saveFigures;
+saveResults = Parser.Results.saveResults;
 
 %% Colors
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
@@ -102,10 +108,14 @@ end
 
 if testInitGain
     disp('Determining gain from initiate coherence trials...')
-    dcpInitCohPert = load(dcpInitCohPertFile);
     if ~exist('initGain','var')
-        [init,~] = initialCohPertBehavioralAnalysis(dcp{1}.sname,'dcp',dcpInitCohPert.dcp(1:end),...
-            'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
+        if ~isempty(initCohPertFile) && isfile(initCohPertFile)
+            load(initCohPertFile,'init')
+        else
+            dcpInitCohPert = load(dcpInitCohPertFile);
+            [init,~] = initialCohPertBehavioralAnalysis(dcp{1}.sname,'dcp',dcpInitCohPert.dcp(1:end),...
+                'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
+        end
         initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
     end
 end
@@ -610,6 +620,18 @@ if ~fileExist
     end
     
     %% End results file check
+end
+
+%% Save results file
+if saveResults
+    
+    saveLocation = ['/home/seth/Projects/DynamicCoherencePhysiology/' dcp{1}.sname ...
+        '/initCohDynCohComp'];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    save([saveLocation '/neuronTyping' datestr(now,'yyyymmdd')],'-v7.3')
+    
 end
 
 %% Simple avaraging

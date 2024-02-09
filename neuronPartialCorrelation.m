@@ -19,6 +19,7 @@ addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'tWin',[750 750])
 addParameter(Parser,'tGainMeasurement',750)
 addParameter(Parser,'gainFitInd',1)
+addParameter(Parser,'saveFigures',false)
 
 parse(Parser,dcp,varargin{:})
 
@@ -32,6 +33,7 @@ directions = Parser.Results.directions;
 tWin = Parser.Results.tWin;
 tGainMeasurement = Parser.Results.tGainMeasurement;
 gainFitInd = Parser.Results.gainFitInd;
+saveFigures = Parser.Results.saveFigures;
 
 %% Preliminary
 [Cohs, Spds] = meshgrid(cohs,speeds);
@@ -222,7 +224,7 @@ for modeli = 1:length(regressionModels)
 end
 
 %% Plot results
-figure
+model1_vs_model2 = figure;
 plot(Z(1,:),Z(2,:),'o')
 hold on
 axis equal
@@ -242,7 +244,7 @@ ylabel(['Z-transformed component correlation for ' regressionModels{2}])
 
 %% Plot model 2 favored over model 1
 for uniti = 1:length(mFavored{2,1})
-    figure('Name',['Unit ' num2str(cellID(mFavored{2,1}(uniti),1,1)) ' ' num2str(cellID(mFavored{2,1}(uniti),1,2))],'Position', [445 100+uniti*2 1784 420])
+    gainFavored(uniti) = figure('Name',['Unit ' num2str(cellID(mFavored{2,1}(uniti),1,1)) ' ' num2str(cellID(mFavored{2,1}(uniti),1,2))],'Position', [445 100+uniti*2 1784 420]);
     for si = 1:length(speeds)
         axh(uniti,si) = subplot(1,length(speeds),si);
         for ci = 1:length(cohs)
@@ -259,7 +261,7 @@ for uniti = 1:length(mFavored{2,1})
 end
 
 %% Plot average of neurons that favor model 2 over model 1
-figure('Name','Grand average of model 2 favored cells','Position', [445 100+uniti*2 1784 420])
+gradAveModel1_vs_Model2 = figure('Name','Grand average of model 2 favored cells','Position', [445 100+uniti*2 1784 420]);
 grandAve = nanmean(1000*Rinit(:,:,:,mFavored{2,1}),4);
 for si = 1:length(speeds)
     axh2(si) = subplot(1,length(speeds),si);
@@ -273,12 +275,18 @@ for si = 1:length(speeds)
     title(['Speed = ' num2str(speeds(si))])
 end
 linkaxes(axh2)
+for si = 1:length(speeds)
+    subplot(axh2(si))
+    plotVertical(tGainMeasurement);
+end
 
-figure
+grandAveGainRepresenation = figure('Name',...
+    ['Representation of gain by average of' regressionModels{2} ' preferring neurons'],...
+    'Position',[447 614 1598 420]);
 for gi = 1:length(tGainMeasurement)
     subplot(1,length(tGainMeasurement)+1,gi)
     for si = 1:length(speeds)
-        plot(gains(si,:,gainFitInd),squeeze(grandAve(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
+        plot(gains(si,:,gi),squeeze(grandAve(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
             'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
         hold on
     end
@@ -296,3 +304,21 @@ end
 xlabel('Behavioral gain (unitless)')
 ylabel('Mean spikes/s')
 title(['For gain at t = ' num2str(tWin)])
+
+%% Save figures
+if saveFigures
+    
+    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/mat/' dcp{1}.sname ...
+        '/partialCorrelation/' datestr(now,'yyyymmdd')];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    
+    savefig(model1_vs_model2,[saveLocation '/zscores_' regressionModels{1} '_vs_' regressionModels{2} '.fig'])
+    savefig(gradAveModel1_vs_Model2 ,[saveLocation '/averagePSTH_grainPreferring.fig'])
+    savefig(grandAveGainRepresenation ,[saveLocation '/gainRepresenationByGainPreferring.fig'])
+    
+    for uniti = 1:length(mFavored{2,1})
+        savefig(gainFavored(uniti),[saveLocation '/' regressionModels{2} 'PreferringUnit_' num2str(cellID(mFavored{2,1}(uniti),1,1)) '_' num2str(cellID(mFavored{2,1}(uniti),1,2)) '.fig'])
+    end
+end

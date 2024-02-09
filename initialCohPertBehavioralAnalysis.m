@@ -24,6 +24,8 @@ addParameter(Parser,'outlierReject',false)
 addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'keep_pert3always0deg',false)
 addParameter(Parser,'pertWin',300)
+addParameter(Parser,'saveFigures',false)
+addParameter(Parser,'saveResults',false)
 
 parse(Parser,sname,varargin{:})
 
@@ -37,6 +39,8 @@ outlierReject = Parser.Results.outlierReject;
 directions = Parser.Results.directions;
 keep_pert3always0deg = Parser.Results.keep_pert3always0deg;
 pertWin = Parser.Results.pertWin;
+saveFigures = Parser.Results.saveFigures;
+saveResults = Parser.Results.saveResults;
 
 %% Build dcp objects
 if isempty(dcpObjectsFile) && isempty(dcp{1})
@@ -293,14 +297,33 @@ lin.rmse = sqrt(mean( (res(testvec) - (lin.B'*[ss(testvec) cs(testvec) ones(size
 interaction.rmse = sqrt(mean( (res(testvec) - (interaction.B'*[ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
 gain(1).rmse = sqrt(mean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec))).^2 ));
 
+%% Saving
+if saveResults
+    saveLocation = ['/home/seth/Projects/DynamicCoherencePhysiology/' sname ...
+        '/initCohPertResults'];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    save([saveLocation '/initCohPert' datestr(now,'yyyymmdd')],'sname','gain','init','-v7.3')
+end
+    
+
 %% Plotting
+
+if saveFigures
+    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/mat/' sname ...
+        '/initCohBehavior/' datestr(now,'yyyymmdd')];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+end
 
 %% Mean initiation response
 figure;
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
 cohColors = 1-repmat(cohs/100,[1,3]);
 close(gcf)
-figure('Name','Mean initCoh response')
+meanInitFigureHandle = figure('Name','Mean initCoh response');
 tempMax = max([length(cohs) length(speeds)]);
 for ci = 1:length(cohs)
     subplot(2,tempMax,ci)
@@ -332,8 +355,12 @@ end
 ax = axis;
 text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
 
+if saveFigures
+    savefig(meanInitFigureHandle,[saveLocation '/meanEyeSpeedsByCondition.fig'])
+end
+
 %% Initiation speed
-figure('Name','Initiation speed')
+initiationSpeedFigureHandle = figure('Name','Initiation speed');
 xs = linspace(min(speeds),max(speeds),100);
 if plotSamps.On
     for ci = 1:length(cohs)
@@ -370,10 +397,14 @@ text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
 xlabel('Target speed (deg/s)')
 ylabel('Initiation speed (deg/s)')
 
+if saveFigures
+    savefig(initiationSpeedFigureHandle,[saveLocation '/initationSpeedByCondition.fig'])
+end
+
 %% Perturbation response
-h = figure;
+pertResOverTimeFigureHandle = figure;
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
-set(h,'Position', [347 292 962 937]);
+set(pertResOverTimeFigureHandle,'Position', [347 292 962 937]);
 ind = 0;
 pertsTemp = perturbations(perturbations ~= 0);
 for si = 1:length(speeds)
@@ -400,7 +431,12 @@ end
 ax = axis;
 text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
 
-figure('Name','Perturabation response')
+if saveFigures
+    savefig(pertResOverTimeFigureHandle,[saveLocation '/perturbationResponseOverTime.fig'])
+end
+
+
+pertResponseFigureHandle = figure('Name','Perturabation response');
 pertInd = 0;
 for pi = 1:length(perturbations)
     if perturbations(pi) > 0
@@ -430,8 +466,12 @@ for pi = 1:length(perturbations)
     end
 end
 
+if saveFigures
+    savefig(pertResponseFigureHandle,[saveLocation '/perturbationResponseSummary.fig'])
+end
 
-figure('Name','Feedforward gain estimate')
+
+gainByCohsFigureHandle = figure('Name','Feedforward gain estimate');
 pertInd = 0;
 for pi = 1:length(perturbations)
     if perturbations(pi) > 0
@@ -462,7 +502,11 @@ for pi = 1:length(perturbations)
     end
 end
 
-figure('Name','Feedforward gain estimate')
+if saveFigures
+    savefig(gainByCohsFigureHandle,[saveLocation '/gainByCoherence.fig'])
+end
+
+gainBySpeedsFigureHandle = figure('Name','Feedforward gain estimate');
 pertInd = 0;
 for pi = 1:length(perturbations)
     if perturbations(pi) > 0
@@ -491,4 +535,8 @@ for pi = 1:length(perturbations)
         axis([0.8*min(speeds) 1.2*max(speeds) min(ax2(:,3)) max(ax2(:,4))])
         plotHorizontal(0);
     end
+end
+
+if saveFigures
+    savefig(gainBySpeedsFigureHandle,[saveLocation '/gainByTargetSpeed.fig'])
 end

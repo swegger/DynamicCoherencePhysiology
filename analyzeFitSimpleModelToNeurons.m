@@ -275,7 +275,7 @@ end
 %% Find model result files
 switch subject
     case 'ar'
-        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20240122*.mat');
+        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20240124*.mat');
 end
 
 for filei = 1:length(files)
@@ -289,13 +289,26 @@ for filei = 1:length(files)
             temp.modelFEF.baseLine(neuroni),temp.modelFEF.R0(neuroni),temp.modelFEF.tau(neuroni)/temp.modelFEF.dt,temp.inputs_z);
         RhatTemp(:,:,neuroni) = tempHat(:,:,2);
     end
-    sse(filei) = sum((Rtemp(:) - RhatTemp(:)).^2);
-    sseNeuron(:,filei) = sum( (Rtemp - RhatTemp).^2 ,[1,2]);
+    if minimizeErrorInTargetedSubspace
+        cellID2 = squeeze(temp.cellID(:,1,1:2));
+        cellID3 = squeeze(cellID(:,1,1:2));
+        LIA = ismember(cellID2,cellID3,'rows');
+        Rtemp = Rtemp(:,:,LIA);
+        for si = 1:length(speedsFEF)
+            pR(:,:,si) = permute(Rtemp(:,si,:),[1,3,2])*BinitOrth(:,3);
+            pRhat(:,:,si) = permute(RhatTemp(:,si,LIA),[1,3,2])*BinitOrth(:,3);
+        end
+        sse(filei) = sum((pR(:) - pRhat(:)).^2);
+        sseNeuron(:,filei) = sum( (Rtemp - RhatTemp(:,:,LIA)).^2 ,[1,2]);
+    else
+        sse(filei) = sum((Rtemp(:) - RhatTemp(:)).^2);
+        sseNeuron(:,filei) = sum( (Rtemp - RhatTemp).^2 ,[1,2]);
+    end
     lambdaRidge(filei) = temp.lambdaRidge;
-    
+    taus(filei) = temp.modelFEF.tau(1);
 end
 
-%% Get data from best fitting model over ridge values
+%% Get data from best fitting model over ridge values and time constants
 [~,minInd] = min(sse);
 temp = load([files(minInd).folder '/' files(minInd).name]);
 R = temp.RtoFit_z;
@@ -311,6 +324,10 @@ t = temp.mtResults.mt{1}.neuron_t(temp.iMT);
 spref = temp.spref;
 spref = spref(~isnan(temp.interpolatedR(1,1,1,:)));
 [~,prefSort] = sort(spref);
+
+swidth = temp.swidth;
+swidth = swidth(~isnan(temp.interpolatedR(1,1,1,:)));
+[~,widthSort] = sort(swidth);
 
 %%
 
@@ -360,25 +377,57 @@ Wy = W*Vy;
 What = W*Vhat;                      % Now ordering weight matrix by the important dimensions in Rhat (e.g. reduced rank regression approach)
 
 [~,rvalsort] = sort(rvals(LIA,3));
+
+%% Assume portion of input weight matrix has MT weights proportional to log2 spref
+u = log2(spref');
+u(u<0) = 0;
+u = u - mean(u(u>0));
+u = u/norm(u);
+
+v = inv(u'*u)*u'*W;
+
+Wspref = u*v;
+
+% More complicated: 'optimal' decoder assuming zero correlations:
+% df/ds*I/(df/ds'*I*df/ds)
+for si = 1:length(speedsFEF)
+    s0 = speedsFEF(si);
+    sprefTemp = spref;
+    sprefTemp(sprefTemp < 1) = 1;
+    swidthTemp = swidth;
+%     swidthTemp(swidthTemp > 10) = 10;
+    df = -log2(s0./sprefTemp)./(s0.*swidth*log(2)).*exp(log2(s0./sprefTemp).^2./(2*swidth.^2));
+    uOpt(:,si) = df*inv(eye(length(sprefTemp)))/(df*inv(eye(length(sprefTemp)))*df');
+    uOpt(uOpt(:,si)<-0.05,si) = min(uOpt(uOpt(:,si)>-0.05,si));
+    uOptNorm(:,si) = uOpt(:,si)/norm(uOpt(:,si));
+    
+    vOpt(:,si) = inv(uOptNorm(:,si)'*uOptNorm(:,si))*uOptNorm(:,si)'*W;
+    Wopt(:,:,si) = uOptNorm(:,si)*vOpt(:,si)';
+end
 %% Plot results
 
 %% Best ridge regression for predicting held-out data
 figure
-[~,sortInd] = sort(lambdaRidge);
+[~,sortInd] = sort([lambdaRidge' taus']);
 subplot(1,2,1)
-loglog(lambdaRidge(sortInd),sse(sortInd),'ko-')
+loglog(lambdaRidge(sortInd(:,1)),sse(sortInd(:,1)),'ko-')
 hold on
 plotVertical(lambdaRidge(sse == min(sse)));
 xlabel('Ridge regression coefficient')
 ylabel('Sum of squared errors (spikes/sec)^2')
 
 subplot(1,2,2)
-loglog(lambdaRidge(sortInd),sseNeuron(:,sortInd),'-','Color',[0 0 0 0.1])
+loglog(lambdaRidge(sortInd(:,1)),sseNeuron(:,sortInd(:,1)),'-','Color',[0 0 0 0.1])
 [~,sseMins] = min(sseNeuron,[],2);
 hold on
 plotVertical(lambdaRidge(sseMins));
 xlabel('Ridge regression coefficient')
 ylabel('Sum of squared errors (spikes/sec)^2')
+
+figure
+scatter(log(lambdaRidge),log(taus),50,log(sse),'filled')
+xlabel('log(lambda)')
+ylabel('log(tau)')
 
 
 %% Best and worst fits (on average across held-out data)
