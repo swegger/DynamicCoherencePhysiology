@@ -710,6 +710,9 @@ classdef dcpObj
                 if strcmp(T.Probe{1},'24V')
                     obj.probe.type = '24V';
                     obj.probe.liveContacts = true(1,24);
+                elseif strcmp(T.Probe{1},'single')
+                    obj.probe.type = 'single';
+                    obj.probe.liveContacts = true;
                 end
             else
                 obj.probe.type = 'tet';

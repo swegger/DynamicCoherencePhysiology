@@ -10,6 +10,7 @@ plotSamps_default.On = true;
 plotSamps_default.n = 100;
 plotSamps_default.replacement = false;
 dcp_default{1} = [];
+detectPoorPursuit_default.On = false;
 
 %% Parse inputs
 Parser = inputParser;
@@ -24,6 +25,7 @@ addParameter(Parser,'outlierReject',false)
 addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'keep_pert3always0deg',false)
 addParameter(Parser,'pertWin',300)
+addParameter(Parser,'detectPoorPursuit',detectPoorPursuit_default)
 addParameter(Parser,'saveFigures',false)
 addParameter(Parser,'saveResults',false)
 
@@ -39,6 +41,7 @@ outlierReject = Parser.Results.outlierReject;
 directions = Parser.Results.directions;
 keep_pert3always0deg = Parser.Results.keep_pert3always0deg;
 pertWin = Parser.Results.pertWin;
+detectPoorPursuit = Parser.Results.detectPoorPursuit;
 saveFigures = Parser.Results.saveFigures;
 saveResults = Parser.Results.saveResults;
 
@@ -121,6 +124,19 @@ init.conditions.pert = init.conditions.pert(1:ind-1);
 init.eye.hvel = init.eye.hvel(:,1:ind-1);
 init.eye.vvel = init.eye.vvel(:,1:ind-1);
 init.eye.speed = sqrt(init.eye.hvel.^2 + init.eye.vvel.^2);
+
+%% Remove high error trials
+if detectPoorPursuit.On
+    rmse = sqrt(nanmean((init.eye.speed(init.t > 200 & init.t < 1200,:)-init.conditions.speeds').^2,1))./init.conditions.speeds';
+    init.conditions.directions = init.conditions.directions(rmse < detectPoorPursuit.threshold);
+    init.conditions.speeds = init.conditions.speeds(rmse < detectPoorPursuit.threshold);
+    init.conditions.coh = init.conditions.coh(rmse < detectPoorPursuit.threshold);
+    init.conditions.pert= init.conditions.pert(rmse < detectPoorPursuit.threshold);
+    
+    init.eye.hvel = init.eye.hvel(:,rmse < detectPoorPursuit.threshold);
+    init.eye.vvel = init.eye.vvel(:,rmse < detectPoorPursuit.threshold);
+    init.eye.speed = init.eye.speed(:,rmse < detectPoorPursuit.threshold);
+end
 
 %% Find conditional means, marginalize direction and perturbations
 speeds = unique(init.conditions.speeds);

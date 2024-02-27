@@ -120,10 +120,10 @@ classdef dirPrefObj < dcpObj
                                 obj.spikeTimes{ind}{2} = ones(size(file.spikes));
                             end                         
                             
+                            onTemp = [file.targets.on{2:end}];
+                            t_temp = min(onTemp):(max(onTemp)-1);
                         end
                         
-                        onTemp = [file.targets.on{2:end}];
-                        t_temp = min(onTemp):(max(onTemp)-1);
                         
                     end
                 end
@@ -226,8 +226,8 @@ classdef dirPrefObj < dcpObj
                     counts(1:size(countsTemp,1),di,:) = countsTemp;
                     maxtrials = max([maxtrials size(countsTemp,1)]);
                 else
-                    counts(1:length(countsTemp),di,:) = countsTemp;
-                    maxtrials = max([maxtrials length(countsTemp)]);
+                    counts(1:size(countsTemp,2),di,:) = countsTemp;
+                    maxtrials = max([maxtrials size(countsTemp,2)]);
                 end
             end
             counts = counts(1:maxtrials,:,:,:);

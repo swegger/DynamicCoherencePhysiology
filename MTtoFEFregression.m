@@ -13,7 +13,10 @@ speedPrefOpts_default.lb = [0, 0];
 speedPrefOpts_default.c = NaN;
 speedPrefOpts_default.s = NaN;
 speedPrefOpts_default.d = 0;
-
+trainCondition_default = [true, false, true;
+                          true, false, true;
+                          true, false, true];
+compToBehavioralGain_default.On = false;
 %% Parse inputs
 Parser = inputParser;
 
@@ -27,6 +30,7 @@ addParameter(Parser,'opponentMT',false)
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'directions',[0 180])
+addParameter(Parser,'trainCondition',trainCondition_default)
 addParameter(Parser,'tWin',[0 900])
 addParameter(Parser,'rankN',80)
 addParameter(Parser,'ridgeLambda',logspace(-1,12,10))
@@ -35,6 +39,7 @@ addParameter(Parser,'checkMTFit',false)
 addParameter(Parser,'speedPrefOpts',speedPrefOpts_default)
 addParameter(Parser,'zMeanWin',[-Inf,Inf])
 addParameter(Parser,'zSTDwin',[-Inf,Inf])
+addParameter(Parser,'compToBehavioralGain',compToBehavioralGain_default)
 addParameter(Parser,'plotOpts',plotOpts_default)
 
 parse(Parser,dcp,varargin{:})
@@ -48,6 +53,7 @@ directionsMT = Parser.Results.directionsMT;
 opponentMT= Parser.Results.opponentMT;
 speedsFEF = Parser.Results.speedsFEF;
 cohsFEF = Parser.Results.cohsFEF;
+trainCondition = Parser.Results.trainCondition;
 directions = Parser.Results.directions;
 tWin = Parser.Results.tWin;
 rankN = Parser.Results.rankN;
@@ -57,6 +63,7 @@ checkMTFit = Parser.Results.checkMTFit;
 speedPrefOpts = Parser.Results.speedPrefOpts;
 zMeanWin = Parser.Results.zMeanWin;
 zSTDwin = Parser.Results.zSTDwin;
+compToBehavioralGain = Parser.Results.compToBehavioralGain;
 plotOpts = Parser.Results.plotOpts;
 
 %% Preliminary
@@ -119,6 +126,12 @@ fef_t = initCoh.neuron_t(taccept);
 %% Remove data that doesn't pass cutoff
 Rinit = Rinit(:,:,:,passCutoff);
 cellID = cellID(passCutoff,:,:);
+
+
+%% Remove outlier rates
+m = squeeze(max(Rinit,[],[1,2,3]))*1000;
+Rinit = Rinit(:,:,:,m<=150);
+cellID = cellID(m<=150,:,:);
 
 %% Get MT data and organize as an input
 
@@ -193,27 +206,37 @@ RtoFit_z = (RtoFit-mean(RtoFit,[1,2,3]))./std(RtoFit,[],[1,2,3]);
 %% Regression models
 
 % Build matrices
-Xfit = nan(size(inputs,2)*size(inputs,3)*(size(inputs,4)-1),size(inputs,1));
-Yfit = nan(size(RtoFit,1)*size(RtoFit,2)*(size(RtoFit,3)-1),size(RtoFit,4));
+Xfit = nan(size(inputs,2)*sum(trainCondition(:)),size(inputs,1));
+Yfit = nan(size(RtoFit,1)*sum(trainCondition(:)),size(RtoFit,4));
+conditions = nan(size(RtoFit,1)*sum(trainCondition(:)),3);
 
 idx = [1, 1];
 for si = 1:length(speedsFEF)
-    for ci = [1 length(cohsFEF)]
-        Xfit(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs_z(:,:,si,ci),[2,1]);
-        Yfit(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit_z(:,si,ci,:));
-        idx(1) = idx(1) + size(inputs,2);
-        idx(2) = idx(2) + size(RtoFit,1);
+    for ci = 1:length(cohsFEF)
+        if trainCondition(si,ci)
+            Xfit(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs_z(:,:,si,ci),[2,1]);
+            Yfit(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit_z(:,si,ci,:));
+            conditions(idx(2):idx(2)+size(RtoFit,1)-1,:) = repmat([speedsFEF(si) cohsFEF(ci) trainCondition(si,ci)],[size(RtoFit,1),1]);
+            idx(1) = idx(1) + size(inputs,2);
+            idx(2) = idx(2) + size(RtoFit,1);
+        end
     end
 end
 
-Xtest = nan(size(inputs,2)*size(inputs,3),size(inputs,1));
-Ytest = nan(size(RtoFit,1)*size(RtoFit,2),size(RtoFit,4));
+Xtest = nan(size(inputs,2)*sum(~trainCondition(:)),size(inputs,1));
+Ytest = nan(size(RtoFit,1)*sum(~trainCondition(:)),size(RtoFit,4));
+conditionsTest = nan(size(RtoFit,1)*sum(~trainCondition(:)),3);
 idx = [1, 1];
 for si = 1:length(speedsFEF)
-    Xtest(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs_z(:,:,si,2),[2,1]);
-    Ytest(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit_z(:,si,2,:));
-    idx(1) = idx(1) + size(inputs,2);
-    idx(2) = idx(2) + size(RtoFit,1);
+    for ci = 1:length(cohsFEF)
+        if ~trainCondition(si,ci)
+            Xtest(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs_z(:,:,si,2),[2,1]);
+            Ytest(idx(2):idx(2)+size(RtoFit,1)-1,:) = squeeze(RtoFit_z(:,si,2,:));
+            conditionsTest(idx(2):idx(2)+size(RtoFit,1)-1,:) = repmat([speedsFEF(si) cohsFEF(ci) trainCondition(si,ci)],[size(RtoFit,1),1]);
+            idx(1) = idx(1) + size(inputs,2);
+            idx(2) = idx(2) + size(RtoFit,1);
+        end
+    end
 end
 
 % Regress
@@ -243,35 +266,110 @@ YnullTest = Xtest*BetaNull;
 
 Rhat = nan(size(RtoFit));
 Rnull = nan(size(RtoFit));
-idx = 1;
-idxTest = 1;
 for si = 1:length(speedsFEF)
-    for ci = [1, length(cohsFEF)]
-        Rhat(:,si,ci,:) = YrrrTrain(idx:idx+size(RtoFit,1)-1,:);
-        Rnull(:,si,ci,:) = YnullTrain(idx:idx+size(RtoFit,1)-1,:);
-        idx = idx+size(RtoFit,1);
+    for ci = 1:length(cohsFEF)
+        if trainCondition(si,ci)
+            temp = ismember(conditions,[speedsFEF(si),cohsFEF(ci),trainCondition(si,ci)],'rows');
+            Rhat(:,si,ci,:) = YrrrTrain(temp,:);
+            Rnull(:,si,ci,:) = YnullTrain(temp,:);
+        else
+            temp = ismember(conditionsTest,[speedsFEF(si),cohsFEF(ci),trainCondition(si,ci)],'rows');
+            Rhat(:,si,ci,:) = YrrrTest(temp,:);
+            Rnull(:,si,ci,:) = YnullTest(temp,:);
+        end
     end
-    
-    ci = 2;
-    Rhat(:,si,ci,:) = YrrrTest(idxTest:idxTest+size(RtoFit,1)-1,:);
-    Rnull(:,si,ci,:) = YnullTest(idxTest:idxTest+size(RtoFit,1)-1,:);
-    idxTest = idxTest+size(RtoFit,1);
 end
 
 % Find correlation with held out data and do Fisher transformation
-rvals = corrcoef([Ytest YhatTest]);
+rvals = corrcoef([Ytest YrrrTest]);
 RhatCC = diag(rvals(size(Ytest,2)+1:end,1:size(Ytest,2)));
 RhatZ = 0.5*log( (1+RhatCC)./(1-RhatCC) );
+[~,zvalSort] = sort(RhatZ);
 
 A = Beta*Vhat;
 [~,sortInd] = sort(spref(~isnan(interpolatedR(1,1,1,:))));
+sp = spref(~isnan(interpolatedR(1,1,1,:)));
+sw = swidth(~isnan(interpolatedR(1,1,1,:)));
 spref2 = spref(~isnan(interpolatedR(1,1,1,:)));
 spref2 = spref2(sortInd);
 A = A(sortInd,:);
 
+%% A theoretical treatment, rather than data driven
+
+weightTheory = 'simple';
+switch weightTheory
+    case 'simple'
+        % Simple, log2(spref) weighting
+        Atheory = [(log2(sp)'-mean(log2(speedsFEF))) ones(size(sp'))];
+        
+    case 'optimal'
+        % More complicated: 'optimal' decoder assuming zero correlations:
+        % df/ds*I/(df/ds'*I*df/ds)
+        s0 = speedsFEF(speedsFEF==10);
+        sprefTemp = sp;
+        %     sprefTemp(sprefTemp < 1) = 1;
+        swidthTemp = sw;
+        %     swidthTemp(swidthTemp > 10) = 10;
+        df = -log2(s0./sprefTemp)./(s0.*sw*log(2)).*exp(log2(s0./sprefTemp).^2./(2*sw.^2));
+        uOpt = df*inv(eye(length(sprefTemp)))/(df*inv(eye(length(sprefTemp)))*df');
+        uOpt(uOpt<-0.05) = min(uOpt(uOpt>-0.05));
+        uOptNorm = uOpt/norm(uOpt);
+        
+        Atheory = [uOpt', ones(size(uOpt'))];
+end
+
+% Normalize 
+Atheory = Atheory./vecnorm(Atheory);
+
+% Construct MT to FEF weight matrix
+expansionDef = 'bestfit';
+switch expansionDef
+    case 'bestfit'
+        vOpt = inv(Atheory'*Atheory)*Atheory'*BetaRRR;
+        for ai = 1:size(Atheory,2)
+            Wopt(:,:,ai) = Atheory(:,ai)*vOpt(ai,:);
+        end
+        BetaTheory = sum(Wopt,3);
+    case 'data'
+        for ai = 1:size(Atheory,2)
+            for ri = 1 %:rankN
+                tempB(:,:,ri) = Atheory(:,ai)*Vhat(:,ri)';
+            end
+            B(:,:,ai) = sum(tempB,3);
+        end
+        BetaTheory = sum(B,3);
+end
+YtheoryTrain = Xfit*BetaTheory;
+YtheoryTest = Xtest*BetaTheory;
+
+Rtheory = nan(size(RtoFit));
+for si = 1:length(speedsFEF)
+    for ci = 1:length(cohsFEF)
+        if trainCondition(si,ci)
+            temp = ismember(conditions,[speedsFEF(si),cohsFEF(ci),trainCondition(si,ci)],'rows');
+            Rtheory(:,si,ci,:) = YtheoryTrain(temp,:);
+        else
+            temp = ismember(conditionsTest,[speedsFEF(si),cohsFEF(ci),trainCondition(si,ci)],'rows');
+            Rtheory(:,si,ci,:) = YtheoryTest(temp,:);
+        end
+    end
+end
+rvals = corrcoef([Ytest YtheoryTest]);
+RhatCCTheory = diag(rvals(size(Ytest,2)+1:end,1:size(Ytest,2)));
+RhatZTheory = 0.5*log( (1+RhatCCTheory)./(1-RhatCCTheory) );
+
+% Compute output along theoretical channels
+for ri = 1:size(Atheory,2)
+    for ci = 1:length(cohsFEF)
+        for si = 1:length(speedsFEF)
+            theoreticalOutputs(:,si,ci,ri) = inputs_z(:,:,si,ci)'*Atheory(:,ri);
+        end
+    end
+end
+
 %% Analysis of variance
 % Signal dependent noise model: Gaussian of the form exp(-w^2/(2*m*ln(s^2))/sqrt(2*pi*m*ln(s^2))
-rankN = 1;
+% rankN = 5;
 mhat = sqrt(sum(A(spref2 >= 1,1:rankN).^2./log(spref2(spref2>=1)'.^2),[1,2])./length(spref2(spref2>=1))); % ML estimator of m 
 LLsignal_dependent_noise = sum( -log( sqrt(2*pi*log(spref2(spref2>=1)'.^2)) ) -...
     log(mhat) - A(spref2>=1,1:rankN).^2./(2*mhat^2*log(spref2(spref2>=1)'.^2)) ,[1,2]);
@@ -288,29 +386,35 @@ if plotOpts.On
     %% Reduced rank regression analysis
     figure
     for ci = 1:length(cohsFEF)
-        subplot(1,length(cohsFEF),ci)
         for si = 1:length(speedsFEF)
+            subplot(length(cohsFEF),length(cohsFEF),si+(ci-1)*length(cohsFEF))
             plot(squeeze(RtoFit_z(:,si,ci,:)),squeeze(Rhat(:,si,ci,:)),'o','Color',speedColors(si,:))
             hold on
+            plotUnity;
+            xlabel('FEF data (z-score)')
+            ylabel('RRR prediction (z-score)')
         end
-        plotUnity;
-        xlabel('FEF data (z-score)')
-        ylabel('RRR prediction (z-score)')
         
     end
     
     figure
-    plot(RhatZ,'o')
+    plot(RhatZ(zvalSort),'o')
     hold on
+    plot(RhatZTheory(zvalSort),'o')
     plotHorizontal(2.34/sqrt(size(Ytest,1)-size(Xfit,2)));       % Approximate pval of 0.01
     xlabel('FEF neuron #')
     ylabel('Fisher transformed r-values')
     
     %%
     figure('Name','MT input channels found by RRR','Position',[674 218 1837 1104])
-    for ri = 1:rankN
+    if rankN < 5
+        rankMax = rankN;
+    else
+        rankMax = 5;
+    end
+    for ri = 1:rankMax
         for ci = 1:length(cohsFEF)
-            subplot(rankN,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
+            subplot(rankMax,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
             for si = 1:length(speedsFEF)
                 MToutputChan(:,si,ci,ri) = inputs_z(:,:,si,ci)'*Beta*Vhat(:,ri);
                 plot(MToutputChan(:,si,ci,ri),'Color',speedColors(si,:))
@@ -322,15 +426,16 @@ if plotOpts.On
         end
         
         for ci = 1:length(cohsFEF)
-            subplot(rankN,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
+            subplot(rankMax,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
             ylim([min(tempLims(:,1)) max(tempLims(:,2))])
         end
     end
     
     %% Weights along 1st reduced rank dimension as a function of preferred speed
     figure
+    ranks = 1:4;
     subplot(1,2,1)
-    semilogx(spref2(spref2>=1),A(spref2>=1,1:rankN),'o')
+    semilogx(spref2(spref2>=1),A(spref2>=1,ranks),'o')
     hold on
     s = logspace(log10(speedPrefOpts.lb(1)),log10(speedPrefOpts.ub(1)),30);
     if LLsignal_dependent_noise > LLstandard_noise
@@ -349,6 +454,282 @@ if plotOpts.On
     ylabel('Weight')
     
     subplot(1,2,2)
-    plot(Vhat(:,1:rankN),'o')
+    plot(Vhat(zvalSort,ranks),'o')
     
+    %% Compare output channels to behavioral gain
+    if compToBehavioralGain.On
+        temp = load(compToBehavioralGain.file,'initGain');
+        initGain = temp.initGain;
+        
+        figure('Name','MT output vs. gain')
+        if rankN < 5
+            rankMax = rankN;
+        else
+            rankMax = 5;
+        end
+        for ri = 1:rankMax
+                subplot(1,rankMax,ri)
+                for si = 1:length(speedsFEF)                    
+                    outputTemp = squeeze(nanmean(MToutputChan(t >= 700 & t <= 800,si,:,ri),1));
+                    plot(squeeze(initGain(si,:,3)),outputTemp,...
+                        'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                    hold on
+                    outputTemp = squeeze(nanmean(MToutputChan(t >= 100 & t <= 200,si,:,ri),1));
+                    plot(squeeze(initGain(si,:,2)),outputTemp,...
+                        'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                end
+                xlabel('Behavioral gain (unitless)')
+                ylabel(['MT input along dimension ' num2str(ri)])
+        end
+        
+        
+        figure('Name','Theoretical MT output vs. gain')
+        for ri = 1:size(Atheory,2)
+                subplot(1,size(Atheory,2),ri)
+                for si = 1:length(speedsFEF)                    
+                    outputTemp = squeeze(nanmean(theoreticalOutputs(t >= 700 & t <= 800,si,:,ri),1));
+                    plot(squeeze(initGain(si,:,3)),outputTemp,...
+                        'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                    hold on
+                    outputTemp = squeeze(nanmean(theoreticalOutputs(t >= 100 & t <= 200,si,:,ri),1));
+                    plot(squeeze(initGain(si,:,2)),outputTemp,...
+                        'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                end
+                xlabel('Behavioral gain (unitless)')
+                ylabel(['MT input along dimension ' num2str(ri)])
+        end
+    end
+    
+    %% Plot reconstructed firing rates projection on gain dimension
+    if compToBehavioralGain.On
+        temp = load(compToBehavioralGain.file,'BinitOrth');
+        BinitOrth = temp.BinitOrth;
+        sz = size(Rhat);
+        pInit = reshape((BinitOrth(:,1:4)'*reshape(Rhat,[prod(sz(1:3)),prod(sz(end))])')',[sz(1),sz(2),sz(3),4]);
+        pInitTheory = reshape((BinitOrth(:,1:4)'*reshape(Rtheory,[prod(sz(1:3)),prod(sz(end))])')',[sz(1),sz(2),sz(3),4]);
+        
+        figure('Name','Predicted response along targeted dimensions','Position',[63 169 1606 1079])
+        subplot(3,1,1)
+        for speedi = 1:length(speedsFEF)
+            for cohi = 1:length(cohsFEF)
+                plot(t,pInit(:,speedi,cohi,1),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                hold on
+            end
+        end
+        axis tight
+        ax(1,:) = axis;
+        xlabel('Time from motion onset (ms)')
+        ylabel('Speed related activity (a.u.)')
+        
+        subplot(3,1,2)
+        for cohi = 1:length(cohsFEF)
+            for speedi = 1:length(speedsFEF)
+                plot(t,pInit(:,speedi,cohi,2),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                hold on
+            end
+        end
+        axis tight
+        ax(1,:) = axis;
+        xlabel('Time from motion onset (ms)')
+        ylabel('Coherence related activity (a.u.)')
+        
+        subplot(3,1,3)
+        for cohi = 1:length(cohsFEF)
+            for speedi = 1:length(speedsFEF)
+                plot(t,pInit(:,speedi,cohi,3),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                hold on
+            end
+        end
+        axis tight
+        ax(1,:) = axis;
+        xlabel('Time from motion onset (ms)')
+        ylabel('Gain related activity (a.u.)')
+        
+        
+        dimNames = {'Speed','Coherence','Gain','Offset'};
+        gvth = figure('Name',['Behavioral gain vs activity on targeted dimension (initCoh)'],'Position',[1956 59 570 1263]);
+        for targetedDim = 1:3
+            tempData = [];
+            subplot(3,1,targetedDim)
+            for si = 1:length(speedsFEF)
+                initRatesTemp = squeeze(nanmean(pInit(t >= 700 & t <= 800,si,:,targetedDim),1));
+                plot(squeeze(initGain(si,:,3)),initRatesTemp,...
+                    'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                hold on
+                tempData = [tempData; initGain(si,:,3)',initRatesTemp(:)];
+                initRatesTemp = squeeze(nanmean(pInit(t >= 100 & t <= 200,si,:,targetedDim),1));
+                plot(squeeze(initGain(si,:,2)),initRatesTemp,...
+                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];
+            end
+            gain_projection_cc = corrcoef(tempData(:,1),tempData(:,2));
+            axis square
+            ax = axis;
+            text(0.9*ax(2),0.9*ax(4),['R^2 = ' num2str(gain_projection_cc(1,2).^2)])
+            xlabel('Behavioral gain (unitless)')
+            ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+        end
+        
+        figure('Name','Theory-based response along targeted dimensions','Position',[63 169 1606 1079])
+        subplot(3,1,1)
+        for speedi = 1:length(speedsFEF)
+            for cohi = 1:length(cohsFEF)
+                plot(t,pInitTheory(:,speedi,cohi,1),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                hold on
+            end
+        end
+        axis tight
+        ax(1,:) = axis;
+        xlabel('Time from motion onset (ms)')
+        ylabel('Speed related activity (a.u.)')
+        
+        subplot(3,1,2)
+        for cohi = 1:length(cohsFEF)
+            for speedi = 1:length(speedsFEF)
+                plot(t,pInitTheory(:,speedi,cohi,2),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                hold on
+            end
+        end
+        axis tight
+        ax(1,:) = axis;
+        xlabel('Time from motion onset (ms)')
+        ylabel('Coherence related activity (a.u.)')
+        
+        subplot(3,1,3)
+        for cohi = 1:length(cohsFEF)
+            for speedi = 1:length(speedsFEF)
+                plot(t,pInitTheory(:,speedi,cohi,3),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                hold on
+            end
+        end
+        axis tight
+        ax(1,:) = axis;
+        xlabel('Time from motion onset (ms)')
+        ylabel('Gain related activity (a.u.)')
+        
+        
+        dimNames = {'Speed','Coherence','Gain','Offset'};
+        gvth2 = figure('Name',['Behavioral gain vs activity on targeted dimension (initCoh)'],'Position',[1956 59 570 1263]);
+        for targetedDim = 1:3
+            tempData = [];
+            subplot(3,1,targetedDim)
+            for si = 1:length(speedsFEF)
+                initRatesTemp = squeeze(nanmean(pInitTheory(t >= 700 & t <= 800,si,:,targetedDim),1));
+                plot(squeeze(initGain(si,:,3)),initRatesTemp,...
+                    'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                hold on
+                tempData = [tempData; initGain(si,:,3)',initRatesTemp(:)];
+                initRatesTemp = squeeze(nanmean(pInitTheory(t >= 100 & t <= 200,si,:,targetedDim),1));
+                plot(squeeze(initGain(si,:,2)),initRatesTemp,...
+                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];
+            end
+            gain_projection_cc = corrcoef(tempData(:,1),tempData(:,2));
+            axis square
+            ax = axis;
+            text(0.9*ax(2),0.9*ax(4),['R^2 = ' num2str(gain_projection_cc(1,2).^2)])
+            xlabel('Behavioral gain (unitless)')
+            ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+        end
+    end
+    
+    %% Relationship to Functional topography
+    if compToBehavioralGain.On
+        temp = load(compToBehavioralGain.file,'NumClusters','Y','idx','centInd');
+        NumClusters = temp.NumClusters;
+        for typei = 1:NumClusters
+            typeAngle = wrapTo2Pi(atan2(temp.Y(temp.centInd == typei,2)-mean(temp.Y(:,2)),temp.Y(temp.centInd == typei,1)-mean(temp.Y(:,1))))/2+pi;
+            hue = typeAngle / (2 * pi);
+            saturation = ones(size(hue));
+            value = ones(size(hue));
+            hsv = cat(3, hue, saturation, value);
+            colorWheel(typei,:) = hsv2rgb(hsv);
+        end
+        colorWheel(colorWheel > 1) = 1;
+        colorWheel(colorWheel < 0) = 0;
+        
+        
+        figure
+        ranks = 1:4;
+        neuronN = 1:size(Vhat,1);
+        for ri = 1:length(ranks)
+            subplot(1,length(ranks),ri)
+            for typei = 1:NumClusters
+                plot(neuronN(temp.idx == typei),Vhat(temp.idx == typei,ri),'o',...
+                    'Color',colorWheel(typei,:),'MarkerFaceColor',colorWheel(typei,:))
+                hold on
+            end
+            xlabel('FEF neuron number')
+            ylabel(['Loading in dim ' num2str(ri)])
+        end
+        
+        figure
+        subplot(1,2,1)
+        scatter(temp.Y(:,1),temp.Y(:,2),50,RhatZ,'filled')
+        cax(1,:) = caxis;
+        xlabel('tSNE_1')
+        ylabel('tSNE_2')
+        
+        subplot(1,2,2)
+        scatter(temp.Y(:,1),temp.Y(:,2),50,RhatZTheory,'filled')
+        cax(2,:) = caxis;
+        xlabel('tSNE_1')
+        ylabel('tSNE_2')
+        
+        subplot(1,2,1)
+        caxis([min(cax(:,1)) max(cax(:,2))])
+        subplot(1,2,2)
+        caxis([min(cax(:,1)) max(cax(:,2))])
+        
+        figure
+        for typei = 1:NumClusters
+            subplot(3,NumClusters,typei)
+            for si = 1:length(speedsFEF)
+                for ci = 1:length(cohsFEF)
+                    plot(t,nanmean(RtoFit(:,si,ci,temp.idx==typei),4)*1000,...
+                        'Color',[speedColors(si,:) cohsFEF(ci)/100])
+                    hold on
+                end
+            end
+            xlabel('Time from motion onset (ms)')
+            ylabel('sp/s')
+            
+            subplot(3,NumClusters,NumClusters+typei)
+            imagesc(BetaRRR(sortInd,temp.idx==typei))
+            ylabel('MT unit (sorted by speed pref)')
+            xlabel('FEF unit in cluster')
+            
+            subplot(3,NumClusters,2*NumClusters+typei)
+            Atemp = Beta(:,temp.idx==typei)*Vhat(temp.idx==typei,:);
+            semilogx(spref2,Atemp(sortInd,1),'o')
+            ylabel('MT unit weight')
+            xlabel('speed preference (deg/s)')
+        end
+        
+        
+        figure
+        for typei = 1:NumClusters
+            subplot(3,NumClusters,typei)
+            for si = 1:length(speedsFEF)
+                for ci = 1:length(cohsFEF)
+                    plot(t,nanmean(Rtheory(:,si,ci,temp.idx==typei),4)*1000,...
+                        'Color',[speedColors(si,:) cohsFEF(ci)/100])
+                    hold on
+                end
+            end
+            xlabel('Time from motion onset (ms)')
+            ylabel('sp/s')
+            
+            subplot(3,NumClusters,NumClusters+typei)
+            imagesc(BetaTheory(sortInd,temp.idx==typei))
+            ylabel('MT unit (sorted by speed pref)')
+            xlabel('FEF unit in cluster')
+            
+            subplot(3,NumClusters,2*NumClusters+typei)
+            Atemp = BetaTheory(:,temp.idx==typei)*Vhat(temp.idx==typei,:);
+            semilogx(spref2,Atemp(sortInd,1:size(Atheory,2)),'o')
+            ylabel('MT unit weight')
+            xlabel('speed preference (deg/s)')
+        end
+    end
 end

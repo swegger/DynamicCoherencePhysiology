@@ -5,12 +5,16 @@
 %%
 
 %% ar initialCoh pertrubation
+detectPoorPursuit.On = true;
+detectPoorPursuit.threshold = 1.5;
 [init,gain] = initialCohPertBehavioralAnalysis('ar','dcpObjectsFile','dcpObjectsPertTemp',...
-    'saveResults',true','saveFigures',false);
+    'detectPoorPursuit',detectPoorPursuit,'saveResults',true,'saveFigures',true);
 
 %% fr initialCoh perturbation
+detectPoorPursuit.On = true;
+detectPoorPursuit.threshold = 1.5;
 [init,gain] = initialCohPertBehavioralAnalysis('fr','dcpObjectsFile','dcpObjectsPert20230929',...
-    'saveResults',true','saveFigures',false);
+    'detectPoorPursuit',detectPoorPursuit,'saveResults',true,'saveFigures',true);
 
 %% ar initialCoh
 

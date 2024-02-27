@@ -16,13 +16,15 @@ Parser = inputParser;
 
 addParameter(Parser,'dcpObjectFile','dcpObjects20210406.mat')
 addParameter(Parser,'countWin',[100 200])
+addParameter(Parser,'baselineWin',[-50,50])
 addParameter(Parser,'win',[-50 250])
 addParameter(Parser,'dirs',linspace(0,315,8))
 addParameter(Parser,'chanMap',[7 1; 6 2; 5 3; 4 4; 3 5; 2 6; 1 7; 0 8; 23 9; 22 10; 21 11; 20 12; 19 13; 18 14; 17 15; 16 16; 15 17; 14 18; 13 19; 12 20; 11 21; 10 22; 9 23; 8 24])
 addParameter(Parser,'sampleRate',40)
 addParameter(Parser,'dirColors',dirColors_default)
 addParameter(Parser,'boxCarWidth',30)
-addParameter(Parser,'rateCutoff',10);
+addParameter(Parser,'checkUnitType',false)
+addParameter(Parser,'rateCutoff',10)
 addParameter(Parser,'cutWindow',[1 1501]);
 
 
@@ -30,11 +32,13 @@ parse(Parser,varargin{:})
 
 dcpObjectFile = Parser.Results.dcpObjectFile;
 countWin = Parser.Results.countWin;
+baselineWin = Parser.Results.baselineWin;
 win = Parser.Results.win;
 dirs = Parser.Results.dirs;
 chanMap = Parser.Results.chanMap;
 dirColors = Parser.Results.dirColors;
 boxCarWidth = Parser.Results.boxCarWidth;
+checkUnitType = Parser.Results.checkUnitType;
 rateCutoff = Parser.Results.rateCutoff;
 cutWindow = Parser.Results.cutWindow;
 
@@ -46,6 +50,7 @@ load(dcpObjectFile);
 passCutoff = nan(1000,1);
 Rinit = nan(length(win(1):win(2)),200,length(dirs),1000);
 counts = nan(200,length(dirs),1000);
+baselineCounts = nan(200,length(dirs),1000);
 locations = nan(1000,3);
 cellID = nan(1000,100,3);
 
@@ -55,6 +60,7 @@ for filei = 1:length(dcp)
 
     % Add probe info
     dcp{filei} = addProbeInfo(dcp{filei});
+    dcp{filei} = tableImport(dcp{filei});
 
     % Dir pref data
     dirPref = dirPrefObj(dcp{filei}.sname,dcp{filei}.datapath);
@@ -81,7 +87,12 @@ for filei = 1:length(dcp)
 %             eInit = nanmean(e(dirPref.eye_t >= initWin(1) & dirPref.eye_t <= initWin(2),:),1);
             
             % Get data for each neuron
-            for uniti = 1:length(dirPref.unitIndex)
+            if checkUnitType && isprop(dcp{filei},'unitTypes')
+                unitInd = find(strcmp(dcp{filei}.unitTypes,'good'));
+            else
+                unitInd = 1:length(dirPref.unitIndex);
+            end
+            for uniti = unitInd
                 
                 for di = 1:length(dirs)
                     [~,condLogical] = trialSort(dirPref,dirs(di),NaN,NaN);
@@ -91,7 +102,10 @@ for filei = 1:length(dcp)
                 
                 countsTemp = dirConditionedCounts(dirPref,'dirs',dirs,'win',countWin);
                 counts(1:size(countsTemp,1),:,indx) = countsTemp(:,:,uniti);
-
+                
+                countsTemp = dirConditionedCounts(dirPref,'dirs',dirs,'win',baselineWin);
+                baselineCounts(1:size(countsTemp,1),:,indx) = countsTemp(:,:,uniti);
+                
                 for j = 1:length(dirPref.unitIndex)
                     cellID(indx,j,1) = filei;
                     cellID(indx,j,2) = dirPref.unitIndex(uniti);
@@ -134,18 +148,26 @@ end
 
 Rinit = Rinit(:,:,:,1:indx-1);
 counts = counts(:,:,1:indx-1);
+baselineCounts = baselineCounts(:,:,1:indx-1);
 passCutoff = logical(passCutoff(1:indx-1));
 cellID = cellID(1:indx-1,:,:);
 locations = locations(1:indx-1,:);
 
 %% Remove data that doesn't pass cutoff
 counts = counts(:,:,passCutoff);
+baselineCounts = baselineCounts(:,:,passCutoff);
 Rinit = Rinit(:,:,:,passCutoff);
 cellID = cellID(passCutoff,:,:);
 locations = locations(passCutoff,:);
 
+locations(locations(:,3) < -2e4) = NaN;
+
 %% Find mean spike counts
 mCounts = nanmean(counts,1);
+
+%% direction index
+DI = (max(mCounts,[],2) - min(mCounts,[],2))./(max(mCounts,[],2) + min(mCounts,[],2));
+DI2 = (max(mCounts,[],2) - min(mCounts,[],2))./(max(mCounts,[],2));
 
 %% Find preferred direction
 [~,maxInd] = max(mCounts,[],2);
@@ -175,18 +197,53 @@ mask(mask ~= 1) = NaN;
 distances = mask.*distances;
 
 %% Direction responses of example neuron
-exIndex = [67, 186];
+switch dirPref.sname
+    case 'ar'
+        exIndex = [67, 186];
+    case 'fr'
+        exIndex = [109, 20];
+end
 cellID2 = squeeze(cellID(:,1,1:2));
 listIndex = find(ismember(cellID2, exIndex, 'rows'));
 figure('Name',['Cell ' num2str(exIndex)],'Position',[312 294 993 960])
 subplot(1,2,1)
 for di = 1:length(dirs)
-    plot(win(1):win(2),nanmean(Rinit(:,:,di,listIndex),2),'Color',dirColors(di,:))
+    plot(win(1):win(2),nanmean(Rinit(:,:,di,listIndex),2)*1000,'Color',dirColors(di,:))
     hold on
 end
+xlabel('Time from motion onset (ms)')
+ylabel('Spikes/s')
+title(['Cell ' num2str(exIndex)])
+ax = axis;
+text((ax(2)-ax(1))*.05+ax(1),(ax(4)-ax(3))*.9+ax(3),...
+    [dcp{exIndex(1)}.datapath(end-11:end) '.' num2str(exIndex(2))])
 
 subplot(1,2,2)
-polar(dirs*pi/180,nanmean(counts(:,:,listIndex),1)','o-')
+thetas = linspace(-pi,pi,60);
+polarplot(thetas,...
+    nanmean(baselineCounts(:,:,listIndex),[1,2])'*1000/(baselineWin(2)-baselineWin(1))+ones(size(thetas))*1.96*nanstd(baselineCounts(:,:,listIndex),[],[1,2])/sqrt(sum(~isnan(baselineCounts(:,:,listIndex)),[1,2]))*1000/(baselineWin(2)-baselineWin(1)),...
+    'k:')
+hold on
+polarplot(thetas,...
+    nanmean(baselineCounts(:,:,listIndex),[1,2])'*1000/(baselineWin(2)-baselineWin(1))-ones(size(thetas))*1.96*nanstd(baselineCounts(:,:,listIndex),[],[1,2])/sqrt(sum(~isnan(baselineCounts(:,:,listIndex)),[1,2]))*1000/(baselineWin(2)-baselineWin(1)),...
+    'k:')
+for di = 1:length(dirs)
+    polarplot(dirs(di)*pi/180,nanmean(counts(:,di,listIndex),1)'*1000/(countWin(2)-countWin(1)),'o','Color',dirColors(di,:),'MarkerFaceColor',dirColors(di,:))
+end
+countstemp = nanmean(counts(:,:,listIndex),1)*1000/(countWin(2)-countWin(1));
+polarplot([dirs; dirs(1)]*pi/180,[countstemp countstemp(1)]','k-')
+
+%% Direction preference and index distribution
+figure('Name','Direction index distribution')
+subplot(1,2,1)
+polarhistogram(preferredDirection*pi/180,linspace(-pi/8,2*pi-pi/8,9))
+% xlabel('Preferred direction')
+% ylabel('Number of neurons')
+
+subplot(1,2,2)
+histogram(DI,linspace(0,1,100));
+xlabel('Direction index')
+ylabel('Number of neurons')
 
 %% Topography of directions
 for di = 1:length(dirs)
@@ -248,4 +305,39 @@ for i = 1:length(X)
     histogram(local,-202.5:45:202.5)
     xlabel('Difference in direction preferrence (deg)')
     ylabel(['Neurons within ' num2str(X(i)*1000) ' um'])
+end
+
+%% Plot direction preferences of neurons
+for neuroni = 1:size(Rinit,4)
+    cellID2 = squeeze(cellID(:,1,1:2));
+    figure('Name',['Cell ' num2str(cellID2(neuroni,:))],'Position',[312 294 993 960])
+    subplot(1,2,1)
+    for di = 1:length(dirs)
+        plot(win(1):win(2),nanmean(Rinit(:,:,di,neuroni),2)*1000,'Color',dirColors(di,:))
+        hold on
+    end
+    xlabel('Time from motion onset (ms)')
+    ylabel('Spikes/s')
+    title(['Cell ' num2str(cellID2(neuroni,:))])
+    ax = axis;
+    text((ax(2)-ax(1))*.05+ax(1),(ax(4)-ax(3))*.9+ax(3),...
+        [dcp{cellID2(neuroni,1)}.datapath(end-11:end) '.' num2str(cellID2(neuroni,2))])
+    
+    subplot(1,2,2)
+    thetas = linspace(-pi,pi,60);
+    polarplot(thetas,...
+        ones(size(thetas))*nanmean(baselineCounts(:,:,neuroni),[1,2])'*1000/(baselineWin(2)-baselineWin(1))+1.96*nanstd(baselineCounts(:,:,neuroni),[],[1,2])/sqrt(sum(~isnan(baselineCounts(:,:,neuroni)),[1,2]))*1000/(baselineWin(2)-baselineWin(1)),...
+        'k:')
+    hold on
+    polarplot(thetas,...
+        ones(size(thetas))*nanmean(baselineCounts(:,:,neuroni),[1,2])'*1000/(baselineWin(2)-baselineWin(1))-1.96*nanstd(baselineCounts(:,:,neuroni),[],[1,2])/sqrt(sum(~isnan(baselineCounts(:,:,neuroni)),[1,2]))*1000/(baselineWin(2)-baselineWin(1)),...
+        'k:')
+    for di = 1:length(dirs)
+        polarplot(dirs(di)*pi/180,nanmean(counts(:,di,neuroni),1)'*1000/(countWin(2)-countWin(1)),...
+            'o','Color',dirColors(di,:),'MarkerFaceColor',dirColors(di,:))
+    end
+    countstemp = nanmean(counts(:,:,neuroni))*1000/(countWin(2)-countWin(1));
+    polarplot([dirs; dirs(1)]*pi/180,[countstemp countstemp(1)],'k-')
+    
+    input('Press enter to continue...')
 end
