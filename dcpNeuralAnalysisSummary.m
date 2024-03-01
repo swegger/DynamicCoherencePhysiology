@@ -96,8 +96,12 @@ trainCondition = [true, false, true;
                   true, false, true];
 compToBehavioralGain.On = true;
 compToBehavioralGain.file = '/home/seth/Projects/DynamicCoherencePhysiology/ar/initCohDynCohComp/neuronTyping_initCoh20240212.mat';
+theoretical.weightTheory = 'optimal';
+theoretical.expansionDef = 'bestfit';
 MTtoFEFregression(dcp,'speedPrefOpts',speedPrefOpts,'checkMTFit',false,'trainCondition',trainCondition,'rankN',80,...
-    'compToBehavioralGain',compToBehavioralGain);
+    'compToBehavioralGain',compToBehavioralGain,'tWIn',[-100 100],...
+    'opponentMT',false,'directionsMT',0,...
+    'theoretical',theoretical);
 
 %% fr MT to FEF regression
 load('/home/seth/Projects/DynamicCoherencePhysiology/fr/dcpObjects/dcpObjects20230322.mat', 'dcp')
@@ -113,8 +117,27 @@ trainCondition = [true, false, true;
                   true, false, true];
 compToBehavioralGain.On = true;
 compToBehavioralGain.file = '/home/seth/Projects/DynamicCoherencePhysiology/fr/initCohDynCohComp/neuronTyping_initCoh20240212.mat';
+theoretical.weightTheory = 'optimal';
+theoretical.expansionDef = 'bestfit';
 MTtoFEFregression(dcp,'sourceDirectory','/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Frederick',...
     'speedPrefOpts',speedPrefOpts,'checkMTFit',false,'trainCondition',trainCondition,'rankN',80,...
-    'compToBehavioralGain',compToBehavioralGain);
+    'compToBehavioralGain',compToBehavioralGain,'tWIn',[-100 100],...
+    'opponentMT',false,'directionsMT',0,...
+    'theoretical',theoretical);
 
-%%
+%% ar MT to FEF integrator
+load('/home/seth/Projects/DynamicCoherencePhysiology/ar/dcpObjects/dcpObjects20210406.mat')
+speedPrefOpts.tWin = [40,120];
+speedPrefOpts.P0 = [16,1];
+speedPrefOpts.ub = [128 128];
+speedPrefOpts.lb = [1,0];
+speedPrefOpts.c = [10, 30, 70, 100];
+speedPrefOpts.s = NaN;
+speedPrefOpts.d = 0;
+trainCondition = [true, false, true;
+                  true, false, true;
+                  true, false, true];
+modelFEF = fitSimpleFEFmodelToNeurons(dcp,'speedPrefOpts',speedPrefOpts,...
+    'checkMTFit',false,'trainCondition',trainCondition,...
+    'tWIn',[-100 100],...
+    'opponentMT',false,'directionsMT',0);

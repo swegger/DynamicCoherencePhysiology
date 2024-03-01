@@ -17,6 +17,9 @@ trainCondition_default = [true, false, true;
                           true, false, true;
                           true, false, true];
 compToBehavioralGain_default.On = false;
+theoretical_default.weigthTheory = 'simple';
+theoretical_default.expansionDef = 'bestfit';
+
 %% Parse inputs
 Parser = inputParser;
 
@@ -40,6 +43,7 @@ addParameter(Parser,'speedPrefOpts',speedPrefOpts_default)
 addParameter(Parser,'zMeanWin',[-Inf,Inf])
 addParameter(Parser,'zSTDwin',[-Inf,Inf])
 addParameter(Parser,'compToBehavioralGain',compToBehavioralGain_default)
+addParameter(Parser,'theoretical',theoretical_default)
 addParameter(Parser,'plotOpts',plotOpts_default)
 
 parse(Parser,dcp,varargin{:})
@@ -64,6 +68,7 @@ speedPrefOpts = Parser.Results.speedPrefOpts;
 zMeanWin = Parser.Results.zMeanWin;
 zSTDwin = Parser.Results.zSTDwin;
 compToBehavioralGain = Parser.Results.compToBehavioralGain;
+theoretical = Parser.Results.theoretical;
 plotOpts = Parser.Results.plotOpts;
 
 %% Preliminary
@@ -296,8 +301,7 @@ A = A(sortInd,:);
 
 %% A theoretical treatment, rather than data driven
 
-weightTheory = 'simple';
-switch weightTheory
+switch theoretical.weightTheory
     case 'simple'
         % Simple, log2(spref) weighting
         Atheory = [(log2(sp)'-mean(log2(speedsFEF))) ones(size(sp'))];
@@ -322,8 +326,7 @@ end
 Atheory = Atheory./vecnorm(Atheory);
 
 % Construct MT to FEF weight matrix
-expansionDef = 'bestfit';
-switch expansionDef
+switch theoretical.expansionDef
     case 'bestfit'
         vOpt = inv(Atheory'*Atheory)*Atheory'*BetaRRR;
         for ai = 1:size(Atheory,2)
@@ -417,10 +420,10 @@ if plotOpts.On
             subplot(rankMax,length(cohsFEF),ci + (ri-1)*length(cohsFEF))
             for si = 1:length(speedsFEF)
                 MToutputChan(:,si,ci,ri) = inputs_z(:,:,si,ci)'*Beta*Vhat(:,ri);
-                plot(MToutputChan(:,si,ci,ri),'Color',speedColors(si,:))
+                plot(t,MToutputChan(:,si,ci,ri),'Color',speedColors(si,:))
                 hold on
             end
-            xlabel('Time from motion onset (steps)')
+            xlabel('Time from motion onset (ms)')
             ylabel(['Input along dimension#' num2str(ri)])
             tempLims(ci,:) = ylim;
         end
@@ -434,27 +437,30 @@ if plotOpts.On
     %% Weights along 1st reduced rank dimension as a function of preferred speed
     figure
     ranks = 1:4;
-    subplot(1,2,1)
-    semilogx(spref2(spref2>=1),A(spref2>=1,ranks),'o')
-    hold on
-    s = logspace(log10(speedPrefOpts.lb(1)),log10(speedPrefOpts.ub(1)),30);
-    if LLsignal_dependent_noise > LLstandard_noise
-        plot(s,mhat*sqrt(log(s.^2)),'r')
-        plot(s,-mhat*sqrt(log(s.^2)),'r')
+    for ri = 1:length(ranks)
+        subplot(length(ranks),2,1+(ri-1)*2)
+        semilogx(spref2(spref2>=1),A(spref2>=1,ranks(ri)),'o')
+        hold on
+        semilogx(sp(spref2>=1),Atheory(spref2>=1,1),'o')
+        s = logspace(log10(speedPrefOpts.lb(1)),log10(speedPrefOpts.ub(1)),30);
+        if LLsignal_dependent_noise > LLstandard_noise
+            plot(s,mhat*sqrt(log(s.^2)),'r')
+            plot(s,-mhat*sqrt(log(s.^2)),'r')
+        end
+        
+        plot(s,sigWeights*ones(length(s),1),'k')
+        plot(s,-sigWeights*ones(length(s),1),'k')
+        
+        xlim([speedPrefOpts.lb(1), speedPrefOpts.ub(1)])
+        ax = axis;
+        text(2,0.95*ax(4),['\delta LL = ' num2str(LLsignal_dependent_noise-LLstandard_noise)])
+        
+        xlabel('Preferred speed (deg/s)')
+        ylabel('Weight')
+        
+        subplot(length(ranks),2,2+(ri-1)*2)
+        plot(Vhat(zvalSort,ranks(ri)),'o')
     end
-    
-    plot(s,sigWeights*ones(length(s),1),'k')
-    plot(s,-sigWeights*ones(length(s),1),'k')
-    
-    xlim([speedPrefOpts.lb(1), speedPrefOpts.ub(1)])
-    ax = axis;
-    text(2,0.95*ax(4),['\delta LL = ' num2str(LLsignal_dependent_noise-LLstandard_noise)])
-    
-    xlabel('Preferred speed (deg/s)')
-    ylabel('Weight')
-    
-    subplot(1,2,2)
-    plot(Vhat(zvalSort,ranks),'o')
     
     %% Compare output channels to behavioral gain
     if compToBehavioralGain.On

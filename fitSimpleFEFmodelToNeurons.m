@@ -14,6 +14,9 @@ speedPrefOpts_default.lb = [0, 0];
 speedPrefOpts_default.c = NaN;
 speedPrefOpts_default.s = NaN;
 speedPrefOpts_default.d = 0;
+trainCondition_default = [true, false, true;
+                          true, false, true;
+                          true, false, true];
 
 %% Parse inputs
 Parser = inputParser;
@@ -28,6 +31,7 @@ addParameter(Parser,'opponentMT',false)
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'directions',[0 180])
+addParameter(Parser,'trainCondition',trainCondition_default)
 addParameter(Parser,'P0',NaN)
 addParameter(Parser,'ub',NaN)
 addParameter(Parser,'lb',NaN)
@@ -57,6 +61,7 @@ opponentMT= Parser.Results.opponentMT;
 speedsFEF = Parser.Results.speedsFEF;
 cohsFEF = Parser.Results.cohsFEF;
 directions = Parser.Results.directions;
+trainCondition = Parser.Results.trainCondition;
 P0 = Parser.Results.P0;
 ub = Parser.Results.ub;
 lb = Parser.Results.lb;
@@ -128,11 +133,11 @@ Rinit = Rinit(:,:,:,1:indx-1);
 passCutoff = logical(passCutoff(1:indx-1));
 cellID = cellID(1:indx-1,:,:);
 
-taccept = initCoh.neuron_t >= tWin(1) & initCoh.neuron_t <= tWin(2);
+% taccept = initCoh.neuron_t >= tWin(1) & initCoh.neuron_t <= tWin(2);
 
-Rinit = Rinit(taccept,:,:,:);
+%Rinit = Rinit(taccept,:,:,:);
 
-fef_t = initCoh.neuron_t(taccept);
+fef_t = initCoh.neuron_t;%(taccept);
 
 %% Remove data that doesn't pass cutoff
 Rinit = Rinit(:,:,:,passCutoff);
@@ -200,13 +205,13 @@ spref2 = spref(prod(any(isnan(inputs),2),[3,4])==0);
 
 % Prepare data for fitting
 [~,iFEF,iMT] = intersect(fef_t,mtNeuron_t);
-RtoFit = Rinit(iFEF,:,:,:);
+R = Rinit(iFEF,:,:,:);
 inputs = inputs(:,iMT,:,:);
 dt = mtNeuron_t(2)-mtNeuron_t(1);
 t = mtNeuron_t(iMT);
 inputs_z = (inputs-mean(inputs(:,t>zMeanWin(1) & t<=zMeanWin(2),:,:,:),[2,3,4]))./...
     std(inputs(:,t>zSTDwin(1) & t<=zSTDwin(2),:,:),[],[2,3,4]);
-RtoFit_z = (RtoFit-mean(RtoFit,[1,2,3]))./std(RtoFit,[],[1,2,3]);
+R_z = (R-mean(R,[1,2,3]))./std(R,[],[1,2,3]);
 
 %% Fit dynamic model
 if isa(weightPrior,'function_handle')
@@ -226,16 +231,24 @@ end
 if any(isnan(ub))
     ub = [tauUB/dt, 100, Inf*ones(1,size(inputs,1))];
 end
+
+taccept = t >= tWin(1) & t <= tWin(2);
+mask = ones(size(trainCondition));
+mask(~trainCondition) = NaN;
+
 % OPTIONS = optimset(@fmincon);
 % OPTIONS.MaxFunEvals = 3e10;
 % OPTIONS.MaxIterations = 1e10;
 OPTIONS = optimoptions('fmincon','MaxFunEvals',3e10,'MaxIterations',1e10);
-for neuroni = 1:size(RtoFit,4)
+for neuroni = 1:size(R,4)
     tic
-    disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(RtoFit,4))])
-    Rtemp = RtoFit_z(:,:,[1, length(cohsFEF)],neuroni);
+    disp(['Neuron ' num2str(neuroni) ' of ' num2str(size(R,4))])
+    Rtemp = R_z(taccept,:,:,neuroni);
+    Rtemp = Rtemp.*permute(mask,[3,1,2]);
+    inputsTemp = inputs_z(:,taccept,:,:);
+    inputsTemp = inputsTemp.*permute(mask,[3,4,1,2]);
     R0 = nanmean(Rtemp(1,:,:),[2,3]);
-    minimizer = @(P)minimizant(P,R0,inputs_z(:,:,:,[1,length(cohsFEF)]),Rtemp,lambdaRidge,W0);
+    minimizer = @(P)minimizant(P,R0,inputsTemp,Rtemp,lambdaRidge,W0);
     [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
     
     modelFEF.tau(neuroni) = P(1)*dt;
@@ -276,13 +289,13 @@ if plotOpts.On
 
     %% Fit quality
     figure
-    for neuroni = size(RtoFit,4)
-        tempFEF = RtoFit(:,:,:,neuroni);
+    for neuroni = size(R,4)
+        tempFEF = R(:,:,:,neuroni);
         test = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modeolFEF.dt,inputs);
         for ci = 1:length(cohsFEF)
             subplot(1,length(cohsFEF),ci)
             for si = 1:length(speedsFEF)
-                plot(tempFEF(:,si,ci)*1000,test(:,si,ci)*1000,'o','Color',speedColors(si,:))
+                plot(tempFEF(taccept,si,ci)*1000,test(taccept,si,ci)*1000,'o','Color',speedColors(si,:))
                 hold on
             end
         end
@@ -328,4 +341,4 @@ function out = minimizant(P,R0,inputs,R,lambda,W0)
     baseLine = P(2);
     W = P(3:end);
     Rest = SimpleFEFmodel(W,baseLine,R0,tau,inputs);
-    out = sum((R(:) - Rest(:)).^2) + lambda*sum((W-W0).^2);
+    out = nansum((R(:) - Rest(:)).^2) + lambda*nansum((W-W0).^2);
