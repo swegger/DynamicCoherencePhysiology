@@ -17,7 +17,7 @@ trainCondition_default = [true, false, true;
                           true, false, true;
                           true, false, true];
 compToBehavioralGain_default.On = false;
-theoretical_default.weigthTheory = 'simple';
+theoretical_default.weightTheory = 'simple';
 theoretical_default.expansionDef = 'bestfit';
 
 %% Parse inputs

@@ -17,7 +17,7 @@ speedPrefOpts_default.d = 0;
 trainCondition_default = [true, false, true;
                           true, false, true;
                           true, false, true];
-theoretical_default.weigthTheory = 'simple';
+theoretical_default.weightTheory = 'simple';
 theoretical_default.expansionDef = 'bestfit';
 
 %% Parse inputs
