@@ -17,6 +17,8 @@ speedPrefOpts_default.d = 0;
 trainCondition_default = [true, false, true;
                           true, false, true;
                           true, false, true];
+theoretical_default.weigthTheory = 'simple';
+theoretical_default.expansionDef = 'bestfit';
 
 %% Parse inputs
 Parser = inputParser;
@@ -46,6 +48,7 @@ addParameter(Parser,'zSTDwin',[-Inf,Inf])
 addParameter(Parser,'weightPrior',NaN)
 addParameter(Parser,'tauLB',NaN)
 addParameter(Parser,'tauUB',NaN)
+addParameter(Parser,'theoretical',theoretical_default)
 addParameter(Parser,'plotOpts',plotOpts_default)
 addParameter(Parser,'saveOpts',saveOpts_default)
 
@@ -76,6 +79,7 @@ zSTDwin = Parser.Results.zSTDwin;
 weightPrior = Parser.Results.weightPrior;
 tauLB = Parser.Results.tauLB;
 tauUB = Parser.Results.tauUB;
+theoretical = Parser.Results.theoretical;
 plotOpts = Parser.Results.plotOpts;
 saveOpts = Parser.Results.saveOpts;
 
@@ -154,43 +158,6 @@ mtResults = load(objectFile);
     'opponentMT',opponentMT,'sprefFromFit',sprefFromFit,'checkMTFit',checkMTFit,...
     'speedPrefOpts',speedPrefOpts);
 
-% MT = [];
-% spref = [];
-% for filei = 1:length(mt)
-%     disp(['File ' num2str(filei) ' of ' num2str(length(mt))])
-%     
-%     MTtemp = nan(length(mt{filei}.neuron_t),length(speeds),length(cohs));
-%     
-%     
-%     for si = 1:length(speeds)
-%         for ci = 1:length(cohs)
-%             [~,condLogical] = trialSort(mt{filei},0,speeds(si),NaN,cohs(ci));
-%             MTtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
-%         end
-%     end
-%     
-%     if sprefFromFit
-%         [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei});
-%         spref = [spref mu];
-%         
-%         if checkMTFit
-%             s = linspace(min(speeds)-0.1*min(speeds),max(speeds)*1.1,20);
-%             h = figure;
-%             semilogx(mt{filei}.speeds,normR,'o')
-%             hold on
-%             semilogx(s,speedTuning(mt{filei},s,mu,sig))
-%             ax = axis;
-%             text(ax(1),0.95*ax(4),['\mu = ' num2str(mu) ', \sig = ' num2str(sig)])
-%             input('Press enter to continue ')
-%             close(h);
-%         end
-%     else
-%         spref = [spref speeds(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100)) == ...
-%             max(nansum(MTtemp(mt{filei}.neuron_t >= 50 & mt{filei}.neuron_t <= 150,:,cohs == 100))))];
-%     end
-%     MT = cat(4,MT,MTtemp);
-% end
-
 mtNeuron_t = mtResults.mt{filei}.neuron_t;
 
 
@@ -200,6 +167,7 @@ mtNeuron_t = mtResults.mt{filei}.neuron_t;
 inputs = permute(interpolatedR,[4,1,2,3]);
 inputs = inputs(prod(any(isnan(inputs),2),[3,4])==0,:,:,:);
 spref2 = spref(prod(any(isnan(inputs),2),[3,4])==0);
+swidth2 = swidth(prod(any(isnan(inputs),2),[3,4])==0);
 
 %% Iterate across neurons and fit data
 
@@ -223,7 +191,8 @@ else
 end
 
 if any(isnan(P0))
-    P0 = [tauLB/dt,0.10,randn(1,size(inputs,1))/1000];
+%     P0 = [tauLB/dt,0,randn(1,size(inputs,1))/1000];
+    P0 = [tauLB/dt,0,(log2(spref2)-mean(log2(speedsFEF)))/1000];
 end
 if any(isnan(lb))
     lb = [tauLB/dt, -100, -Inf*ones(1,size(inputs,1))];
@@ -283,6 +252,75 @@ Weff = W./repmat(wmax,[1,size(W,2)]);
 
 % SVD
 [U,S,V] = svd(Weff);
+
+% Build matrices
+X = nan(size(inputs,2)*sum(trainCondition(:)),size(inputs,1));
+Y = nan(size(R_z,1)*sum(trainCondition(:)),size(R_z,4));
+conditions = nan(size(R_z,1)*sum(trainCondition(:)),2);
+
+idx = [1, 1];
+for si = 1:length(speedsFEF)
+    for ci = 1:length(cohsFEF)
+        X(idx(1):idx(1)+size(inputs,2)-1,:) = permute(inputs_z(:,:,si,ci),[2,1]);
+        Y(idx(2):idx(2)+size(R_z,1)-1,:) = squeeze(R_z(:,si,ci,:));
+        conditions(idx(2):idx(2)+size(R_z,1)-1,:) = repmat([speedsFEF(si) cohsFEF(ci)],[size(R_z,1),1]);
+        idx(1) = idx(1) + size(inputs,2);
+        idx(2) = idx(2) + size(R_z,1);
+    end
+end
+[Uhat,Shat,Vhat] = svd(Y,0);
+A = W*Vhat;
+
+%% A theoretical treatment, rather than data driven
+
+switch theoretical.weightTheory
+    case 'simple'
+        % Simple, log2(spref) weighting
+        Atheory = [(log2(spref2)'-mean(log2(speedsFEF))) ones(size(spref2'))];
+        
+    case 'optimal'
+        % More complicated: 'optimal' decoder assuming zero correlations:
+        % df/ds*I/(df/ds'*I*df/ds)
+        s0 = speedsFEF(speedsFEF==10);
+        sprefTemp = spref2;
+        %     sprefTemp(sprefTemp < 1) = 1;
+        swidthTemp = swidth2;
+        %     swidthTemp(swidthTemp > 10) = 10;
+        df = -log2(s0./sprefTemp)./(s0.*sw*log(2)).*exp(log2(s0./sprefTemp).^2./(2*sw.^2));
+        uOpt = df*inv(eye(length(sprefTemp)))/(df*inv(eye(length(sprefTemp)))*df');
+        uOpt(uOpt<-0.05) = min(uOpt(uOpt>-0.05));
+        uOptNorm = uOpt/norm(uOpt);
+        
+        Atheory = [uOpt', ones(size(uOpt'))];
+end
+
+% Normalize 
+Atheory = Atheory./vecnorm(Atheory);
+
+% Construct MT to FEF weight matrix
+switch theoretical.expansionDef
+    case 'bestfit'
+        vOpt = inv(Atheory'*Atheory)*Atheory'*W;
+        for ai = 1:size(Atheory,2)
+            Wopt(:,:,ai) = Atheory(:,ai)*vOpt(ai,:);
+        end
+        WTheory = sum(Wopt,3);
+    case 'data'
+        for ai = 1:size(Atheory,2)
+            for ri = 1 %:rankN
+                tempB(:,:,ri) = Atheory(:,ai)*Vhat(:,ri)';
+            end
+            B(:,:,ai) = sum(tempB,3);
+        end
+        WTheory = sum(B,3);
+end
+
+%% Make predictions
+for neuroni = size(R_z,4)
+    Rhat(:,:,:,neuroni) = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modeolFEF.dt,inputs);
+    RhatTheory(:,:,:,neuroni) = SimpleFEFmodel(WTheory(:,neuroni)',0,modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modelFEF.dt,inputs_z);
+end
+
 
 %% Plotting
 if plotOpts.On
