@@ -317,7 +317,7 @@ end
 
 %% Make predictions
 for neuroni = size(R_z,4)
-    Rhat(:,:,:,neuroni) = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modeolFEF.dt,inputs);
+    Rhat(:,:,:,neuroni) = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modelFEF.dt,inputs);
     RhatTheory(:,:,:,neuroni) = SimpleFEFmodel(WTheory(:,neuroni)',0,modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modelFEF.dt,inputs_z);
 end
 
@@ -329,7 +329,7 @@ if plotOpts.On
     figure
     for neuroni = size(R,4)
         tempFEF = R(:,:,:,neuroni);
-        test = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modeolFEF.dt,inputs);
+        test = SimpleFEFmodel(modelFEF.W(:,neuroni)',modelFEF.baseLine(neuroni),modelFEF.R0(neuroni),modelFEF.tau(neuroni)/modelFEF.dt,inputs);
         for ci = 1:length(cohsFEF)
             subplot(1,length(cohsFEF),ci)
             for si = 1:length(speedsFEF)
