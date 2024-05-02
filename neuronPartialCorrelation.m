@@ -20,6 +20,7 @@ addParameter(Parser,'tWin',[750 750])
 addParameter(Parser,'tGainMeasurement',750)
 addParameter(Parser,'gainFitInd',1)
 addParameter(Parser,'saveFigures',false)
+addParameter(Parser,'saveResults',false)
 
 parse(Parser,dcp,varargin{:})
 
@@ -34,6 +35,7 @@ tWin = Parser.Results.tWin;
 tGainMeasurement = Parser.Results.tGainMeasurement;
 gainFitInd = Parser.Results.gainFitInd;
 saveFigures = Parser.Results.saveFigures;
+saveResults = Parser.Results.saveResults;
 
 %% Preliminary
 [Cohs, Spds] = meshgrid(cohs,speeds);
@@ -262,11 +264,12 @@ end
 
 %% Plot average of neurons that favor model 2 over model 1
 gradAveModel1_vs_Model2 = figure('Name','Grand average of model 2 favored cells','Position', [445 100+uniti*2 1784 420]);
-grandAve = nanmean(1000*Rinit(:,:,:,mFavored{2,1}),4);
+grandAve = nanmean(1000*Rinit,4);
+grandAveFavored = nanmean(1000*Rinit(:,:,:,mFavored{2,1}),4);
 for si = 1:length(speeds)
     axh2(si) = subplot(1,length(speeds),si);
     for ci = 1:length(cohs)
-        plot(initCoh.neuron_t,grandAve(:,si,ci),'Color',(100-cohs(ci))/100*ones(1,3))
+        plot(initCoh.neuron_t,grandAveFavored(:,si,ci),'Color',(100-cohs(ci))/100*ones(1,3))
         hold on
     end
     axis tight
@@ -286,9 +289,11 @@ grandAveGainRepresenation = figure('Name',...
 for gi = 1:length(tGainMeasurement)
     subplot(1,length(tGainMeasurement)+1,gi)
     for si = 1:length(speeds)
-        plot(gains(si,:,gi),squeeze(grandAve(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
+        plot(gains(si,:,gi),squeeze(grandAveFavored(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
             'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
         hold on
+        plot(gains(si,:,gi),squeeze(grandAve(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
+            'o-','Color',speedColors(si,:))
     end
     xlabel('Behavioral gain (unitless)')
     ylabel('Mean spikes/s')
@@ -297,9 +302,11 @@ end
 
 subplot(1,length(tGainMeasurement)+1,length(tGainMeasurement)+1)
 for si = 1:length(speeds)
-    plot(gains(si,:,gainFitInd),squeeze(nanmean(grandAve(taccept,si,:),1)),...
+    plot(gains(si,:,gainFitInd),squeeze(nanmean(grandAveFavored(taccept,si,:),1)),...
         'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
     hold on
+    plot(gains(si,:,gainFitInd),squeeze(nanmean(grandAve(taccept,si,:),1)),...
+        'o-','Color',speedColors(si,:))
 end
 xlabel('Behavioral gain (unitless)')
 ylabel('Mean spikes/s')
@@ -321,4 +328,14 @@ if saveFigures
     for uniti = 1:length(mFavored{2,1})
         savefig(gainFavored(uniti),[saveLocation '/' regressionModels{2} 'PreferringUnit_' num2str(cellID(mFavored{2,1}(uniti),1,1)) '_' num2str(cellID(mFavored{2,1}(uniti),1,2)) '.fig'])
     end
+end
+
+%% Saving
+if saveResults
+    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFinitiation/' dcp{1}.sname ...
+        '/partialCorrelationResults'];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    save([saveLocation '/partialCorrelationResults' datestr(now,'yyyymmdd')],'-v7.3')
 end

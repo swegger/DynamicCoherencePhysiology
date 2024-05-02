@@ -14,6 +14,7 @@ Parser = inputParser;
 addRequired(Parser,'subject')
 addParameter(Parser,'dcpObjectFile','dcpObjects20210406.mat')
 addParameter(Parser,'sourceDirectory','/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle')
+addParameter(Parser,'fileBase','20240124')
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
 addParameter(Parser,'dir',[0 180])
@@ -27,12 +28,15 @@ addParameter(Parser,'perturbations',[0; 4; 6; 8])
 addParameter(Parser,'NumClusters',8)
 addParameter(Parser,'checkUnitType',false)
 addParameter(Parser,'rateCutoff',NaN)
+addParameter(Parser,'minimizeErrorInTargetedSubspace',false)
+addParameter(Parser,'compWithBetaSubspace',false)
 
 parse(Parser,subject,varargin{:})
 
 subject = Parser.Results.subject;
 dcpObjectFile = Parser.Results.dcpObjectFile;
 sourceDirectory = Parser.Results.sourceDirectory;
+fileBase = Parser.Results.fileBase;
 speedsFEF = Parser.Results.speedsFEF;
 cohsFEF = Parser.Results.cohsFEF;
 dirs = Parser.Results.dir;
@@ -42,6 +46,8 @@ resultsFile = Parser.Results.resultsFile;
 testInitGain = Parser.Results.testInitGain;
 checkUnitType = Parser.Results.checkUnitType;
 rateCutoff = Parser.Results.rateCutoff;
+minimizeErrorInTargetedSubspace= Parser.Results.minimizeErrorInTargetedSubspace;
+compWithBetaSubspace = Parser.Results.compWithBetaSubspace;
 
 %% Preliminary
 
@@ -275,19 +281,25 @@ end
 %% Find model result files
 switch subject
     case 'ar'
-        files = dir('/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*20240124*.mat');
+        files = dir(['/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle/fitSimpleFEFModelResults/*' fileBase '*.mat']);
 end
 
 for filei = 1:length(files)
+    disp(['File ' num2str(filei) ' of ' num2str(length(files))])
     temp = load([files(filei).folder '/' files(filei).name]);
+    taccept = temp.t >= temp.tWin(1) & temp.t <= temp.tWin(2);
     if length(temp.modelFEF.tau) == 1
         temp.modelFEF.tau = temp.modelFEF.tau*ones(size(temp.modelFEF.baseLine));
     end
-    Rtemp = squeeze(temp.RtoFit_z(:,:,2,:));
+    if isfield(temp,'RtoFit_z')
+        Rtemp = squeeze(temp.RtoFit_z(taccept,:,2,:));
+    else
+        Rtemp = squeeze(temp.R_z(taccept,:,2,:));
+    end
     for neuroni = 1:size(Rtemp,3)
         tempHat = SimpleFEFmodel(temp.modelFEF.W(:,neuroni)',...
             temp.modelFEF.baseLine(neuroni),temp.modelFEF.R0(neuroni),temp.modelFEF.tau(neuroni)/temp.modelFEF.dt,temp.inputs_z);
-        RhatTemp(:,:,neuroni) = tempHat(:,:,2);
+        RhatTemp(:,:,neuroni) = tempHat(taccept,:,2);
     end
     if minimizeErrorInTargetedSubspace
         cellID2 = squeeze(temp.cellID(:,1,1:2));
@@ -311,7 +323,13 @@ end
 %% Get data from best fitting model over ridge values and time constants
 [~,minInd] = min(sse);
 temp = load([files(minInd).folder '/' files(minInd).name]);
-R = temp.RtoFit_z;
+
+if isfield(temp,'RtoFit_z')
+    R = temp.RtoFit_z;
+else
+    R = temp.R_z;
+end
+        
 modelFEF = temp.modelFEF;
 tau = temp.tau;
 dt = temp.dt;
@@ -347,7 +365,7 @@ if compWithBetaSubspace
     cellID3 = squeeze(cellID(:,1,1:2));
     LIA = ismember(cellID2,cellID3,'rows');
 else
-    LIA = true(size(cellID2,1));
+    LIA = true(size(cellID2,1),1);
 end
 W = W(:,LIA);
 baseLine = baseLine(LIA);
@@ -461,9 +479,9 @@ subplot(1,3,1)
 title('Example neuron')
 neuroni = find(ismember(cellID2, [77,140],'rows'));
 for si = 1:length(speedsFEF)
-    plot(t,R(:,si,2,neuroni)*1000,'Color',speedColors(si,:))
+    plot(t(taccept),R(taccept,si,3,neuroni)*1000,'Color',speedColors(si,:))
     hold on
-    plot(t,Rhat(:,si,2,neuroni)*1000,'--','Color',speedColors(si,:))
+    plot(t(taccept),Rhat(taccept,si,3,neuroni)*1000,'--','Color',speedColors(si,:))
 end
 xlabel('Time from motion onset (ms)')
 ylabel('Spikes/s')
@@ -471,9 +489,9 @@ ylabel('Spikes/s')
 subplot(1,3,2)
 title('Mean across neurons')
 for si = 1:length(speedsFEF)
-    plot(t,nanmean(R(:,si,2,:),4)*1000,'Color',speedColors(si,:))
+    plot(t,nanmean(R(:,si,3,:),4)*1000,'Color',speedColors(si,:))
     hold on
-    plot(t,nanmean(Rhat(:,si,2,:),4)*1000,'--','Color',speedColors(si,:))
+    plot(t,nanmean(Rhat(:,si,3,:),4)*1000,'--','Color',speedColors(si,:))
 end
 xlabel('Time from motion onset (ms)')
 ylabel('Mean spikes/s (across neurons)')

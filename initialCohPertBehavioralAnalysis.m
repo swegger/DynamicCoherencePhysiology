@@ -308,10 +308,10 @@ end
 [lin.B, lin.BINT, ~,~, lin.STATS] = regress(res(fitvec),[ss(fitvec) cs(fitvec) ones(size(ss(fitvec)))]);
 [interaction.B, interaction.BINT, ~,~, interaction.STATS] = regress(res(fitvec),[ss(fitvec).*cs(fitvec) ones(size(ss(fitvec)))]);
 
-full.rmse = sqrt(mean( (res(testvec) - (full.B'*[ss(testvec) cs(testvec) ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
-lin.rmse = sqrt(mean( (res(testvec) - (lin.B'*[ss(testvec) cs(testvec) ones(size(ss(testvec)))]')').^2 ));
-interaction.rmse = sqrt(mean( (res(testvec) - (interaction.B'*[ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
-gain(1).rmse = sqrt(mean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec))).^2 ));
+full.rmse = sqrt(nanmean( (res(testvec) - (full.B'*[ss(testvec) cs(testvec) ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
+lin.rmse = sqrt(nanmean( (res(testvec) - (lin.B'*[ss(testvec) cs(testvec) ones(size(ss(testvec)))]')').^2 ));
+interaction.rmse = sqrt(nanmean( (res(testvec) - (interaction.B'*[ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
+gain(1).rmse = sqrt(nanmean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec))).^2 ));
 
 %% Saving
 if saveResults
@@ -555,4 +555,31 @@ end
 
 if saveFigures
     savefig(gainBySpeedsFigureHandle,[saveLocation '/gainByTargetSpeed.fig'])
+end
+
+%% Compare eye speed to gain
+for si = 1:length(speeds)
+    for ci = 1:length(cohs)
+        tempMean(:,si,ci) = nanmean(init.eye.speed(:,init.conditions.speeds == speeds(si) & init.conditions.coh == cohs(ci) & init.conditions.directions == 0 & init.conditions.pert == 0),2);
+    end
+end
+pert = (init.eye.pert.res - init.eye.pert.resControl)./repmat(0.4*speeds,[1,3,3]);
+
+gainVsEyeSpeed = figure('Name','Measured gain vs. eye speed');
+subplotInd = 1;
+for pi = find(perturbations)'
+    subplot(1,sum(perturbations~=0),subplotInd)
+    for si = 1:length(speeds)
+        plot(pert(si,:,pi),squeeze(tempMean(init.t==init.eye.pert.t(si,1,pi)+100,si,:)),...
+            'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+        hold on
+    end
+    xlabel('Gain')
+    ylabel('Eye speed (deg/s)')
+    title(['Perturbation time = ' num2str(init.eye.pert.t(1,1,pi))])
+    subplotInd = subplotInd+1;
+end
+
+if saveFigures
+    savefig(gainVsEyeSpeed,[saveLocation '/gainVsEyeSpeed.fig'])
 end

@@ -22,6 +22,7 @@ addParameter(Parser,'speedsMT',[2,4,8,16,32])
 addParameter(Parser,'cohsMT',[10 30 70 100])
 addParameter(Parser,'directionsMT',0)
 addParameter(Parser,'opponentMT',false)
+addParameter(Parser,'normalize',false)
 addParameter(Parser,'sprefFromFit',true)
 addParameter(Parser,'speedPrefOpts',speedPrefOpts_default)
 addParameter(Parser,'checkMTFit',false)
@@ -33,6 +34,7 @@ speedsMT = Parser.Results.speedsMT;
 cohsMT = Parser.Results.cohsMT;
 directionsMT = Parser.Results.directionsMT;
 opponentMT= Parser.Results.opponentMT;
+normalize = Parser.Results.normalize;
 sprefFromFit = Parser.Results.sprefFromFit;
 speedPrefOpts = Parser.Results.speedPrefOpts;
 checkMTFit = Parser.Results.checkMTFit;
@@ -60,16 +62,24 @@ for di = 1:dN
                 if opponentMT
                     [~,condLogical] = trialSort(mt{filei},directionsMT(1),speedsMT(si),NaN,cohsMT(ci));
                     [~,condLogicalNull] = trialSort(mt{filei},directionsMT(2),speedsMT(si),NaN,cohsMT(ci));
-                    MTtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2) - mean(mt{filei}.r(:,condLogicalNull),2);
+                    MTtempPref(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
+                    MTtempNull(:,si,ci) = mean(mt{filei}.r(:,condLogicalNull),2);
                 else
                     [~,condLogical] = trialSort(mt{filei},directionsMT(di),speedsMT(si),NaN,cohsMT(ci));
                     MTtemp(:,si,ci) = mean(mt{filei}.r(:,condLogical),2);
                 end
             end
         end
+        if normalize && opponentMT
+            MTtemp = (MTtempPref-MTtempNull)/max(MTtempPref,[],[1,2,3]);
+        elseif normalize
+            MTtemp = MTtemp/max(MTtemp,[],[1,2,3]);
+        elseif opponentMT
+            MTtemp = MTtempPref-MTtempNull;
+        end
         
         if sprefFromFit
-            [mu,sig,~,normR,~] = fitSpeedTuning( mt{filei},'P0',speedPrefOpts.P0,...
+            [mu,sig,~,normR,~] = fitSpeedTuning(mt{filei},'P0',speedPrefOpts.P0,...
                 'ub',speedPrefOpts.ub,'lb',speedPrefOpts.lb,...
                 'c',speedPrefOpts.c,'s',speedPrefOpts.s,'d',speedPrefOpts.d,...
                 'tWin',speedPrefOpts.tWin);
