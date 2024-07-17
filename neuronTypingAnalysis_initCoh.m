@@ -14,7 +14,7 @@ Parser = inputParser;
 addParameter(Parser,'dcpObjectFile','dcpObjects20210406.mat')
 addParameter(Parser,'sourceDirectory','/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle')
 addParameter(Parser,'binT',0:100:1400)
-addParameter(Parser,'dir',[0 180])
+addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'initWin',[150 200])
 addParameter(Parser,'chanMap',[7 1; 6 2; 5 3; 4 4; 3 5; 2 6; 1 7; 0 8; 23 9; 22 10; 21 11; 20 12; 19 13; 18 14; 17 15; 16 16; 15 17; 14 18; 13 19; 12 20; 11 21; 10 22; 9 23; 8 24])
 addParameter(Parser,'win',-200:200)
@@ -42,7 +42,7 @@ parse(Parser,varargin{:})
 dcpObjectFile = Parser.Results.dcpObjectFile;
 sourceDirectory = Parser.Results.sourceDirectory;
 binT = Parser.Results.binT;
-dir = Parser.Results.dir;
+directions = Parser.Results.directions;
 initWin = Parser.Results.initWin;
 chanMap = Parser.Results.chanMap;
 win = Parser.Results.win;
@@ -106,7 +106,7 @@ if ~fileExist
     
     %% Get mean and covariance of each unit
     [Rinit, ~, cellID, passCutoff, locations] = collateFiringRates(dcp,...
-        'sourceDirectory',sourceDirectory,'dir',dir,'chanMap',chanMap,...
+        'sourceDirectory',sourceDirectory,'directions',directions,'chanMap',chanMap,...
         'rateCutoff',rateCutoff,'checkUnitType',checkUnitType,...
         'initCohCollate',true,'dynCohCollate',false);
     

@@ -1,0 +1,222 @@
+function predictFiringRatesFromRRdynamics(subject,varargin)
+%%
+%
+%
+%
+%%
+
+%% Defaults
+
+%% Parse inputs
+Parser = inputParser;
+
+addRequired(Parser,'subject')
+addParameter(Parser,'neuronTypingFile',NaN)
+addParameter(Parser,'fitReducedRankDynamicsFile',NaN)
+addParameter(Parser,'MTtoFEFregressionFile',NaN)
+addParameter(Parser,'speedCluster',9)
+
+parse(Parser,subject,varargin{:})
+
+subject = Parser.Results.subject;
+neuronTypingFile = Parser.Results.neuronTypingFile;
+fitReducedRankDynamicsFile = Parser.Results.fitReducedRankDynamicsFile;
+MTtoFEFregressionFile = Parser.Results.MTtoFEFregressionFile;
+speedCluster = Parser.Results.speedCluster;
+
+%% Check for specific files as input, otherwise set default files
+if any(isnan(neuronTypingFile))
+    switch subject
+        case 'ar'
+            neuronTypingFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/arfr/neuronTypingAnalysis/neuronTyping20240530.mat';
+        case 'fr'
+            neuronTypingFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/arfr/neuronTypingAnalysis/neuronTyping20240530.mat';            
+        otherwise
+            error(['Subejct ' subject ' not recognized!'])
+    end
+end
+
+if any(isnan(fitReducedRankDynamicsFile))
+    switch subject
+        case 'ar'
+            fitReducedRankDynamicsFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/ar/ReducedRankModel/fitReducedRankModel20240613.mat';
+        case 'fr'
+            fitReducedRankDynamicsFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/fr/ReducedRankModel/fitReducedRankModel20240613.mat';
+        otherwise
+            error(['Subejct ' subject ' not recognized!'])
+    end
+end
+
+if any(isnan(MTtoFEFregressionFile))
+    switch subject
+        case 'ar'
+            MTtoFEFregressionFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFinitiation/ar/MTtoFEFregressionResults/MTtoFEFregressionResults20240603.mat';
+        case 'fr'
+            MTtoFEFregressionFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFinitiation/fr/MTtoFEFregressionResults/MTtoFEFregressionResults20240603.mat';
+        otherwise
+            error(['Subejct ' subject ' not recognized!'])
+    end
+end
+
+%% Load the data
+neuronTyping = load(neuronTypingFile,'subjects','Y','cellID','gainRegression','idx','Rinit','NumClusters','initCoh');
+rrModel = load(fitReducedRankDynamicsFile,'modelFEF','theoreticalInput','kappas');
+MTtoFEF = load(MTtoFEFregressionFile,'vOpt');
+
+%% Select data from neuronTyping related to this subject
+subjecti = find(strcmp(neuronTyping.subjects,subject));
+Y = neuronTyping.Y(neuronTyping.cellID(:,1,4) == subjecti,:);
+idx = neuronTyping.idx(neuronTyping.cellID(:,1,4) == subjecti);
+R = neuronTyping.Rinit(:,:,:,neuronTyping.cellID(:,1,4) == subjecti);
+kappas = repmat(permute(rrModel.kappas,[1,5,2,3,4]),[1,size(Y,1),1,1,1]);
+input = repmat(permute(rrModel.theoreticalInput,[1,5,2,3,4]),[1,size(Y,1),1,1,1]);
+inputsTheory = rrModel.theoreticalInput;
+t = rrModel.modelFEF.t;
+data_t = neuronTyping.initCoh.neuron_t;
+
+%% Set the vectors
+m_r = zeros(size(Y,1),length(rrModel.modelFEF.dimNames));
+for di = 1:length(rrModel.modelFEF.dimNames)
+    disp(size(m_r))
+    switch rrModel.modelFEF.dimNames{di}
+        case 'Speed'
+            m_r(idx==speedCluster,di) = 1;
+        case 'Gain'
+            for clusti = 1:neuronTyping.NumClusters
+                m_r(idx==clusti,di) = neuronTyping.gainRegression(subjecti).B(clusti);
+            end
+        otherwise
+            error(['Reduced rank model dimension ' rrModel.modelFEF.dimNames{di} ' not recognized!'])
+    end
+end
+
+I_l = MTtoFEF.vOpt';
+for inputi = 1:size(I_l,2)
+    I_l_ortho(:,inputi) = I_l(:,inputi) - m_r*inv(m_r'*m_r)*m_r'*I_l(:,inputi);
+end
+
+m_r = m_r./vecnorm(m_r);
+I_l_ortho = I_l_ortho./vecnorm(I_l_ortho);
+
+
+%% Estimate R from first principles
+Rhat = permute(sum(kappas.*repmat(m_r',[1,1,size(kappas,3),size(kappas,4),size(kappas,5)]),1) + ...
+    sum(input(1:2,:,:,:,:).*repmat(I_l_ortho',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,4,5,2,1]);
+Rhat_c = Rhat./max(abs(Rhat),[],[1,2,3]);
+R_c = R./max(abs(R),[],[1,2,3]);
+R_c = R_c-mean(R_c(data_t<=0,:,:,:),'all');
+% R_c = (R-mean(R(data_t<=0,:,:,:),'all'))./max(abs(R-mean(R(data_t<=0,:,:,:),'all')),[],[1,2,3]);
+
+%% Estimate R from regression against inputs/dynamics
+X = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),size(inputsTheory,1)+size(kappas,1)+1);
+Xin = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),1+size(kappas,1)+1);
+Xout = nan(size(Xin,1),size(R,4));
+Xunexplained = nan(size(Xin,1),size(R,4));
+Xexplained = permute(sum(input(1:2,:,:,:,:).*repmat(I_l_ortho',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,2,4,5,1]);
+
+ind = 1;
+for si = 1:size(inputsTheory,3)
+    for ci = 1:size(inputsTheory,4)
+        X(ind:ind+size(inputsTheory,2)-1,1:size(inputsTheory,1)) = permute(inputsTheory(:,:,si,ci),[2,1,3,4]);
+        X(ind:ind+size(inputsTheory,2)-1,size(inputsTheory,1)+1:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
+        X(ind:ind+size(inputsTheory,2)-1,end) = 1;
+        Xin(ind:ind+size(inputsTheory,2)-1,1) = permute(inputsTheory(1,:,si,ci),[2,1,3,4]);
+        Xin(ind:ind+size(inputsTheory,2)-1,2:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
+        Xin(ind:ind+size(inputsTheory,2)-1,end) = 1;
+        Xout(ind:ind+size(inputsTheory,2)-1,:) = squeeze(R_c(data_t<=t(end),si,ci,:));
+        Xunexplained(ind:ind+size(inputsTheory,2)-1,:) = Xout(ind:ind+size(inputsTheory,2)-1,:)-Xexplained(:,:,si,ci);
+        ind = ind + size(inputsTheory,2);
+    end
+end
+
+B = inv(Xin'*Xin)*Xin'*Xunexplained;
+B = [I_l_ortho'; B];
+B2 = (B'./vecnorm(B'))';
+
+Xhat = X*B;
+
+CC = corrcoef([Xout,Xhat]);
+cc = diag(CC(size(Xout,2)+1:end,1:size(Xout,2)));
+
+for clusti = 1:neuronTyping.NumClusters
+    mean_cc_by_cluster(clusti) = mean(cc(idx==clusti));
+    ste_cc_by_cluster(clusti) = std(cc(idx==clusti))/sqrt(sum(idx==clusti));
+end
+
+%% Plotting
+
+%% The population vectors represented in the functional topology
+figure
+subplot(2,2,1)
+scatter(Y(m_r(:,1)>0,1),Y(m_r(:,1)>0,2),abs(m_r(m_r(:,1)>0,1))*1000,m_r(m_r(:,1)>0,1),'filled')
+axis([-30 30 -30 30])
+subplot(2,2,2)
+scatter(Y(:,1),Y(:,2),abs(m_r(:,2))*1000,m_r(:,2),'filled')
+axis([-30 30 -30 30])
+subplot(2,2,3)
+scatter(Y(:,1),Y(:,2),abs(I_l_ortho(:,1))*1000,I_l(:,1),'filled')
+axis([-30 30 -30 30])
+subplot(2,2,4)
+scatter(Y(:,1),Y(:,2),abs(I_l_ortho(:,2))*1000,I_l(:,2),'filled')
+axis([-30 30 -30 30])
+
+%% The population vectors identified by regression
+figure
+for regressori = 1:size(B,1)
+    subplot(2,size(B,1)+1,regressori)
+    scatter(Y(:,1),Y(:,2),abs(B2(regressori,:)')/max(abs(B2),[],'all')*100,B2(regressori,:)','filled')
+    caxis([min(B2,[],'all'), max(B2,[],'all')])
+    xlabel('tSNE1')
+    ylabel('tSNE2')
+    axis([-30 30 -30 30])
+    
+    if regressori < 4
+        A = B2(regressori,:).*input(regressori,:,:,:,:);
+    elseif regressori < 6
+        A = B2(regressori,:).*kappas(regressori-3,:,:,:,:);
+    else
+        A = nan(size(A));
+    end
+    subplot(2,size(B,1)+1,regressori + size(B,1)+1)
+    for si = 1:3
+        for ci = 1:3
+            plot(t,squeeze(nanmean(A(:,:,:,si,ci),2)))
+            hold on
+        end
+    end
+    xlabel('Time from motion onset (ms)')
+    ylabel('Average along this population mode')
+end
+subplot(2,size(B,1)+1,regressori+1)
+scatter(Y(:,1),Y(:,2),abs(cc)*100,cc,'filled')
+title('R-values of regression model')
+xlabel('tSNE1')
+ylabel('tSNE2')
+axis([-30 30 -30 30])
+
+subplot(2,size(B,1)+1,regressori+2+size(B,1))
+errorbar(1:neuronTyping.NumClusters,mean_cc_by_cluster,ste_cc_by_cluster,'o')
+xlabel('Cluster #')
+ylabel('Mean correlation coefficient')
+
+%% Predicted firing rates and mean firing rate by cluster
+figure
+for idxi = 1:neuronTyping.NumClusters
+    subplot(3,3,idxi)
+    plot(t,squeeze(Rhat_c(:,2,2,idx==idxi)),'Color',[0.6 0.6 0.6])
+    hold on
+    plot(data_t(data_t<=t(end)),nanmean(R_c(data_t<=t(end),2,2,idx==idxi),4),'k','LineWidth',2)
+end
+
+%% Predicted firing rates vs firing rates by cluster
+figure
+for idxi = 1:neuronTyping.NumClusters
+    subplot(3,3,idxi)
+    dataTemp = R(data_t<=100,:,:,idx==idxi);
+    predictionTemp = Rhat(t<=100,:,:,idx==idxi);
+    plot(dataTemp(:),predictionTemp(:),'o')
+    hold on
+end
+    
+
+

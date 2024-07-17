@@ -1,4 +1,4 @@
-function [MT, spref, cohsMT] = simulateMTdata(mt,t,modelN,varargin)
+function [MT, spref, cohsMT, MTnull] = simulateMTdata(mt,t,modelN,varargin)
 %%
 %
 %
@@ -92,7 +92,7 @@ for ni = 1:modelN
     for si = 1:length(speedsMT)
         d = abs(log2(spref(ni)) - log2(speedsMT(si)));
         for ci = 1:length(cohsMT)
-            if opponentMT
+%             if opponentMT
                 if gaussianApprox
                     foundationTemp = mvnrnd(mu.foundation,Sig.foundation);
                     modulationHtemp = mvnrnd(mu.modulationH(:,ci),Sig.modulationH(:,:,ci));
@@ -117,32 +117,38 @@ for ni = 1:modelN
                         modulationHnull(:,vp(ni),ci) + ...
                         d.*modulationSPnull(:,vp(ni),ci));
                 end
-            else
-                if gaussianApprox
-                    foundationTemp = mvnrnd(mu.foundation,Sig.foundation);
-                    modulationHtemp = mvnrnd(mu.modulationH(:,ci),Sig.modulationH(:,:,ci));
-                    modulationSPtemp = mvnrnd(mu.modulationSP(:,ci),Sig.modulationSP(:,:,ci));   
-                    MTtemp(:,si,ci) = modelneuron(t,foundationTemp .* ...
-                        modulationHtemp + ...
-                        d.*modulationSPtemp);      
-                    
-                else
-                    MTtemp(:,si,ci) = modelneuron(t,foundation(:,vp(ni)) .* ...
-                        modulationH(:,vp(ni),ci) + ...
-                        d.*modulationSP(:,vp(ni),ci));
-                end
-            end
+%             else
+%                 if gaussianApprox
+%                     foundationTemp = mvnrnd(mu.foundation,Sig.foundation);
+%                     modulationHtemp = mvnrnd(mu.modulationH(:,ci),Sig.modulationH(:,:,ci));
+%                     modulationSPtemp = mvnrnd(mu.modulationSP(:,ci),Sig.modulationSP(:,:,ci));   
+%                     MTtemp(:,si,ci) = modelneuron(t,foundationTemp .* ...
+%                         modulationHtemp + ...
+%                         d.*modulationSPtemp);      
+%                     
+%                 else
+%                     MTtemp(:,si,ci) = modelneuron(t,foundation(:,vp(ni)) .* ...
+%                         modulationH(:,vp(ni),ci) + ...
+%                         d.*modulationSP(:,vp(ni),ci));
+%                 end
+%             end
         end
     end
     if normalize && opponentMT
         MTtemp = (MTtempPref-MTtempNull)/max(MTtempPref,[],[1,2,3]);
+        MTtempNull = (MTtempNull-MTtempPref)/max(MTtempPref,[],[1,2,3]);
     elseif normalize
+        MTtempNull = MTtempNull/max(MTtemp,[],[1,2,3]);
         MTtemp = MTtemp/max(MTtemp,[],[1,2,3]);
     elseif opponentMT
         MTtemp = MTtempPref-MTtempNull;
+        MTtempNull = MTtempNull-MTtempPref;
+    else
+        MTtemp = MTtempPref;
     end
     
     MT(:,:,:,ni) = MTtemp;
+    MTnull(:,:,:,ni) = MTtempNull;
 end
 
 %% Functions

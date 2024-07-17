@@ -1,4 +1,4 @@
-function modelFEF = fitReducedRankModel(nerualDataFile,varargin)
+function modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNames,varargin)
 %% neuronPartialCorrelation
 %
 %
@@ -6,7 +6,6 @@ function modelFEF = fitReducedRankModel(nerualDataFile,varargin)
 
 %% Defaults
 plotOpts_default.On = false;
-saveOpts_default.On = false;
 speedPrefOpts_default.tWin = [40,120];
 speedPrefOpts_default.P0 = [16,1];
 speedPrefOpts_default.ub = [254,128];
@@ -27,7 +26,14 @@ centerData_default.On = false;
 %% Parse inputs
 Parser = inputParser;
 
-addRequired(Parser,'nerualDataFile')
+addRequired(Parser,'subject')
+addRequired(Parser,'R')
+addRequired(Parser,'fef_t')
+addRequired(Parser,'eye_t')
+addRequired(Parser,'initGain')
+addRequired(Parser,'meanEyeSpeed')
+addRequired(Parser,'dimNames')
+addParameter(Parser,'fitType','fitSigmas')
 addParameter(Parser,'objectFile','allMT_20230419.mat')
 addParameter(Parser,'speeds',[2,4,8,16,32])
 addParameter(Parser,'cohs',[10 30 70 100])
@@ -53,11 +59,19 @@ addParameter(Parser,'equalizeInputsPriorToStimulusOnset',equalizeInputsPriorToSt
 addParameter(Parser,'centerData',centerData_default)
 addParameter(Parser,'probeObjectiveFunction',false)
 addParameter(Parser,'plotOpts',plotOpts_default)
-addParameter(Parser,'saveOpts',saveOpts_default)
+addParameter(Parser,'saveResults',false)
+addParameter(Parser,'saveFigures',false)
 
-parse(Parser,nerualDataFile,varargin{:})
+parse(Parser,subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNames,varargin{:})
 
-nerualDataFile = Parser.Results.nerualDataFile;
+subject = Parser.Results.subject;
+R = Parser.Results.R;
+fef_t = Parser.Results.fef_t;
+eye_t = Parser.Results.eye_t;
+initGain = Parser.Results.initGain;
+meanEyeSpeed = Parser.Results.meanEyeSpeed;
+dimNames = Parser.Results.dimNames;
+fitType = Parser.Results.fitType;
 objectFile = Parser.Results.objectFile;
 speeds = Parser.Results.speeds;
 cohs = Parser.Results.cohs;
@@ -82,7 +96,8 @@ equalizeInputsPriorToStimulusOnset = Parser.Results.equalizeInputsPriorToStimulu
 centerData = Parser.Results.centerData;
 probeObjectiveFunction = Parser.Results.probeObjectiveFunction;
 plotOpts = Parser.Results.plotOpts;
-saveOpts = Parser.Results.saveOpts;
+saveResults = Parser.Results.saveResults;
+saveFigures = Parser.Results.saveFigures;
 
 %% Preliminary
 
@@ -98,12 +113,7 @@ passCutoff = nan(1000,1);
 Rinit = nan(1701,3,3,1000);
 cellID = nan(1000,100,3);
 indx = 1;
-temp = load(nerualDataFile,'BinitOrth','pInit','initCoh','initGain');
 
-BinitOrth = temp.BinitOrth;
-pInit = temp.pInit;
-fef_t = temp.initCoh.neuron_t;
-initGain = temp.initGain;
 
 %% Get MT data and organize as an input
 
@@ -149,7 +159,7 @@ sw = swidth(~isnan(interpolatedR(1,1,1,:)));%swidth(prod(any(isnan(inputs),2),[3
 
 %% Prepare data for fitting
 [~,iFEF,iMT] = intersect(fef_t,t);
-R = pInit(iFEF,:,:,:);
+R = R(iFEF,:,:,:);
 inputs = inputs(:,iMT,:,:);
 dt = t(2)-t(1);
 t = t(iMT);
@@ -163,20 +173,21 @@ R_n = R./max(abs(R),[],[1,2,3]);
 
 taccept = t >= tWin(1) & t <= tWin(2);
 
-RtoFit = R_n(:,:,:,[1,2,3]);
+RtoFit = R_n(:,:,:,~strcmp(dimNames,'Offset'));
 RtoFit = RtoFit - mean(RtoFit(t<=0,:,:,:),[1,2,3]);
 if centerData.On
     RtoFit = RtoFit - RtoFit(:,centerData.inds(1),centerData.inds(2),:);
     initGain = initGain - initGain(centerData.inds(1),centerData.inds(2),:);
 end
 RtoFit = RtoFit./max(abs(RtoFit),[],[1,2,3]);
+% RtoFit(:,:,:,2) = -RtoFit(:,:,:,2);
 
 %% Set MT weights
 switch theoretical.weightTheory
     case 'simple'
         % Simple, log2(spref) weighting
-%         Atheory = [(log2(sp)' - log2(mean(speedsFEF))) ones(size(sp'))];
-        Atheory = [(log2(sp)') ones(size(sp'))];
+        Atheory = [(log2(sp)' - log2(mean(speedsFEF))) ones(size(sp'))];
+%         Atheory = [(log2(sp)') ones(size(sp'))];
         
     case 'optimal'
         % More complicated: 'optimal' decoder assuming zero correlations:
@@ -203,92 +214,275 @@ for ri = 1:size(Atheory,2)
         end
     end
 end
-theoreticalInput(3,:,:,:) = repmat(permute(mean(R_n(:,:,:,4),[2,3]),[2,1]),[1,1,length(speedsFEF),length(cohsFEF)]);
+if any(strcmp(dimNames,'Offset'))
+    theoreticalInput(size(Atheory,2)+1,:,:,:) = repmat(permute(mean(R_n(:,:,:,strcmp(dimNames,'Offset')),[2,3]),[2,1]),[1,1,length(speedsFEF),length(cohsFEF)]);
+end
 theoreticalInput = theoreticalInput - theoreticalInput(:,t==0,:,:);
 %theoreticalInput(:,t<0,:,:) = 0;
 if centerData.On
     theoreticalInput(1,:,:,:) = theoreticalInput(1,:,:,:) - theoreticalInput(1,:,centerData.inds(1),centerData.inds(2));
     theoreticalInput(2,:,:,:) = theoreticalInput(2,:,:,:) - theoreticalInput(2,:,centerData.inds(1),centerData.inds(2));
 else
-    theoreticalInput(1,:,:,:) = theoreticalInput(1,:,:,:) - theoreticalInput(1,:,2,2);
-    theoreticalInput(2,:,:,:) = theoreticalInput(2,:,:,:) - theoreticalInput(2,:,3,3);    
+    theoreticalInput(1,:,:,:) = theoreticalInput(1,:,:,:);% - theoreticalInput(1,:,2,2);
+    theoreticalInput(2,:,:,:) = theoreticalInput(2,:,:,:);% - theoreticalInput(2,:,3,3);    
 end
 theoreticalInput = theoreticalInput./max(abs(theoreticalInput),[],[2,3,4]);
 
 %% Fit dynamic model
-N = size(RtoFit,4);
-M = size(theoreticalInput,1);
+switch fitType
+    case 'sigmasHeldConstant'
+        N = size(RtoFit,4);
+        M = size(theoreticalInput,1);
+        
+        overlapsSet = zeros(N,N+M);
+        overlapsSet(1,1) = 1;
+        overlapsSet(2,1) = -1.7;
+        overlapsSet(2,2) = 0.5;
+        overlapsSet(1,N+1) = 0.5;
+        overlapsSet(1,N+2) = 0;
+        overlapsSet(2,N+2) = 0;
+        overlapsSet(2,N+1) = 1.9;
+        
+        % P0 = reshape(overlapsSet,[N*(N+M),1]);
+        P0 = zeros(N*(N+M),1);
+        lb = -Inf*ones(N,N+M);
+        temp = zeros(N);
+        temp(~eye(N)) = -Inf*1;
+        lb(1:N,1:N) = temp;
+        lb = reshape(lb,[N*(N+M),1]);
+        % lb = -Inf*ones(N*(N+M),1);
+        % lb(3) = -Inf;
+        % lb(N*(N+M)-1) = -Inf;
+        % lb(N*(N+M)) = -Inf;
+        % ub = Inf*ones(N*(N+M),1);
+        % ub(3) = Inf;
+        % ub(N*(N+M)-1) = Inf;
+        % ub(N*(N+M)) = Inf;
+        
+        if any(isnan(P0))
+            P0 = zeros(N*(N+M),1);
+        end
+        if any(isnan(lb))
+            lb = -Inf*ones(N*(N+M),1);
+        end
+        if any(isnan(ub))
+            ub = Inf*ones(N*(N+M),1);
+        end
+        sigmas = ones(N+M,1);
+        
+        OPTIONS = optimoptions('fmincon','MaxFunEvals',3e10,'MaxIterations',1e10,'Display','iter',...
+            'StepTolerance',1e-40);
+        R0 = nanmean(RtoFit(1,:,:,:),[2,3]);
+        minimizer = @(P)minimizant(P,R0,theoreticalInput,RtoFit,t,tau,sigmas);
+        [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
+        
+        modelFEF.tau = tau;
+        modelFEF.R0 = R0;
+        modelFEF.overlaps = reshape(P,[N,N+M]);
+        modelFEF.sigmas = sigmas;
+        modelFEF.fval = fval;
+        modelFEF.exitflag = exitflag;
+        modelFEF.output = output;
+        modelFEF.lambda = lambda;
+        modelFEF.grad = grad;
+        modelFEF.hessian = hessian;
+        modelFEF.t = t;
+        modelFEF.dt = dt;
+        
+    case 'fitSigmas'
+        
+        % Fit sigmas
+        N = size(RtoFit,4);
+        M = size(theoreticalInput,1);
+        
+        overlapsSet = zeros(N,N+M);
+        overlapsSet(1,1) = 1;
+        overlapsSet(2,1) = -1.7;
+        overlapsSet(2,2) = 0.5;
+        overlapsSet(1,N+1) = 0.5;
+        overlapsSet(1,N+2) = 0;
+        overlapsSet(2,N+2) = 0;
+        overlapsSet(2,N+1) = 1.9;
+        
+        % P0 = reshape(overlapsSet,[N*(N+M),1]);
+        P0 = zeros(N*(N+M) + N + M,1);
+        lb = -Inf*ones(N,N+M);
+        temp = zeros(N);
+        temp(~eye(N)) = -Inf*1;
+        lb(1:N,1:N) = temp;
+        lb = reshape(lb,[N*(N+M),1]);
+        lb = [lb; zeros(N+M,1)];
+        ub = Inf*ones(N*(N+M)+N+M,1);
+        
+        %lb(end-(N+M)-1) = 0;
+        %ub(end-(N+M)-1) = 0;
+        %lb(end-(N+M)) = 0;
+        %ub(end-(N+M)) = 0;
+        % lb = -Inf*ones(N*(N+M),1);
+        % lb(3) = -Inf;
+        % lb(N*(N+M)-1) = -Inf;
+        % lb(N*(N+M)) = -Inf;
+        % ub = Inf*ones(N*(N+M),1);
+        % ub(3) = Inf;
+        % ub(N*(N+M)-1) = Inf;
+        % ub(N*(N+M)) = Inf;
+        
+        if any(isnan(P0))
+            P0 = zeros(N*(N+M),1);
+        end
+        if any(isnan(lb))
+            lb = -Inf*ones(N*(N+M),1);
+        end
+        if any(isnan(ub))
+            ub = Inf*ones(N*(N+M)+N+M,1);
+        end
+        
+        OPTIONS = optimoptions('fmincon','MaxFunEvals',3e10,'MaxIterations',1e10,'Display','iter',...
+            'StepTolerance',1e-40);
+        R0 = nanmean(RtoFit(1,:,:,:),[2,3]);
+        minimizer = @(P)minimizantSigmas(P,R0,theoreticalInput,RtoFit,t,tau);
+        [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
+        
+        modelFEF.tau = tau;
+        modelFEF.R0 = R0;
+        modelFEF.overlaps = reshape(P(1:end-(N+M)),[N,N+M]);
+        modelFEF.sigmas = P(end-(N+M)+1:end);
+        modelFEF.fval = fval;
+        modelFEF.exitflag = exitflag;
+        modelFEF.output = output;
+        modelFEF.lambda = lambda;
+        modelFEF.grad = grad;
+        modelFEF.hessian = hessian;
+        modelFEF.t = t;
+        modelFEF.dt = dt;
+        modelFEF.dimNames = dimNames;
 
-overlapsSet = zeros(N,N+M);
-overlapsSet(1,1) = 1;
-overlapsSet(2,1) = -1.7;
-overlapsSet(2,2) = 0.5;
-overlapsSet(1,N+1) = 0.5;
-overlapsSet(1,N+2) = 0;
-overlapsSet(2,N+2) = 0;
-overlapsSet(2,N+1) = 1.9;
-
-% P0 = reshape(overlapsSet,[N*(N+M),1]);
-P0 = zeros(N*(N+M),1);
-lb = -Inf*ones(N,N+M);
-temp = zeros(N);
-temp(~eye(N)) = -Inf*1;
-lb(1:N,1:N) = temp;
-lb = reshape(lb,[N*(N+M),1]);
-% lb = -Inf*ones(N*(N+M),1);
-% lb(3) = -Inf;
-% lb(N*(N+M)-1) = -Inf;
-% lb(N*(N+M)) = -Inf;
-% ub = Inf*ones(N*(N+M),1);
-% ub(3) = Inf;
-% ub(N*(N+M)-1) = Inf;
-% ub(N*(N+M)) = Inf;
-
-if any(isnan(P0))
-    P0 = zeros(N*(N+M),1);
+    case 'fitSigmasWithDummy'
+        
+        % Fit sigmas
+        N = size(RtoFit,4)+1;
+        M = size(theoreticalInput,1);
+                
+        P0 = zeros(N*(N+M) + N + M,1);
+        
+        lb = -Inf*ones(N,N+M);
+        temp = zeros(N);
+        temp(~eye(N)) = -Inf*1;
+        lb(1:N,1:N) = temp;
+        lb(N,:) = 0;
+        lb = reshape(lb,[N*(N+M),1]);
+        lb = [lb; zeros(N+M,1)];
+        
+        ub = Inf*ones(N,N+M);
+        ub(N,:) = 0;
+        ub(N,N) = Inf;
+        ub(N,N+M) = Inf;
+        ub = reshape(ub,[N*(N+M),1]);
+        ub = [ub; Inf*ones(N+M,1)];
+                        
+        if any(isnan(P0))
+            P0 = zeros(N*(N+M),1);
+        end
+        if any(isnan(lb))
+            lb = -Inf*ones(N*(N+M),1);
+        end
+        if any(isnan(ub))
+            ub = Inf*ones(N*(N+M)+N+M,1);
+        end
+        
+        OPTIONS = optimoptions('fmincon','MaxFunEvals',3e10,'MaxIterations',1e10,'Display','iter',...
+            'StepTolerance',1e-40);
+        R0 = nanmean(RtoFit(1,:,:,:),[2,3]);
+        minimizer = @(P)minimizantSigmasDummy(P,R0,theoreticalInput,RtoFit,t,tau,1);
+        [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
+        
+        modelFEF.tau = tau;
+        modelFEF.R0 = [squeeze(R0); 0];
+        modelFEF.overlaps = reshape(P(1:end-(N+M)),[N,N+M]);
+        modelFEF.sigmas = P(end-(N+M)+1:end);
+        modelFEF.fval = fval;
+        modelFEF.exitflag = exitflag;
+        modelFEF.output = output;
+        modelFEF.lambda = lambda;
+        modelFEF.grad = grad;
+        modelFEF.hessian = hessian;
+        modelFEF.t = t;
+        modelFEF.dt = dt;
+        modelFEF.dimNames = dimNames;
+        
+    case 'fitSigmasExtraInput'
+        
+        % Fit sigmas
+        theoreticalInput(size(theoreticalInput,1)+1,:,:,:) = 0;
+        N = size(RtoFit,4);
+        M = size(theoreticalInput,1);
+        
+        P0 = zeros(N*(N+M) + N + M,1);
+        P0 = [P0; 1/100; 250];
+        lb = -Inf*ones(N,N+M);
+        temp = zeros(N);
+        temp(~eye(N)) = -Inf*1;
+        lb(1:N,1:N) = temp;
+        lb = reshape(lb,[N*(N+M),1]);
+        lb = [lb; zeros(N+M,1); 0; -Inf];
+        ub = Inf*ones(N*(N+M)+N+M,1);
+        ub = [ub; 1/200; Inf];
+        
+        if any(isnan(P0))
+            P0 = zeros(N*(N+M),1);
+        end
+        if any(isnan(lb))
+            lb = -Inf*ones(N*(N+M),1);
+        end
+        if any(isnan(ub))
+            ub = Inf*ones(N*(N+M)+N+M,1);
+        end
+        
+        OPTIONS = optimoptions('fmincon','MaxFunEvals',3e10,'MaxIterations',1e10,'Display','iter',...
+            'StepTolerance',1e-40);
+        R0 = nanmean(RtoFit(1,:,:,:),[2,3]);
+        minimizer = @(P)minimizantSigmasExtraInput(P,R0,theoreticalInput,RtoFit,t,tau,3);
+        [P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
+        
+        Ptemp = P;
+        theoreticalInput(3,:,:,:) = repmat(1./(1 + exp( -(t-Ptemp(end))*Ptemp(end-1) )),[1,1,size(theoreticalInput,3),size(theoreticalInput,4)]);
+        Ptemp = P(1:end-2);
+        
+        modelFEF.tau = tau;
+        modelFEF.R0 = R0;
+        modelFEF.overlaps = reshape(Ptemp(1:end-(N+M)),[N,N+M]);
+        modelFEF.sigmas = Ptemp(end-(N+M)+1:end);
+        modelFEF.fval = fval;
+        modelFEF.exitflag = exitflag;
+        modelFEF.output = output;
+        modelFEF.lambda = lambda;
+        modelFEF.grad = grad;
+        modelFEF.hessian = hessian;
+        modelFEF.t = t;
+        modelFEF.dt = dt;
+        modelFEF.dimNames = dimNames;
+        modelFEF.extraInput = P(end-1:end);
+        
+    otherwise
+        error(['fitType ' fitType ' not recognized!'])
 end
-if any(isnan(lb))
-    lb = -Inf*ones(N*(N+M),1);
-end
-if any(isnan(ub))
-    ub = Inf*ones(N*(N+M),1);
-end
-sigmas = ones(N+M,1);
-
-OPTIONS = optimoptions('fmincon','MaxFunEvals',3e10,'MaxIterations',1e10,'Display','iter',...
-    'StepTolerance',1e-40);
-R0 = nanmean(RtoFit(1,:,:,:),[2,3]);
-minimizer = @(P)minimizant(P,R0,theoreticalInput,RtoFit,t,tau,sigmas);
-[P, fval, exitflag, output, lambda, grad, hessian] = fmincon(minimizer,P0,[],[],[],[],lb,ub,[],OPTIONS);
-
-modelFEF.tau = tau;
-modelFEF.R0 = R0;
-modelFEF.overlaps = reshape(P,[N,N+M]);
-modelFEF.sigmas = sigmas;
-modelFEF.fval = fval;
-modelFEF.exitflag = exitflag;
-modelFEF.output = output;
-modelFEF.lambda = lambda;
-modelFEF.grad = grad;
-modelFEF.hessian = hessian;
-modelFEF.t = t;
-modelFEF.dt = dt;
 
 %% probe the objective function by perturbations around the found minimum
 if probeObjectiveFunction
-    [D14,D31] = meshgrid(linspace(-2,2,11),linspace(0,4,11));
-    del = zeros([size(modelFEF.overlaps),numel(D14)]);
+    [D12,D21] = meshgrid(linspace(-2,2,11),linspace(-2,2,11));
+    del = zeros([size(modelFEF.overlaps),numel(D12)]);
 %     del(2,3,:) = -1;
-    del(1,4,:) = D14(:);
-    del(3,1,:) = D31(:);
+    del(1,2,:) = D12(:);
+    del(2,1,:) = D21(:);
     err = probeObjective(minimizer,modelFEF,del);
     figure
-    surf(D14,D31,reshape(err,size(D14)),'EdgeColor','none');
+    surf(D12,D21,reshape(log(err),size(D12)),'EdgeColor','none');
     xlabel('x')
 end
 
 %% Make predictions
 overlapsTemp = modelFEF.overlaps;
+
 % overlapsTemp(2,N+1) = 1.7;
 for si = 1:length(speedsFEF)
     for ci = 1:length(cohsFEF)
@@ -320,7 +514,7 @@ idx = 1;
 for si = 1:length(speedsFEF)
     for ci = 1:length(cohsFEF)
         Y(idx:idx+size(RtoFit,1)-1,:) = squeeze(RtoFit(:,si,ci,:));
-        Yhat(idx:idx+size(RtoFit,1)-1,:) = squeeze(Rhat(:,si,ci,:));
+        Yhat(idx:idx+size(RtoFit,1)-1,:) = squeeze(Rhat(:,si,ci,1:size(RtoFit,4)));
         conditions(idx:idx+size(RtoFit,1)-1,:) = repmat([speedsFEF(si) cohsFEF(ci) trainCondition(si,ci)],[size(RtoFit,1),1]);
         idx = idx + size(RtoFit,1);
     end
@@ -329,6 +523,19 @@ rvalsFit = corrcoef([Y, Yhat]);
 RhatCC = diag(rvalsFit(size(Y,2)+1:end,1:size(Y,2)));
 RhatZ = 0.5*log( (1+RhatCC)./(1-RhatCC) );
 [~,zvalSort] = sort(RhatZ);
+
+
+%% Saving
+if saveResults
+        
+    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/' subject ...
+        '/ReducedRankModel'];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    save([saveLocation '/fitReducedRankModel' datestr(now,'yyyymmdd')],'-v7.3')
+    
+end
 
 %% Plotting
 if plotOpts.On
@@ -341,7 +548,8 @@ if plotOpts.On
         for ci = 1:length(cohsFEF)
             for si = 1:length(speedsFEF)
                 subplot(length(cohsFEF),length(speedsFEF),si + (ci-1)*length(speedsFEF))
-                plot(tempFEF(taccept,si,ci)*1000,test(taccept,si,ci)*1000,'o','Color',speedColors(si,:))
+                plot(tempFEF(taccept,si,ci),test(taccept,si,ci),'o','Color',speedColors(si,:),...
+                    'DisplayName',['Dim = ' num2str(neuroni) ', Speed = ' num2str(speedsFEF(speedi)) ', Coh = ' num2str(cohsFEF(cohi))])
                 hold on
             end
         end
@@ -352,20 +560,20 @@ if plotOpts.On
             subplot(length(cohsFEF),length(speedsFEF),si + (ci-1)*length(speedsFEF))
             axis square
             plotUnity;
-            xlabel('FEF data (sp/s)')
-            ylabel('Fit data (sp/s)')
+            xlabel('FEF data')
+            ylabel('Fit data')
         end
     end
     
     %% Fit quality distribution
     figure('Name','Fit quality distribution')
-    plot(RhatZ(zvalSort),'bo')
+    plot(RhatZ,'bo')
     hold on
-    xlabel('FEF neuron #')
+    xlabel('Dimension')
     ylabel('Fisher transformed r-values')
         
     %% Model parameters
-    figure
+    hModelParameters = figure('Name','ModelParameters');
     subplot(1,2,1)
     imagesc(modelFEF.overlaps(:,1:N))
     colorbar
@@ -382,20 +590,19 @@ if plotOpts.On
     xlabel('Input dimension')
     
     %% 
-    
-    
-        dimNames = {'Speed','Coherence','Gain','Offset'};
-        
-        figure('Name','Predicted response along targeted dimensions','Position',[63 169 1606 1079])
+            
+        hModelandData = figure('Name','Predicted response along targeted dimensions','Position',[63 169 1606 1079]);
         for dimi = 1:M
             subplot(N+M,2,2*(dimi-1)+1)
             for speedi = 1:length(speedsFEF)
                 for cohi = 1:length(cohsFEF)
-                    plot(t,theoreticalInput(dimi,:,speedi,cohi),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                    plot(t,theoreticalInput(dimi,:,speedi,cohi),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100],...
+                        'DisplayName',['Speed = ' num2str(speedsFEF(speedi)) ', Coh = ' num2str(cohsFEF(cohi))])
                     hold on
                 end
             end
             axis tight
+            title('Input from MT')
             xlabel('Time from motion onset (ms)')
             ylabel(['Input ' num2str(dimi)])
         end
@@ -405,26 +612,34 @@ if plotOpts.On
             subplot(N+M,2,2*(dimi-1)+2*M+1)
             for speedi = 1:length(speedsFEF)
                 for cohi = 1:length(cohsFEF)
-                    plot(t,Rhat(:,speedi,cohi,dimi),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
+                    plot(t,Rhat(:,speedi,cohi,dimi),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100],...
+                        'DisplayName',['Speed = ' num2str(speedsFEF(speedi)) ', Coh = ' num2str(cohsFEF(cohi))])
                     hold on
                 end
             end
             axis tight
             title('Fit predictions')
             xlabel('Time from motion onset (ms)')
-            ylabel([dimNames{dimi} ' related activity (a.u.)'])
+            if dimi > length(dimNames)
+                ylabel(['Dummy related activity (a.u.)'])
+            else
+                ylabel([dimNames{dimi} ' related activity (a.u.)'])
+            end
                         
             subplot(N+M,2,2*(dimi-1)+2*M+2)
-            for speedi = 1:length(speedsFEF)
-                for cohi = 1:length(cohsFEF)
-                    plot(t,RtoFit(:,speedi,cohi,dimi),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100])
-                    hold on
+            if dimi <= length(dimNames)
+                for speedi = 1:length(speedsFEF)
+                    for cohi = 1:length(cohsFEF)
+                        plot(t,RtoFit(:,speedi,cohi,dimi),'-','Color',[speedColors(speedi,:) cohsFEF(cohi)/100],...
+                            'DisplayName',['Speed = ' num2str(speedsFEF(speedi)) ', Coh = ' num2str(cohsFEF(cohi))])
+                        hold on
+                    end
                 end
+                axis tight
+                title('Data')
+                xlabel('Time from motion onset (ms)')
+                ylabel([dimNames{dimi} ' related activity (a.u.)'])
             end
-            axis tight
-            title('Data')
-            xlabel('Time from motion onset (ms)')
-            ylabel([dimNames{dimi} ' related activity (a.u.)'])
         end
         
         compLims = repmat([Inf,-Inf],[N,1]);
@@ -458,19 +673,48 @@ if plotOpts.On
             ylabel([dimNames{dimi} ' related activity (a.u.)'])
         end
         
-        gvth = figure('Name',['Behavioral gain vs activity on targeted dimension (initCoh)'],'Position',[1956 59 570 1263]);
+        gvth = figure('Name',['Behavioral gain vs activity on targeted dimension (initCoh)'],'Position',[1456 59 1070 1263]);
         for targetedDim = 1:N
             tempData = [];
-            subplot(N,1,targetedDim)
+            subplot(N,2,2*targetedDim-1)            
+            for si = 1:length(speeds)
+                eyeSpeedTemp = squeeze(nanmean(meanEyeSpeed(eye_t >= 750 & eye_t <= 750,:,:),1));
+                initRatesTemp = squeeze(nanmean(Rhat(t >= 700 & t <= 800,si,:,targetedDim),1));
+                plot(eyeSpeedTemp(si,:),initRatesTemp,...
+                    'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:),...
+                    'DisplayName',['Speed = ' num2str(speeds(si))])
+                hold on
+                tempData = [tempData; eyeSpeedTemp(si,:)',initRatesTemp(:)];
+            end
+            for si = 1:length(speeds)
+                eyeSpeedTemp = squeeze(nanmean(meanEyeSpeed(eye_t >= 150 & eye_t <= 150,:,:),1));
+                initRatesTemp = squeeze(nanmean(Rhat(t >= 100 & t <= 200,si,:,targetedDim),1));
+                plot(eyeSpeedTemp(si,:),initRatesTemp,...
+                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:),...
+                    'DisplayName',['Speed = ' num2str(speeds(si))])
+                tempData = [tempData; eyeSpeedTemp(si,:)',initRatesTemp(:)];
+            end
+            
+            speed_projection_cc = corrcoef(tempData(:,1),tempData(:,2));
+            axis square
+            ax = axis;
+            text(0.9*ax(2),0.9*ax(4),['R^2 = ' num2str(speed_projection_cc(1,2).^2)])
+            xlabel('Eye speed (deg/s)')
+            ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+            
+            tempData = [];
+            subplot(N,2,2*targetedDim)
             for si = 1:length(speedsFEF)
                 initRatesTemp = squeeze(nanmean(Rhat(t >= 700 & t <= 800,si,:,targetedDim),1));
                 plot(squeeze(initGain(si,:,3)),initRatesTemp,...
-                    'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                    'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:),...
+                    'DisplayName',['Steady State pursuit, Speed = ' num2str(speedsFEF(speedi))])
                 hold on
                 tempData = [tempData; initGain(si,:,3)',initRatesTemp(:)];
                 initRatesTemp = squeeze(nanmean(Rhat(t >= 100 & t <= 200,si,:,targetedDim),1));
                 plot(squeeze(initGain(si,:,2)),initRatesTemp,...
-                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:),...
+                    'DisplayName',['Pursuit initiation, Speed = ' num2str(speedsFEF(speedi))])
                 tempData = [tempData; initGain(si,:,2)',initRatesTemp(:)];
             end
             gain_projection_cc = corrcoef(tempData(:,1),tempData(:,2));
@@ -483,10 +727,20 @@ if plotOpts.On
     
 end
 
-
-%% Saving
-if saveOpts.On
-    save(saveOpts.location);
+%% Save figures
+if saveFigures
+    
+    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/mat/' subject ...
+        '/fitReducedRankModel/' datestr(now,'yyyymmdd')];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    
+    savefig(hModelandData,[saveLocation '/reducedRankModelVsTargetedDimensions.fig'])
+    savefig(gvth ,[saveLocation '/reducedRankModelvsGain.fig'])
+    savefig(hModelParameters ,[saveLocation '/reducedRankModelParameters.fig'])
+    
+    
 end
 
 %% Functions
@@ -509,6 +763,82 @@ function out = minimizant(P,R0,inputs,R,t,tau,sigmas)
         end
     end
     Rest = permute(kappas,[2,3,4,1]);
+        
+    out = nansum((R(:) - Rest(:)).^2);
+    
+%% Include sigmas in fit
+function out = minimizantSigmas(P,R0,inputs,R,t,tau)
+    N = size(R,4);
+    M = size(inputs,1);
+    sigmas = P(end-(N+M)+1:end);
+    P = P(1:end-(N+M));
+    overlaps = reshape(P,[N N+M]);
+    
+    for si = 1:size(inputs,3)
+        for ci = 1:size(inputs,4)
+            [~,kappas(:,:,si,ci),sigmaTildes(:,:,:,si,ci),deltas(:,si,ci),~] = simulateLatentDynamics('tau',tau/(t(2)-t(1)),...
+                't',t,...
+                'us',inputs(:,:,si,ci),...
+                'kappas0',squeeze(R0),...
+                'overlaps',overlaps,...
+                'sigmas',sigmas);
+            
+        end
+    end
+    Rest = permute(kappas,[2,3,4,1]);
+        
+    out = nansum((R(:) - Rest(:)).^2);
+    
+%% Include sigmas in fit w/ dummy population mode
+function out = minimizantSigmasDummy(P,R0,inputs,R,t,tau,dummyModes)
+    N = size(R,4)+dummyModes;
+    M = size(inputs,1);
+    sigmas = P(end-(N+M)+1:end);
+    P = P(1:end-(N+M));
+    overlaps = reshape(P,[N N+M]);
+    kappas0 = [squeeze(R0); zeros(dummyModes,1)];
+    
+    for si = 1:size(inputs,3)
+        for ci = 1:size(inputs,4)
+            [~,kappas(:,:,si,ci),sigmaTildes(:,:,:,si,ci),deltas(:,si,ci),~] = simulateLatentDynamics('tau',tau/(t(2)-t(1)),...
+                't',t,...
+                'us',inputs(:,:,si,ci),...
+                'kappas0',kappas0,...
+                'overlaps',overlaps,...
+                'sigmas',sigmas);
+            
+        end
+    end
+    Rest = permute(kappas(1:size(R,4),:,:,:),[2,3,4,1]);
+        
+    out = nansum((R(:) - Rest(:)).^2);
+    
+%% Include sigmas and parameters for additional input in fit 
+function out = minimizantSigmasExtraInput(P,R0,inputs,R,t,tau,extraInd)
+    N = size(R,4);
+    M = size(inputs,1);
+    Ptemp = P;
+    inputParams = Ptemp(end-1:end);
+    Ptemp = Ptemp(1:end-2);
+    sigmas = Ptemp(end-(N+M)+1:end);
+    Ptemp = Ptemp(1:end-(N+M));
+    overlaps = reshape(Ptemp,[N N+M]);
+    kappas0 = squeeze(R0);
+    
+    inputs(extraInd,:,:,:) = repmat(1./(1 + exp( -(t-inputParams(2))*inputParams(1) )),[1, 1, size(inputs,3), size(inputs,4)]);
+    
+    for si = 1:size(inputs,3)
+        for ci = 1:size(inputs,4)
+            [~,kappas(:,:,si,ci),sigmaTildes(:,:,:,si,ci),deltas(:,si,ci),~] = simulateLatentDynamics('tau',tau/(t(2)-t(1)),...
+                't',t,...
+                'us',inputs(:,:,si,ci),...
+                'kappas0',kappas0,...
+                'overlaps',overlaps,...
+                'sigmas',sigmas);
+            
+        end
+    end
+    Rest = permute(kappas(1:size(R,4),:,:,:),[2,3,4,1]);
         
     out = nansum((R(:) - Rest(:)).^2);
 
@@ -559,6 +889,6 @@ function err = probeObjective(minimizer,modelFEF,del)
         overlapsTemp = modelFEF.overlaps;
         overlapsTemp = overlapsTemp + del(:,:,ind);
 
-        err(ind) = minimizer(reshape(overlapsTemp,[N*(N+M),1]));
+        err(ind) = minimizer([reshape(overlapsTemp,[N*(N+M),1]); modelFEF.sigmas]);
 
     end

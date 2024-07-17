@@ -1,4 +1,4 @@
-function [init, gain] = initialCohPertBehavioralAnalysis(sname,varargin)
+function [init, gain, gainModel] = initialCohPertBehavioralAnalysis(sname,varargin)
 %%
 %
 %
@@ -313,6 +313,24 @@ lin.rmse = sqrt(nanmean( (res(testvec) - (lin.B'*[ss(testvec) cs(testvec) ones(s
 interaction.rmse = sqrt(nanmean( (res(testvec) - (interaction.B'*[ss(testvec).*cs(testvec) ones(size(ss(testvec)))]')').^2 ));
 gain(1).rmse = sqrt(nanmean( (res(testvec) - (g(testvec).*ss(testvec) + off(testvec))).^2 ));
 
+%% Compare regression models of gain
+[Cs,Ss] = meshgrid(cohs,speeds);
+Mask = [true true true;
+        true true true;
+        true true true];
+tempRes = (init.eye.pert.res(:,:,2)-init.eye.pert.resControl)./(0.4.*Ss);
+tempSTE = sqrt(init.eye.pert.resSTE(:,:,2).^2 + init.eye.pert.resControlSTE(:,:,2).^2)./(0.4*Ss);
+
+[Blineartemp,~,MSElineartemp] = lscov([Ss(Mask(:)) Cs(Mask(:)) ones(size(Cs(Mask(:))))],tempRes(Mask(:)),tempSTE(Mask(:)));
+[Bnonlineartemp,~,MSEnonlineartemp] = lscov([Ss(Mask(:)).*Cs(Mask(:)) Cs(Mask(:)) ones(size(Cs(Mask(:))))],tempRes(Mask(:)),tempSTE(Mask(:)));
+
+[gainModel.linear.B, gainModel.linear.BINT, ~,~, gainModel.linear.STATS] = regress(tempRes(Mask(:)),[Ss(Mask(:)) Cs(Mask(:)) ones(size(Cs(Mask(:))))]);
+[gainModel.nonlinear.B, gainModel.nonlinear.BINT, ~,~, gainModel.nonlinear.STATS] = regress(tempRes(Mask(:)),[Ss(Mask(:)).*Cs(Mask(:)) Cs(Mask(:)) ones(size(Cs(Mask(:))))]);
+
+gainModel.linear.sse = sum( ([Ss(~Mask(:)) Cs(~Mask(:)) ones(size(Cs(~Mask(:))))]*gainModel.linear.B - tempRes(~Mask(:))).^2 );
+gainModel.nonlinear.sse = sum( ([Ss(~Mask(:)).*Cs(~Mask(:)) Cs(~Mask(:)) ones(size(Cs(~Mask(:))))]*gainModel.nonlinear.B - tempRes(~Mask(:))).^2 );
+
+
 %% Saving
 if saveResults
     saveLocation = ['/home/seth/Projects/DynamicCoherencePhysiology/' sname ...
@@ -415,6 +433,55 @@ ylabel('Initiation speed (deg/s)')
 
 if saveFigures
     savefig(initiationSpeedFigureHandle,[saveLocation '/initationSpeedByCondition.fig'])
+end
+
+%%
+initiationSpeedFigureHandle2 = figure('Name','Initiation speed');
+for si = 1:length(speeds)
+    for ci = 1:length(cohs)
+        tempEye.mean(si,ci) = nanmean(init.eye.init{si,ci});
+        tempEye.ste(si,ci) = nanstd(init.eye.init{si,ci})/sqrt(numel(init.eye.init{si,ci}));
+    end
+end
+for ci = 1:length(cohs)
+        errorbar(speeds,tempEye.mean(:,ci),tempEye.ste(:,ci)*1.96,...
+            'o-','Color',cohColors(ci,:),'MarkerSize',8,'MarkerFaceColor',cohColors(ci,:))
+        hold on
+end
+plotUnity;
+axis square
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
+xlabel('Target speed (deg/s)')
+ylabel('Initiation speed (deg/s)')
+
+if saveFigures
+    savefig(initiationSpeedFigureHandle2,[saveLocation '/initationSpeedByCondition2.fig'])
+end
+
+%%
+sustainedSpeedFigureHandle2 = figure('Name','Sustained speed');
+for si = 1:length(speeds)
+    for ci = 1:length(cohs)
+        tempEye.mean(si,ci) = init.eye.mean(init.t == 750,si,ci);
+        tempEye.ste(si,ci) = init.eye.ste(init.t == 750,si,ci);
+    end
+end
+for ci = 1:length(cohs)
+        errorbar(speeds,tempEye.mean(:,ci),tempEye.ste(:,ci)*1.96,...
+            'o-','Color',cohColors(ci,:),'MarkerSize',8,'MarkerFaceColor',cohColors(ci,:))
+        hold on
+end
+axis([0 max(speeds) 0 max(speeds)])
+plotUnity;
+axis square
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
+xlabel('Target speed (deg/s)')
+ylabel('Initiation speed (deg/s)')
+
+if saveFigures
+    savefig(sustainedSpeedFigureHandle2,[saveLocation '/sustainedSpeedByCondition2.fig'])
 end
 
 %% Perturbation response

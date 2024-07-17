@@ -13,13 +13,11 @@ speedPrefOpts_default.lb = [0, 0];
 speedPrefOpts_default.c = NaN;
 speedPrefOpts_default.s = NaN;
 speedPrefOpts_default.d = 0;
-trainCondition_default = [true, false, true;
-                          true, false, true;
-                          true, false, true];
 compToBehavior_default.On = false;
 theoretical_default.weightTheory = 'simple';
 theoretical_default.expansionDef = 'bestfit';
 simulateMT_default.On = false;
+estimatorPathwayNonlinearity_default = @(x)(x);
 
 %% Parse inputs
 Parser = inputParser;
@@ -32,8 +30,7 @@ addParameter(Parser,'directionsMT',0)
 addParameter(Parser,'opponentMT',false)
 addParameter(Parser,'speedsFEF',[5,10,20])
 addParameter(Parser,'cohsFEF',[20, 60, 100])
-addParameter(Parser,'directions',[0 180])
-addParameter(Parser,'trainCondition',trainCondition_default)
+addParameter(Parser,'estimatorPathwayNonlinearity',estimatorPathwayNonlinearity_default)
 addParameter(Parser,'tWin',[0 900])
 addParameter(Parser,'rankN',80)
 addParameter(Parser,'ridgeLambda',logspace(-1,12,10))
@@ -60,6 +57,7 @@ directionsMT = Parser.Results.directionsMT;
 opponentMT= Parser.Results.opponentMT;
 speedsFEF = Parser.Results.speedsFEF;
 cohsFEF = Parser.Results.cohsFEF;
+estimatorPathwayNonlinearity = Parser.Results.estimatorPathwayNonlinearity;
 sprefFromFit = Parser.Results.sprefFromFit;
 checkMTFit = Parser.Results.checkMTFit;
 speedPrefOpts = Parser.Results.speedPrefOpts;
@@ -160,6 +158,7 @@ for si = 1:length(speedsFEF)
     end
 end
 
+shat = estimatorPathwayNonlinearity(shat);
 ehat = gain.*(shat);
 c = median(speedsFEF)/ehat(1,t==80,speedsFEF==median(speedsFEF),cohsFEF==100);
 
@@ -193,7 +192,7 @@ if plotOpts.On
     for ci = 1:length(cohsFEF)
         subplot(3,length(cohsFEF),ci)
         for si = 1:length(cohsFEF)
-            plot(t,2.^shat(1,:,si,ci),'Color',speedColors(si,:))
+            plot(t,shat(1,:,si,ci),'Color',speedColors(si,:))
             hold on
         end
         xlabel('Time from motion onset (ms)')
@@ -275,7 +274,7 @@ if plotOpts.On
             set(gca,'XScale','log','TickDir','out')
             ylim(lims)
             hold on
-            plotVertical(2.^shat(1,t==80,si,ci));
+            plotVertical(shat(1,t==80,si,ci));
         end
     end
     
@@ -305,7 +304,7 @@ if plotOpts.On
             set(gca,'XScale','log','TickDir','out')
             ylim(lims)
             hold on
-            plotVertical(2.^shat(1,t==600,si,ci));
+            plotVertical(shat(1,t==600,si,ci));
         end
     end
     
@@ -380,54 +379,80 @@ if plotOpts.On
         hSpeeds = figure;
         hGains = figure;
         for filei = 1:length(compToBehavior.file)
-            temp = load(compToBehavior.file{filei},'initiationSpeed','gain');
+            temp = load(compToBehavior.file{filei},'init');
+            eye_t = temp.init.t;
+            eyeSpeed = temp.init.eye.mean;
+            slips = -squeeze(temp.init.eye.mean(temp.init.t == 750,:,:)) + speedsFEF';
+            initGain = (temp.init.eye.pert.res - temp.init.eye.pert.resControl)./(0.4*repmat(speedsFEF',[1,3,3])); 
+            clear temp
             if compToBehavior.applyLogrithmicEstimatorCorrection
-                gBehavior(:,:,1) = temp.gain(:,:,2).*speedsFEF'*0.4./log2(1.4);
-                gBehavior(:,:,2) = temp.gain(:,:,3).*speedsFEF'*0.4./log2(0.4*speedsFEF');
+                gBehavior(:,:,1) = initGain(:,:,2).*speedsFEF'*0.4./log2(1.4);
+                gBehavior(:,:,2) = initGain(:,:,3).*speedsFEF'*0.4./log2(1+0.4.*speedsFEF'./slips);
             else
-                gBehavior = temp.gain(:,:,2:3);
+                gBehavior = initGain(:,:,2:3);
             end
             ehatBehavioral = squeeze(shat(1,t==80,:,:)).*gBehavior;
             ehatBehavioral_z = (ehatBehavioral - repmat(mean(ehatBehavioral,[1,2]),[length(speedsFEF),length(cohsFEF),1]))./ ...
                 repmat(std(ehatBehavioral,[],[1,2]),[length(speedsFEF),length(cohsFEF),1]);
             
             figure(hSpeeds)
-            subplot(length(compToBehavior.file),2,1+(filei-1)*2)
+            subplot(length(compToBehavior.file),3,1+(filei-1)*3)
             for ci = 1:length(cohsFEF)
-                eyeTemp = (temp.initiationSpeed.mean(:,ci)-...
-                    mean(temp.initiationSpeed.mean,[1,2]))./...
-                    std(temp.initiationSpeed.mean,[],[1,2]);
+                eyeTemp = (eyeSpeed(eye_t==150,:,ci)-...
+                    mean(eyeSpeed(eye_t==150,:,:),[2,3]))./...
+                    std(eyeSpeed(eye_t==150,:,:),[],[2,3]);
                 plot(speedsFEF,eyeTemp,'o-',...
                     'Color',ones(1,3)-cohsFEF(ci)/100)
                 hold on
                 plot(speedsFEF,(squeeze(ehat(1,t==80,:,ci))-mean(ehat(1,t==80,:,:),[3,4]))./std(ehat(1,t==80,:,:),[],[3,4]),...
                     'x','Color',ones(1,3)-cohsFEF(ci)/100)
-                plot(speedsFEF,ehatBehavioral_z(:,ci,1),...
-                    'd','Color',ones(1,3)-cohsFEF(ci)/100,'MarkerFaceColor',ones(1,3)-cohsFEF(ci)/100)
+%                 plot(speedsFEF,ehatBehavioral_z(:,ci,1),...
+%                     'd','Color',ones(1,3)-cohsFEF(ci)/100,'MarkerFaceColor',ones(1,3)-cohsFEF(ci)/100)
             end
             xlabel('Target speed (deg/s)')
             ylabel('z-scored eye speed')
             set(gca,'TickDir','out')
             
-            subplot(length(compToBehavior.file),2,2+(filei-1)*2)
+            subplot(length(compToBehavior.file),3,2+(filei-1)*3)
             for ci = 1:length(cohsFEF)
-                eyeTemp = (temp.initiationSpeed.mean(:,ci)-...
-                    mean(temp.initiationSpeed.mean,[1,2]))./...
-                    std(temp.initiationSpeed.mean,[],[1,2]);
+                eyeTemp = (eyeSpeed(eye_t==150,:,ci)-...
+                    mean(eyeSpeed(eye_t==150,:,:),[2,3]))./...
+                    std(eyeSpeed(eye_t==150,:,:),[],[2,3]);
                 plot(eyeTemp,...
                     (squeeze(ehat(1,t==80,:,ci))-mean(ehat(1,t==80,:,:),[3,4]))./std(ehat(1,t==80,:,:),[],[3,4]),...
                     'x-','Color',ones(1,3)-cohsFEF(ci)/100)
                 hold on
-                plot(eyeTemp,...
-                    ehatBehavioral_z(:,ci,1),...
-                    'd-','Color',ones(1,3)-cohsFEF(ci)/100)
+%                 plot(eyeTemp,...
+%                     ehatBehavioral_z(:,ci,1),...
+%                     'd-','Color',ones(1,3)-cohsFEF(ci)/100)
             end
+            plotUnity();
+            axis square
+            xlabel('z-scored eye speed')
+            ylabel('z-scored predictions')
+            set(gca,'TickDir','out')
+            
+            subplot(length(compToBehavior.file),3,3+(filei-1)*3)
+            for ci = 1:length(cohsFEF)
+                eyeTemp = (eyeSpeed(eye_t==750,:,ci)-...
+                    mean(eyeSpeed(eye_t==150,:,:),[2,3]))./...
+                    std(eyeSpeed(eye_t==150,:,:),[],[2,3]);
+                plot(eyeTemp,...
+                    (squeeze(ehat(1,t==750,:,ci))-mean(ehat(1,t==80,:,:),[3,4]))./std(ehat(1,t==80,:,:),[],[3,4]),...
+                    'x-','Color',ones(1,3)-cohsFEF(ci)/100)
+                hold on
+%                 plot(eyeTemp,...
+%                     ehatBehavioral_z(:,ci,1),...
+%                     'd-','Color',ones(1,3)-cohsFEF(ci)/100)
+            end
+            plotUnity();
+            axis square
             xlabel('z-scored eye speed')
             ylabel('z-scored predictions')
             set(gca,'TickDir','out')
             
             figure(hGains)
-            subplot(1,2,filei)
+            subplot(2,2,filei)
             for ci = 1:length(cohsFEF)
                 plot(gBehavior(:,ci,1),...
                     squeeze(gain(1,t==80,:,ci)),...
@@ -442,6 +467,24 @@ if plotOpts.On
             for ci = 1:length(cohsFEF)
                 gtemp = gain(1,t==80,:,ci);
                 rtemp = corrcoef(gBehavior(:,ci,1),gtemp(:));
+                text(0.05*(ax(2)-ax(1))+ax(1),(0.95-0.1*(ci-1))*(ax(4)-ax(3))+ax(3),['r = ' num2str(rtemp(1,2))],'Color',ones(1,3)-cohsFEF(ci)/100)
+            end
+            
+            subplot(2,2,filei+2)
+            for ci = 1:length(cohsFEF)
+                plot(gBehavior(:,ci,2),...
+                    squeeze(gain(1,t==750,:,ci)),...
+                    'o-','Color',ones(1,3)-cohsFEF(ci)/100,...
+                    'MarkerFaceColor',ones(1,3)-cohsFEF(ci)/100)
+                hold on
+            end
+            xlabel('Measured gain')
+            ylabel('Predicted gain')
+            set(gca,'TickDir','out')
+            ax = axis;
+            for ci = 1:length(cohsFEF)
+                gtemp = gain(1,t==750,:,ci);
+                rtemp = corrcoef(gBehavior(:,ci,2),gtemp(:));
                 text(0.05*(ax(2)-ax(1))+ax(1),(0.95-0.1*(ci-1))*(ax(4)-ax(3))+ax(3),['r = ' num2str(rtemp(1,2))],'Color',ones(1,3)-cohsFEF(ci)/100)
             end
             

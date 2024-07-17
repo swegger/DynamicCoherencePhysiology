@@ -7,13 +7,13 @@
 %% ar initialCoh pertrubation
 detectPoorPursuit.On = true;
 detectPoorPursuit.threshold = 1.5;
-[init,gain] = initialCohPertBehavioralAnalysis('ar','dcpObjectsFile','dcpObjectsPertTemp',...
+[init,gain,gainModel] = initialCohPertBehavioralAnalysis('ar','dcpObjectsFile','dcpObjectsPertTemp',...
     'detectPoorPursuit',detectPoorPursuit,'saveResults',true,'saveFigures',true);
 
 %% fr initialCoh perturbation
 detectPoorPursuit.On = true;
 detectPoorPursuit.threshold = 1.5;
-[init,gain] = initialCohPertBehavioralAnalysis('fr','dcpObjectsFile','dcpObjectsPert20230929',...
+[init,gain,gainModel] = initialCohPertBehavioralAnalysis('fr','dcpObjectsFile','dcpObjectsPert20230929',...
     'detectPoorPursuit',detectPoorPursuit,'saveResults',true,'saveFigures',true);
 
 %% ar behavioral and physiological gain estimates 
@@ -22,6 +22,7 @@ speeds = [5, 10, 20];
 cohs = [20, 60, 100];
 
 load('/home/seth/Projects/DynamicCoherencePhysiology/ar/initCohPertResults/initCohPert20240212.mat', 'init')
+slips = -squeeze(init.eye.mean(init.t == 750,:,:)) + speeds';
 
 for pi = 1:3
     for ci = 1:length(cohs)
@@ -35,8 +36,8 @@ for pi = 1:3
         gPhys95CI(:,:,pi) = gain95CI(:,:,pi).*speeds'*0.4./log2(1.4);
     elseif pi == 3
         % Closed loop
-        gPhys(:,:,pi) = gain(:,:,pi).*speeds'*0.4./log2(0.4*speeds');
-        gPhys95CI(:,:,pi) = gain95CI(:,:,pi).*speeds'*0.4./log2(0.4*speeds');
+        gPhys(:,:,pi) = gain(:,:,pi).*speeds'*0.4./log2(1+0.4*speeds'./slips);
+        gPhys95CI(:,:,pi) = gain95CI(:,:,pi).*speeds'*0.4./log2(1+0.4*speeds'./slips);
     end
 end
 
@@ -107,6 +108,7 @@ speeds = [5, 10, 20];
 cohs = [20, 60, 100];
 
 load('/home/seth/Projects/DynamicCoherencePhysiology/fr/initCohPertResults/initCohPert20240212.mat', 'init')
+slips = -squeeze(init.eye.mean(init.t == 750,:,:)) + speeds';
 
 for pi = 1:3
     for ci = 1:length(cohs)
@@ -120,8 +122,8 @@ for pi = 1:3
         gPhys95CI(:,:,pi) = gain95CI(:,:,pi).*speeds'*0.4./log2(1.4);
     elseif pi == 3
         % Closed loop
-        gPhys(:,:,pi) = gain(:,:,pi).*speeds'*0.4./log2(0.4*speeds');
-        gPhys95CI(:,:,pi) = gain95CI(:,:,pi).*speeds'*0.4./log2(0.4*speeds');
+        gPhys(:,:,pi) = gain(:,:,pi).*speeds'*0.4./log2(1+0.4*speeds'./slips);
+        gPhys95CI(:,:,pi) = gain95CI(:,:,pi).*speeds'*0.4./log2(1+0.4*speeds'./slips);
     end
 end
 

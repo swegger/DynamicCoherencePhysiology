@@ -96,19 +96,21 @@ end
 
 %% Find the gain from behavioral data
 
-if ~exist('gain','var')
+if ~exist('gain','var') || ~exist('dyn','var')
     disp('Determining gain from dynamic coherence trials...')
     if isempty(dcpDynCohFile)
-        [~,gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcp,'directions',[0,180],'pertWin',pertWin);
+        [dyn,gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcp,'directions',[0,180],'pertWin',pertWin);
     else
         dcpDynCoh = load(dcpDynCohFile);
-        [~,gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcpDynCoh.dcp,'directions',[0,180],'pertWin',pertWin);
+        [dyn,gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcpDynCoh.dcp,'directions',[0,180],'pertWin',pertWin);
     end
+    eye_tDyn = dyn.t;
+    meanEyeSpeedDyn = dyn.eye.mean;
 end
 
 if testInitGain
     disp('Determining gain from initiate coherence trials...')
-    if ~exist('initGain','var')
+    if ~exist('initGain','var') || ~exist('init','var')
         if ~isempty(initCohPertFile) && isfile(initCohPertFile)
             load(initCohPertFile,'init')
         else
@@ -116,6 +118,8 @@ if testInitGain
             [init,~] = initialCohPertBehavioralAnalysis(dcp{1}.sname,'dcp',dcpInitCohPert.dcp(1:end),...
                 'outlierReject',false,'win',[150 200],'keep_pert3always0deg',false,'directions',[0,180],'pertWin',pertWin);
         end
+        eye_t = init.t;
+        meanEyeSpeed = init.eye.mean;
         initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
     end
 end
@@ -905,10 +909,13 @@ xlabel('Behavioral gain (unitless)')
 ylabel('Spikes/s')
 
 %% Simple avaraging, by cluster
+speedRegression.y = [];
 gainRegression.y = [];
 if testInitGain
+    speedRegression.x = nan(length(speeds)*length(cohs)+3*length(sequences),NumClusters);
     gainRegression.x = nan(length(speeds)*length(cohs)+3*length(sequences),NumClusters);
 else
+    speedRegression.x = nan(3*length(sequences),NumClusters);
     gainRegression.x = nan(3*length(sequences),NumClusters);
 end
 for i = 1:NumClusters
@@ -984,6 +991,51 @@ for i = 1:NumClusters
     ylabel('Spikes/s')
     
     gvrh = figure('Name',['Cluster ' num2str(i)]);
+    subplot(1,2,1)
+    eyeSpeedTemp = squeeze(nanmean(meanEyeSpeedDyn(eye_tDyn >= 450 & eye_tDyn <= 450,:,:),1));
+    dynRatesTemp = nanmean(squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,idx==i),1)),2)*1000;
+    speedRegression.x(1:length(sequences),i) = dynRatesTemp;
+    for seqi = 1:length(sequences)
+        plot(eyeSpeedTemp(seqi),dynRatesTemp(seqi),'d','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+        hold on
+    end
+    eyeSpeedTemp = squeeze(nanmean(meanEyeSpeedDyn(eye_tDyn >= 750 & eye_tDyn <= 750,:,:),1));
+    dynRatesTemp = nanmean(squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,:,idx==i),1)),2)*1000;
+    speedRegression.x(length(sequences)+1:2*length(sequences),i) = dynRatesTemp;
+    for seqi = 1:length(sequences)
+        plot(eyeSpeedTemp(seqi),dynRatesTemp(seqi),'o','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    end
+    eyeSpeedTemp = squeeze(nanmean(meanEyeSpeedDyn(eye_tDyn >= 1050 & eye_tDyn <= 1050,:,:),1));
+    dynRatesTemp = nanmean(squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 1000 & dynCoh.neuron_t <= 1100,:,idx==i),1)),2)*1000;
+    speedRegression.x(2*length(sequences)+1:3*length(sequences),i) = dynRatesTemp;
+    for seqi = 1:length(sequences)
+        plot(eyeSpeedTemp(seqi),dynRatesTemp(seqi),'s','Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:))
+    end
+    if testInitGain
+        for si = 1:length(speeds)
+            eyeSpeedTemp = squeeze(nanmean(meanEyeSpeed(eye_t >= 750 & eye_t <= 750,:,:),1));
+            initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 700 & dynCoh.neuron_t <= 800,si,:,:),1)),2)*1000;
+            speedRegression.x(3*length(sequences)+(si-1)*length(cohs)+1:3*length(sequences)+si*length(cohs),i) = initRatesTemp;
+            plot(eyeSpeedTemp(si,:),initRatesTemp,...
+                'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+        end
+        if includeEarlyInitCohPertTime
+            for si = 1:length(speeds)
+                eyeSpeedTemp = squeeze(nanmean(meanEyeSpeed(eye_t >= 150 & eye_t <= 150,:,:),1));
+                initRatesTemp = nanmean(squeeze(nanmean(a(dynCoh.neuron_t >= 100 & dynCoh.neuron_t <= 200,si,:,:),1)),2)*1000;
+                speedRegression.x(3*length(sequences)+3*length(cohs) + (si-1)*length(cohs)+1:3*length(sequences)+3*length(cohs)+si*length(cohs),i) = initRatesTemp;
+                plot(eyeSpeedTemp(si,:),initRatesTemp,...
+                    'd-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+            end
+        end
+        
+    end
+    axis square
+    set(gca,'TickDir','out')
+    xlabel('Eye speed (deg/s)')
+    ylabel('Spikes/s')
+    
+    subplot(1,2,2)
     dynRatesTemp = nanmean(squeeze(nanmean(Rdyn(dynCoh.neuron_t >= 400 & dynCoh.neuron_t <= 500,:,idx==i),1)),2)*1000;
     gainRegression.x(1:length(sequences),i) = dynRatesTemp;
     for seqi = 1:length(sequences)
@@ -1017,6 +1069,8 @@ for i = 1:NumClusters
         end
         
     end
+    axis square
+    set(gca,'TickDir','out')
     xlabel('Behavioral gain (unitless)')
     ylabel('Spikes/s')
 end

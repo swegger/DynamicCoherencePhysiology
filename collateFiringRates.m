@@ -12,7 +12,7 @@ Parser = inputParser;
 
 addRequired(Parser,'dcp')
 addParameter(Parser,'sourceDirectory','/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Aristotle')
-addParameter(Parser,'dir',[0 180])
+addParameter(Parser,'directions',[0 180])
 addParameter(Parser,'initCohCollate',true)
 addParameter(Parser,'dynCohCollate',true)
 addParameter(Parser,'preAllocationSize',1000)
@@ -24,7 +24,7 @@ parse(Parser,dcp,varargin{:})
 
 dcp = Parser.Results.dcp;
 sourceDirectory = Parser.Results.sourceDirectory;
-dir = Parser.Results.dir;
+directions = Parser.Results.directions;
 preAllocationSize = Parser.Results.preAllocationSize;
 initCohCollate = Parser.Results.initCohCollate;
 dynCohCollate = Parser.Results.dynCohCollate;
@@ -74,10 +74,10 @@ for filei = 1:length(dcp)
                     unitInd = 1:length(initCoh.preferredDirectionRelative);
                 end
                 for uniti = unitInd
-                    ind = find(dir == initCoh.preferredDirectionRelative(uniti));
+                    ind = find(directions == initCoh.preferredDirectionRelative(uniti));
                     Rinit(:,:,:,indx) = initCoh.R(:,:,:,uniti,ind);
                     
-                    ind = find(dir == dynCoh.preferredDirectionRelative(uniti));
+                    ind = find(directions == dynCoh.preferredDirectionRelative(uniti));
                     Rdyn(:,:,indx) = dynCoh.R(:,:,uniti,ind);
                     
                     
@@ -143,7 +143,7 @@ for filei = 1:length(dcp)
                 unitInd = 1:length(dynCoh.preferredDirectionRelative);
             end
             for uniti = unitInd
-                ind = find(dir == dynCoh.preferredDirectionRelative(uniti));
+                ind = find(directions == dynCoh.preferredDirectionRelative(uniti));
                 Rdyn(:,:,indx) = dynCoh.R(:,:,uniti,ind);
                 
                 for j = 1:length(dynCoh.unitIndex)
@@ -207,7 +207,7 @@ for filei = 1:length(dcp)
                 unitInd = 1:length(initCoh.preferredDirectionRelative);
             end
             for uniti = unitInd
-                ind = find(dir == initCoh.preferredDirectionRelative(uniti));
+                ind = find(directions == initCoh.preferredDirectionRelative(uniti));
                 Rinit(:,:,:,indx) = initCoh.R(:,:,:,uniti,ind);
                 
                 for j = 1:length(initCoh.unitIndex)

@@ -76,7 +76,7 @@ mtResults = load(objectFile);
 if simulateMT.On
     t = -500:900;
     speeds = speedsFEF;
-    [MT, spref, cohs] = simulateMTdata(mtResults,mtNeuron_t,simulateMT.modelN,...
+    [MT, spref, cohs] = simulateMTdata(mtResults,t,simulateMT.modelN,...
         'speedsMT',speeds,'removeBaseline',simulateMT.removeBaseline,'gaussianApprox',simulateMT.gaussianApprox);
     swidth = 1.2*ones(size(spref));
 else
@@ -136,24 +136,37 @@ for ri = 1:size(Atheory,2)
 end
 theoreticalInput = theoreticalInput - theoreticalInput(:,t==0,:,:);
 theoreticalInput(:,t<0,:,:) = 0;
-theoreticalInput(1,:,:,:) = theoreticalInput(1,:,:,:) - theoreticalInput(1,:,2,2);
-theoreticalInput(2,:,:,:) = theoreticalInput(2,:,:,:) - theoreticalInput(2,:,3,3);
+% theoreticalInput(1,:,:,:) = theoreticalInput(1,:,:,:) - theoreticalInput(1,:,2,2);
+% theoreticalInput(2,:,:,:) = theoreticalInput(2,:,:,:) - theoreticalInput(2,:,3,3);
+theoreticalInput(3,:,:,:) = repmat(t'/1000,[1 length(speedsFEF) length(cohsFEF)]);
+theoreticalInput(3,t<0,:,:) = 0;
 theoreticalInput = theoreticalInput./max(abs(theoreticalInput),[],[2,3,4]);
 theoreticalInput(3,:,:,:) = 0;
 % theoreticalInput(2,:,:,:) = theoreticalInput(2,:,:,:)/10000;
 
 %% Set overlaps and sigmas
-N = 2;
+N = 3;
 M = size(theoreticalInput,1);
 if any(isnan(overlaps(:)))
+%     overlapsSet = zeros(N,N+M);
+%     overlapsSet(1,1) = 1;
+%     overlapsSet(2,1) = 1.7;
+%     overlapsSet(2,2) = 0.5;
+%     overlapsSet(1,N+1) = 0.5;
+%     overlapsSet(1,N+2) = 0;
+%     overlapsSet(2,N+2) = 0;
+%     overlapsSet(2,N+1) = -1.9;
     overlapsSet = zeros(N,N+M);
     overlapsSet(1,1) = 1;
-    overlapsSet(2,1) = 1.7;
+    overlapsSet(2,1) = 1.9;
     overlapsSet(2,2) = 0.5;
+    overlapsSet(2,3) = -1.0;
+    overlapsSet(3,3) = 1;
     overlapsSet(1,N+1) = 0.5;
-    overlapsSet(1,N+2) = 0;
+    overlapsSet(1,N+2) = 0.5;
     overlapsSet(2,N+2) = 0;
-    overlapsSet(2,N+1) = -1.9;
+    overlapsSet(2,N+1) = -1.0;
+    overlapsSet(3,N+2) = 0.5;
 else
     overlapsSet = overlaps;
 end
@@ -165,6 +178,7 @@ else
 end
 
 %% Simulate reduced rank network
+kappas0 = zeros(N,1);
 for si = 1:length(speedsFEF)
     for ci = 1:length(cohsFEF)
         [~,kappas(:,:,si,ci),sigmaTildes(:,:,:,si,ci),deltas(:,si,ci),~] = simulateLatentDynamics('tau',tau/(t(2)-t(1)),...
@@ -184,8 +198,12 @@ g = sigmaTildes./overlapsSet;
 if plotOpts.On
     
     %% Plot reduced rank outputs
-    dims = {'speed','gain'};
+    dims = {'speed','gain','coh'};
     figure('Name',['Inputs and outputs'],'Position',[1961 282 560 1040])
+    subplot(length(dims)+M,2,[find(mod(1:2*M,2))]+1)
+    imagesc(overlapsSet')
+    xlabel('To')
+    ylabel('From')
     for di = 1:M
         subplot(length(dims)+M,2,1+(di-1)*2)
         for si = 1:length(speedsFEF)

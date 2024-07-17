@@ -290,10 +290,12 @@ for gi = 1:length(tGainMeasurement)
     subplot(1,length(tGainMeasurement)+1,gi)
     for si = 1:length(speeds)
         plot(gains(si,:,gi),squeeze(grandAveFavored(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
-            'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+            'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:),...
+            'DisplayName',['Speed = ' num2str(speeds(si)) ', gain favoring'])
         hold on
         plot(gains(si,:,gi),squeeze(grandAve(initCoh.neuron_t == tGainMeasurement(gi),si,:)),...
-            'o-','Color',speedColors(si,:))
+            'o-','Color',speedColors(si,:),...
+            'DisplayName',['Speed = ' num2str(speeds(si)) ', all neurons'])
     end
     xlabel('Behavioral gain (unitless)')
     ylabel('Mean spikes/s')
@@ -303,10 +305,12 @@ end
 subplot(1,length(tGainMeasurement)+1,length(tGainMeasurement)+1)
 for si = 1:length(speeds)
     plot(gains(si,:,gainFitInd),squeeze(nanmean(grandAveFavored(taccept,si,:),1)),...
-        'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:))
+        'o-','Color',speedColors(si,:),'MarkerFaceColor',speedColors(si,:),...
+        'DisplayName',['Speed = ' num2str(speeds(si)) ', gain favoring'])
     hold on
     plot(gains(si,:,gainFitInd),squeeze(nanmean(grandAve(taccept,si,:),1)),...
-        'o-','Color',speedColors(si,:))
+        'o-','Color',speedColors(si,:),...
+        'DisplayName',['Speed = ' num2str(speeds(si)) ', all neurons'])
 end
 xlabel('Behavioral gain (unitless)')
 ylabel('Mean spikes/s')

@@ -1,0 +1,60 @@
+--- dcpTargetedDimensionalityReduction.m	2024-05-17 11:40:40.028389821 -0400
++++ dcpTargetedDimensionalityReduction.asv	2024-05-17 12:04:10.400376741 -0400
+@@ -76,10 +76,10 @@
+ 
+ disp('Determining gain from dynamic coherence trials...')
+ if isempty(dcpDynCohFile)
+-    [~,gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcp,'directions',[0,180],'pertWin',pertWin);
++    [dyn, gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcp,'directions',[0,180],'pertWin',pertWin);
+ else
+     dcpDynCoh = load(dcpDynCohFile);
+-    [~,gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcpDynCoh.dcp,'directions',[0,180],'pertWin',pertWin);
++    [dyn, gain] = dynamicCohBehavioralAnalysis(dcp{1}.sname,'dcp',dcpDynCoh.dcp,'directions',[0,180],'pertWin',pertWin);
+ end
+ 
+ if ~isempty(initCohPertFile) && isfile(initCohPertFile)
+@@ -93,6 +93,13 @@
+ initGain = (init.eye.pert.res - init.eye.pert.resControl)./(0.4*repmat(speeds,[1,3,3]));
+ 
+ if applyLogrithmicEstimatorCorrection
++    for seqi = 1:length(sequences)
++        for pi = 1:length(dyn.eye.pert.t(seqi,:))
++            slips(seqi,pi) = -dyn.eye.pert.m(dyn.t == dyn.eye.pert.t(seqi,pi),seqi,1) + 10;
++        end
++    end
++    gain = gain.*10*0.4./
++    
+     slips = -squeeze(init.eye.mean(init.t == 750,:,:)) + speeds;
+     initGain(:,:,2) = initGain(:,:,2).*speeds*0.4./log2(1.4);
+     initGain(:,:,3) = initGain(:,:,3).*speeds*0.4./log2(1+0.4.*speeds./slips);
+@@ -430,29 +437,7 @@
+                 Rdyn(dynCoh.neuron_t>=min(t100) & dynCoh.neuron_t<=max(t100),5,:);
+         end
+     end
+-    
+-    figure
+-    subplot(2,1,1)
+-    for seqi = 1:5
+-        plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(c(:,seqi,:)),2)*1000,'Color',colors(seqi,:))
+-        hold on
+-        plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(b(:,seqi,:)),2)*1000,'Color',colors(seqi,:))
+-    end
+-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,2,1,:)-a(:,2,2,:)),2)*1000,'Color',initColors(1,:))
+-    hold on
+-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,2,3,:)-a(:,2,2,:)),2)*1000,'Color',initColors(3,:))
+-    plotHorizontal(0);
+-    plotVertical([450 750 1050]);
+-    xlabel('Time from motion onset (ms)')
+-    ylabel('Excess spike/s')
+-    
+-    subplot(2,1,2)
+-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(a(:,2,2,:)),2)*1000,'Color',initColors(2,:))
+-    hold on
+-    plot(dynCoh.neuron_t(dynCoh.neuron_t<=1350),nanmean(squeeze(Rdyn(:,5,:)),2)*1000,'Color',colors(5,:))
+-    plotVertical([450 750 1050]);
+-    xlabel('Time from motion onset (ms)')
+-    ylabel('Spikes/s')
++        
+     
+     figure('Name','Grand average','Position',[486 733 1650 420])
+     minMax = [Inf,0];
