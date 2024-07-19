@@ -1,4 +1,4 @@
-function [Rinit, Rdyn, cellID, passCutoff, locations] = collateFiringRates(dcp,varargin)
+function [Rinit, Rdyn, cellID, passCutoff, locations, ResInit, Minit, Ninit, Cinit, VarCEinit] = collateFiringRates(dcp,varargin)
 %% collateFiringRates
 %
 %
@@ -19,6 +19,9 @@ addParameter(Parser,'preAllocationSize',1000)
 addParameter(Parser,'chanMap',[7 1; 6 2; 5 3; 4 4; 3 5; 2 6; 1 7; 0 8; 23 9; 22 10; 21 11; 20 12; 19 13; 18 14; 17 15; 16 16; 15 17; 14 18; 13 19; 12 20; 11 21; 10 22; 9 23; 8 24])
 addParameter(Parser,'checkUnitType',false)
 addParameter(Parser,'rateCutoff',NaN)
+addParameter(Parser,'calcRes',false)
+addParameter(Parser,'calcCov',false)
+addParameter(Parser,'calcVarCE',false)
 
 parse(Parser,dcp,varargin{:})
 
@@ -31,6 +34,9 @@ dynCohCollate = Parser.Results.dynCohCollate;
 chanMap = Parser.Results.chanMap;
 checkUnitType = Parser.Results.checkUnitType;
 rateCutoff = Parser.Results.rateCutoff;
+calcRes = Parser.Results.calcRes;
+calcCov = Parser.Results.calcCov;
+calcVarCE = Parser.Results.calcVarCE;
 
 %% Collate responses
 passCutoff = nan(preAllocationSize,1);
@@ -39,6 +45,17 @@ Rdyn = nan(1701,5,preAllocationSize);
 locations = nan(preAllocationSize,3);
 cellID = nan(preAllocationSize,100,3);
 indx = 1;
+
+ResInit = NaN;%nan(1701,preAllocationSize,100*9);
+Minit = NaN;%nan(1701,preAllocationSize,3,3,1);
+Ninit = NaN;%nan(1,preAllocationSize,3,3,1);
+if calcCov.On
+    Cinit = nan(length(calcCov.binT),length(calcCov.binT),preAllocationSize);
+else
+    Cinit - nan(1,1,preAllocationSize);
+end
+VarCEinit = nan(1701,preAllocationSize);
+
 for filei = 1:length(dcp)
     disp(['File ' num2str(filei) ' of ' num2str(length(dcp))])
     
@@ -244,8 +261,26 @@ for filei = 1:length(dcp)
                 end
                 locations(indx,:) = [x,y,depth];
                 
+                if calcRes
+                    [ResTemp, MTemp, NTemp] = calcREsiduals(initCoh,...
+                        unique(initCoh.speeds),unique(initCoh.coh),initCoh.preferredDirectionRelative(uniti));
+                    ResInit(:,indx,:) = ResTemp(:,uniti,:);
+                    Minit(:,indx,:,:,:) = MTemp(:,uniti,:,:,:);
+                    Ninit(1,indx,:,:,:) = NTemp(1,1,:,:,:);
+                end                
+                if calcCov.On
+                    Ctemp = findCovariance(initCoh,calcCov.binT,...
+                        unique(initCoh.speeds),unique(initCoh.coh),initCoh.preferredDirectionRelative(uniti));
+                    Cinit(:,:,indx) = Ctemp(:,:,uniti);
+                end
+                if calcVarCE
+                    VarCEtemp = findVarCE(initCoh,...
+                        unique(initCoh.speeds),unique(initCoh.coh),initCoh.preferredDirectionRelative(uniti));
+                    VarCEinit(:,indx) = VarCEtemp(:,uniti);
+                end
                 indx = indx+1;
             end
+            
         end    
     end
 end
@@ -256,3 +291,6 @@ locations = locations(1:indx-1,:);
 passCutoff = logical(passCutoff(1:indx-1));
 cellID = cellID(1:indx-1,:,:);
     
+ResInit = NaN;%ResInit(:,1:indx-1,:);
+Cinit = Cinit(:,:,1:indx-1);
+VarCEinit = VarCEinit(:,1:indx-1);

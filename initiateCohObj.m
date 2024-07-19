@@ -215,9 +215,15 @@ classdef initiateCohObj < dcpObj
         
         %% Behavioral analysis methods
         
-        function [C, res] = findCovarianceBehavior(obj,speeds,cohs,dirs,win,interpolationMethod)
+        function [C, res] = findCovarianceBehavior(obj,speeds,cohs,dirs,win,interpolationMethod,interpolationThreshold,detectPoorPursuitThreshold)
             if ~exist('interpolationMethod','var')
                 interpolationMethod = 'Linear';
+            end
+            if ~exist('interpolationThreshold','var')
+                interpolationThreshold = 0;
+            end
+            if ~exist('detectPoorPursuitThreshold','var')
+                detectPoorPursuitThreshold = Inf;
             end
             res = nan(1000,length(obj.eye_t(obj.eye_t>=win(1) & obj.eye_t<= win(2))));
             ind = 1;
@@ -229,6 +235,13 @@ classdef initiateCohObj < dcpObj
                         ev = vertcat(obj.eye(:).vvel);
                         eSpeed = sqrt(eh(condLogical,:).^2 + ...
                             ev(condLogical,:).^2);
+                        
+                        rmse = sqrt(nanmean(...
+                            (eSpeed(:,obj.eye_t > 200 & obj.eye_t < 1200)-speeds(si)).^2,2))...
+                            ./speeds(si);
+                        
+                        meetsThreshold = sum(~isnan(eSpeed),2) > interpolationThreshold & rmse < detectPoorPursuitThreshold;
+                        eSpeed = eSpeed(meetsThreshold,:);
                         
                         % interpolate during sacceades
                         switch interpolationMethod
@@ -247,7 +260,7 @@ classdef initiateCohObj < dcpObj
                                 
                         end
                         
-                        res(ind:ind+sum(condLogical)-1,:) = ...
+                        res(ind:ind+size(eSpeed,1)-1,:) = ...
                             eSpeed(:,obj.eye_t>=win(1) & obj.eye_t<= win(2)) - ...
                             mean(eSpeed(:,obj.eye_t>=win(1) & obj.eye_t<= win(2)),1);
                         ind = ind+sum(condLogical);
@@ -491,6 +504,26 @@ classdef initiateCohObj < dcpObj
             FF = V./M;
             phi = min(FF,[],1);
             varCE = V - repmat(phi,[size(M,1),1]).*M;
+        end
+        
+        function [res, m, n] = calcResiduals(obj,speeds,cohs,dirs)
+            rtemp = obj.r*obj.filterWidth*2;
+            res = nan(size(rtemp));
+            res = permute(res,[1,3,2]);
+            ind = 1;
+            for di = 1:length(dirs)
+                for si = 1:length(speeds)
+                    for ci = 1:length(cohs)
+                        [~,condLogical] = trialSort(obj,dirs(di),speeds(si),NaN,cohs(ci));
+                        m(:,:,di,si,ci) = mean(rtemp(:,condLogical,:),2);
+                        res(:,:,ind:ind+sum(condLogical)-1) = permute(rtemp(:,condLogical,:),[1,3,2]) - ...
+                            repmat(m(:,:,di,si,ci),[1,1,sum(condLogical)]);
+                        n(1,1,di,si,ci) = sum(condLogical);
+                        ind = ind+sum(condLogical);
+                    end
+                end
+            end
+            res = res(:,:,1:ind-1);
         end
         
         function [rsc,pval] = spikeCountCorrelation(obj,varargin)

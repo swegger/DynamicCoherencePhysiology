@@ -234,7 +234,7 @@ end
 Rinit = Rinit(:,:,:,m<=150 & m2<=150);
 Rdyn = Rdyn(:,:,m<=150 & m2<=150);
 locations = locations(m<=150 & m2<=150,:);
-cellID = cellID(m<=150 & m2<150,:,:);
+cellID = cellID(m<=150 & m2<=150,:,:);
 
 %% Remove tail
 if dynCohCollate

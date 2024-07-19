@@ -14,10 +14,10 @@ addRequired(Parser,'subject')
 addParameter(Parser,'lambdaS',31*0.3)
 addParameter(Parser,'lambdaT',100)
 addParameter(Parser,'mtSig',logspace(-3,-0.5,4))
-addParameter(Parser,'otherInputSig',logspace(-2,-0.1,4))
+addParameter(Parser,'otherInputSig',logspace(-2,0,4))
 addParameter(Parser,'trialN',200)
 addParameter(Parser,'noiseTimeConstant',20/1000)
-addParameter(Parser,'otherInputNoiseModel','rampSlope')
+addParameter(Parser,'otherInputNoiseModel','lowpassNoise')
 
 parse(Parser,subject,varargin{:})
 
@@ -242,52 +242,23 @@ switch subject
                 end
                 
 %                 speedNoise(mtSigi,inSigi,1) = var(kappasNoise(1,simulateMT.t==150,:,:,3,mtSigi,inSigi),[],'all');
-                outN = Inf;
                 kappasTemp = squeeze(kappasNoise(1,simulateMT.t==150,:,:,3,mtSigi,inSigi));
-                count = 0;
-                while outN > 10 && count <= 10
-                    count = count+1;
-                    m = mean(kappasTemp,'all');
-                    v = var(kappasTemp,[],'all');
-                    kappasTemp = kappasTemp(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                    outN = sum(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                end
-                speedNoise(mtSigi,inSigi,1) = v;
+                v = robustSpeedVarianceEstimate(kappasTemp,20);
+                speedNoise(mtSigi,inSigi,1) = sum(v);
+                
 %                 gainNoise(mtSigi,inSigi,1) = var(kappasNoise(2,simulateMT.t == 150,:,:,3,mtSigi,inSigi),[],'all');
-                outN = Inf;
                 kappasTemp = squeeze(kappasNoise(2,simulateMT.t==150,:,:,3,mtSigi,inSigi));
-                count = 0;
-                while outN > 10 && count <= 10
-                    count = count+1;
-                    m = mean(kappasTemp,'all');
-                    v = var(kappasTemp,[],'all');
-                    kappasTemp = kappasTemp(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                    outN = sum(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                end
+                v = robustGainVarianceEstimate(kappasTemp,20);
                 gainNoise(mtSigi,inSigi,1) = v;
+                
 %                 speedNoise(mtSigi,inSigi,2) = var(kappasNoise(1,simulateMT.t==750,:,:,3,mtSigi,inSigi),[],'all');
-                outN = Inf;
                 kappasTemp = squeeze(kappasNoise(1,simulateMT.t==750,:,:,3,mtSigi,inSigi));
-                count = 0;
-                while outN > 10 && count <= 10
-                    count = count+1;
-                    m = mean(kappasTemp,'all');
-                    v = var(kappasTemp,[],'all');
-                    kappasTemp = kappasTemp(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                    outN = sum(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                end
-                speedNoise(mtSigi,inSigi,2) = v;
+                v = robustSpeedVarianceEstimate(kappasTemp,20);
+                speedNoise(mtSigi,inSigi,2) = sum(v);
+                
 %                 gainNoise(mtSigi,inSigi,2) = var(kappasNoise(2,simulateMT.t == 750,:,:,3,mtSigi,inSigi),[],'all');
-                outN = Inf;
                 kappasTemp = squeeze(kappasNoise(2,simulateMT.t==750,:,:,3,mtSigi,inSigi));
-                count = 0;
-                while outN > 10 && count <= 10
-                    count = count+1;
-                    m = mean(kappasTemp,'all');
-                    v = var(kappasTemp,[],'all');
-                    kappasTemp = kappasTemp(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                    outN = sum(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
-                end
+                v = robustGainVarianceEstimate(kappasTemp,20);
                 gainNoise(mtSigi,inSigi,2) = v;
 %                 
 %                 figure
@@ -368,7 +339,7 @@ colorbar
 subplot(2,2,4)
 contour(MTSIG,INSIG,sqrt(gainNoise(:,:,2)*gainBeta(1)^2),logspace(log10(min(sqrt(gainNoise(:)*gainBeta(1)^2))),log10(max(sqrt(gainNoise(:)*gainBeta(1)^2))),10))
 hold on
-contour(MTSIG,INSIG,sqrt(gainNoise(:,:,1)*gainBeta(1)^2),[0.043 0.07],'r','LineWidth',2)
+contour(MTSIG,INSIG,sqrt(gainNoise(:,:,2)*gainBeta(1)^2),[0.043 0.07],'r','LineWidth',2)
 xlabel('MT input noise')
 ylabel('Extra input noise')
 title('Gain noise, late')
@@ -393,3 +364,32 @@ function Sigma = covarainceFunctionSpeedPreference(lambdaS,prefSpeeds)
     prefSpeeds = prefSpeeds(:)';
     
     Sigma = exp(-(prefSpeeds-prefSpeeds').^2/2/lambdaS^2);
+    
+function v = robustSpeedVarianceEstimate(kappasTemp,countMax)
+    outN = Inf;
+    count = 0;
+    while outN > 10 && count < countMax
+        count = count+1;
+        m = nan(1,size(kappasTemp,2));
+        v = nan(1,size(kappasTemp,2));
+        kappaOut = false(size(kappasTemp));
+        for si = 1:size(kappasTemp,2)
+            m(si) = nanmean(kappasTemp(:,si));
+            v(si) = nanvar(kappasTemp(:,si));
+            kappaOut(:,si) = kappasTemp(:,si) <= (m(si)+2*sqrt(v(si))) & kappasTemp(:,si) >= (m(si)-2*sqrt(v(si)));
+        end
+        kappasTemp(~kappaOut) = NaN;
+        outN = sum(~kappaOut(:));
+    end
+    
+function v = robustGainVarianceEstimate(kappasTemp,countMax)
+    outN = Inf;
+    count = 0;
+    while outN > 10 && count <= countMax
+        count = count+1;
+        m = mean(kappasTemp,'all');
+        v = var(kappasTemp,[],'all');
+        kappasTemp = kappasTemp(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
+        outN = sum(kappasTemp <= (m+2*sqrt(v)) & kappasTemp >= (m-2*sqrt(v)));
+    end
+    
