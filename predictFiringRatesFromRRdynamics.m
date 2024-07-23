@@ -15,6 +15,9 @@ addParameter(Parser,'neuronTypingFile',NaN)
 addParameter(Parser,'fitReducedRankDynamicsFile',NaN)
 addParameter(Parser,'MTtoFEFregressionFile',NaN)
 addParameter(Parser,'speedCluster',9)
+addParameter(Parser,'speeds',[5,10,20])
+addParameter(Parser,'cohs',[20 60 100])
+addParameter(Parser,'tol',1)
 
 parse(Parser,subject,varargin{:})
 
@@ -23,6 +26,16 @@ neuronTypingFile = Parser.Results.neuronTypingFile;
 fitReducedRankDynamicsFile = Parser.Results.fitReducedRankDynamicsFile;
 MTtoFEFregressionFile = Parser.Results.MTtoFEFregressionFile;
 speedCluster = Parser.Results.speedCluster;
+speeds = Parser.Results.speeds;
+cohs = Parser.Results.cohs;
+tol = Parser.Results.tol;
+
+%% Colors
+speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
+figure;
+colors = colormap('lines');
+close(gcf)
+initColors = 1-[20 20 20; 60 60 60; 100 100 100]/100;
 
 %% Check for specific files as input, otherwise set default files
 if any(isnan(neuronTypingFile))
@@ -108,30 +121,84 @@ R_c = R_c-mean(R_c(data_t<=0,:,:,:),'all');
 % R_c = (R-mean(R(data_t<=0,:,:,:),'all'))./max(abs(R-mean(R(data_t<=0,:,:,:),'all')),[],[1,2,3]);
 
 %% Estimate R from regression against inputs/dynamics
-X = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),size(inputsTheory,1)+size(kappas,1)+1);
-Xin = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),1+size(kappas,1)+1);
-Xout = nan(size(Xin,1),size(R,4));
-Xunexplained = nan(size(Xin,1),size(R,4));
-Xexplained = permute(sum(input(1:2,:,:,:,:).*repmat(I_l_ortho',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,2,4,5,1]);
-
-ind = 1;
-for si = 1:size(inputsTheory,3)
-    for ci = 1:size(inputsTheory,4)
-        X(ind:ind+size(inputsTheory,2)-1,1:size(inputsTheory,1)) = permute(inputsTheory(:,:,si,ci),[2,1,3,4]);
-        X(ind:ind+size(inputsTheory,2)-1,size(inputsTheory,1)+1:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
-        X(ind:ind+size(inputsTheory,2)-1,end) = 1;
-        Xin(ind:ind+size(inputsTheory,2)-1,1) = permute(inputsTheory(1,:,si,ci),[2,1,3,4]);
-        Xin(ind:ind+size(inputsTheory,2)-1,2:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
-        Xin(ind:ind+size(inputsTheory,2)-1,end) = 1;
-        Xout(ind:ind+size(inputsTheory,2)-1,:) = squeeze(R_c(data_t<=t(end),si,ci,:));
-        Xunexplained(ind:ind+size(inputsTheory,2)-1,:) = Xout(ind:ind+size(inputsTheory,2)-1,:)-Xexplained(:,:,si,ci);
-        ind = ind + size(inputsTheory,2);
+I_ortho = [I_l zeros(size(I_l_ortho,1),1)];
+% angles = zeros(size(inputsTheory,1),length(rrModel.modelFEF.dimNames));
+    X = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),size(inputsTheory,1)+size(kappas,1)+1);
+    Xin = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),1+size(kappas,1)+1);
+    Xout = nan(size(Xin,1),size(R,4));
+    Xunexplained = nan(size(Xin,1),size(R,4));
+    Xexplained = permute(sum(input(1:2,:,:,:,:).*repmat(I_ortho(:,1:size(I_ortho,2)-1)',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,2,4,5,1]);
+    
+    ind = 1;
+    for si = 1:size(inputsTheory,3)
+        for ci = 1:size(inputsTheory,4)
+            X(ind:ind+size(inputsTheory,2)-1,1:size(inputsTheory,1)) = permute(inputsTheory(:,:,si,ci),[2,1,3,4]);
+            X(ind:ind+size(inputsTheory,2)-1,size(inputsTheory,1)+1:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
+            X(ind:ind+size(inputsTheory,2)-1,end) = 1;
+            Xin(ind:ind+size(inputsTheory,2)-1,1) = permute(inputsTheory(3,:,si,ci),[2,1,3,4]);
+            Xin(ind:ind+size(inputsTheory,2)-1,2:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
+            Xin(ind:ind+size(inputsTheory,2)-1,end) = 1;
+            Xout(ind:ind+size(inputsTheory,2)-1,:) = squeeze(R_c(data_t<=t(end),si,ci,:));
+            Xunexplained(ind:ind+size(inputsTheory,2)-1,:) = Xout(ind:ind+size(inputsTheory,2)-1,:)-Xexplained(:,:,si,ci);
+            ind = ind + size(inputsTheory,2);
+        end
     end
+    
+    % Collect vectors
+    B = inv(Xin'*Xin)*Xin'*Xunexplained;
+    B = [I_ortho(:,1:size(I_ortho,2)-1)'; B];
+    B2 = (B'./vecnorm(B'))';
+    
+    % Measure angles between input vectors and
+    angles = acosd(B2(1:size(inputsTheory,1),:)*B2(size(inputsTheory,1)+1:end-1,:)');
+    
+    % Orthogonalize input space to recurrent space
+    I_l = B(1:size(inputsTheory,1),:)';
+    m_r_temp = B(size(inputsTheory,1)+1:end-1,:)';
+    for inputi = 1:size(I_ortho,2)
+        I_ortho(:,inputi) = I_l(:,inputi) - m_r_temp*inv(m_r_temp'*m_r_temp)*m_r_temp'*I_l(:,inputi);
+    end
+    
+%     I_ortho = I_ortho./vecnorm(I_ortho);
+
+while any(abs(angles(:)-90) > tol)    
+    X = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),size(inputsTheory,1)+size(kappas,1)+1);
+    Xin = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),size(kappas,1)+1);
+    Xout = nan(size(Xin,1),size(R,4));
+    Xunexplained = nan(size(Xin,1),size(R,4));
+    Xexplained = permute(sum(input(1:3,:,:,:,:).*repmat(I_ortho',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,2,4,5,1]);
+    
+    ind = 1;
+    for si = 1:size(inputsTheory,3)
+        for ci = 1:size(inputsTheory,4)
+            X(ind:ind+size(inputsTheory,2)-1,1:size(inputsTheory,1)) = permute(inputsTheory(:,:,si,ci),[2,1,3,4]);
+            X(ind:ind+size(inputsTheory,2)-1,size(inputsTheory,1)+1:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
+            X(ind:ind+size(inputsTheory,2)-1,end) = 1;
+            Xin(ind:ind+size(inputsTheory,2)-1,1:end-1) = permute(kappas(:,1,:,si,ci),[3,1,2,4,5]);
+            Xin(ind:ind+size(inputsTheory,2)-1,end) = 1;
+            Xout(ind:ind+size(inputsTheory,2)-1,:) = squeeze(R_c(data_t<=t(end),si,ci,:));
+            Xunexplained(ind:ind+size(inputsTheory,2)-1,:) = Xout(ind:ind+size(inputsTheory,2)-1,:)-Xexplained(:,:,si,ci);
+            ind = ind + size(inputsTheory,2);
+        end
+    end
+    
+    % Collect vectors
+    B = inv(Xin'*Xin)*Xin'*Xunexplained;
+    B = [I_ortho'; B];
+    B2 = (B'./vecnorm(B'))';
+    
+    % Measure angles between input vectors and
+    angles = acosd(B2(1:size(inputsTheory,1),:)*B2(size(inputsTheory,1)+1:end-1,:)');
+    
+    % Orthogonalize input space to recurrent space
+    I_l = B(1:size(inputsTheory,1),:)';
+    m_r_temp = B(size(inputsTheory,1)+1:end-1,:)';
+    for inputi = 1:size(I_ortho,2)
+        I_ortho(:,inputi) = I_l(:,inputi) - m_r_temp*inv(m_r_temp'*m_r_temp)*m_r_temp'*I_l(:,inputi);
+    end
+    
 end
 
-B = inv(Xin'*Xin)*Xin'*Xunexplained;
-B = [I_l_ortho'; B];
-B2 = (B'./vecnorm(B'))';
 
 Xhat = X*B;
 
@@ -171,16 +238,19 @@ for regressori = 1:size(B,1)
     axis([-30 30 -30 30])
     
     if regressori < 4
-        A = B2(regressori,:).*input(regressori,:,:,:,:);
+%         A = B2(regressori,:).*input(regressori,:,:,:,:);
+        A = B2(regressori,:).*permute(R_c(data_t<=t(end),:,:,:),[5,4,1,2,3]);
     elseif regressori < 6
-        A = B2(regressori,:).*kappas(regressori-3,:,:,:,:);
+%         A = B2(regressori,:).*kappas(regressori-3,:,:,:,:);
+        A = B2(regressori,:).*permute(R_c(data_t<=t(end),:,:,:),[5,4,1,2,3]);
     else
         A = nan(size(A));
     end
     subplot(2,size(B,1)+1,regressori + size(B,1)+1)
     for si = 1:3
         for ci = 1:3
-            plot(t,squeeze(nanmean(A(:,:,:,si,ci),2)))
+            plot(t,squeeze(nanmean(A(:,:,:,si,ci),2)),'Color',[speedColors(si,:) cohs(ci)/100],...
+                'DisplayName',['speed = ' num2str(speeds(si)) ', coh = ' num2str(cohs(ci))])
             hold on
         end
     end
