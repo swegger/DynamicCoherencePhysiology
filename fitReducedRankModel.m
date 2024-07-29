@@ -45,6 +45,7 @@ addParameter(Parser,'trainCondition',trainCondition_default)
 addParameter(Parser,'P0',NaN)
 addParameter(Parser,'ub',NaN)
 addParameter(Parser,'lb',NaN)
+addParameter(Parser,'sigmaLowerBound',0.05)
 addParameter(Parser,'tWin',[-100 900])
 addParameter(Parser,'tau',20)
 addParameter(Parser,'sprefFromFit',true)
@@ -83,6 +84,7 @@ trainCondition = Parser.Results.trainCondition;
 P0 = Parser.Results.P0;
 ub = Parser.Results.ub;
 lb = Parser.Results.lb;
+sigmaLowerBound = Parser.Results.sigmaLowerBound;
 tWin = Parser.Results.tWin;
 tau = Parser.Results.tau;
 sprefFromFit = Parser.Results.sprefFromFit;
@@ -424,7 +426,8 @@ switch fitType
         temp(~eye(N)) = -Inf*1;
         lb(1:N,1:N) = temp;
         lb = reshape(lb,[N*(N+M),1]);
-        lb = [lb; zeros(N+M,1); 0; -Inf];
+%         lb = [lb; zeros(N+M,1); 0; -Inf];
+        lb = [lb; sigmaLowerBound*ones(N+M,1); 0; -Inf];
         ub = Inf*ones(N*(N+M)+N+M,1);
         ub = [ub; 1/200; Inf];
         
@@ -549,7 +552,7 @@ if plotOpts.On
             for si = 1:length(speedsFEF)
                 subplot(length(cohsFEF),length(speedsFEF),si + (ci-1)*length(speedsFEF))
                 plot(tempFEF(taccept,si,ci),test(taccept,si,ci),'o','Color',speedColors(si,:),...
-                    'DisplayName',['Dim = ' num2str(neuroni) ', Speed = ' num2str(speedsFEF(speedi)) ', Coh = ' num2str(cohsFEF(cohi))])
+                    'DisplayName',['Dim = ' num2str(neuroni) ', Speed = ' num2str(speedsFEF(si)) ', Coh = ' num2str(cohsFEF(ci))])
                 hold on
             end
         end

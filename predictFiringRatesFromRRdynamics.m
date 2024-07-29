@@ -18,6 +18,7 @@ addParameter(Parser,'speedCluster',9)
 addParameter(Parser,'speeds',[5,10,20])
 addParameter(Parser,'cohs',[20 60 100])
 addParameter(Parser,'tol',1)
+addParameter(Parser,'ridgeLambda',0)
 
 parse(Parser,subject,varargin{:})
 
@@ -29,6 +30,7 @@ speedCluster = Parser.Results.speedCluster;
 speeds = Parser.Results.speeds;
 cohs = Parser.Results.cohs;
 tol = Parser.Results.tol;
+ridgeLambda = Parser.Results.ridgeLambda;
 
 %% Colors
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
@@ -52,7 +54,8 @@ end
 if any(isnan(fitReducedRankDynamicsFile))
     switch subject
         case 'ar'
-            fitReducedRankDynamicsFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/ar/ReducedRankModel/fitReducedRankModel20240613.mat';
+%             fitReducedRankDynamicsFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/ar/ReducedRankModel/fitReducedRankModel20240613.mat';
+            fitReducedRankDynamicsFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/ar/ReducedRankModel/fitReducedRankModel20240729.mat';
         case 'fr'
             fitReducedRankDynamicsFile = '/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/fr/ReducedRankModel/fitReducedRankModel20240613.mat';
         otherwise
@@ -117,7 +120,7 @@ Rhat = permute(sum(kappas.*repmat(m_r',[1,1,size(kappas,3),size(kappas,4),size(k
     sum(input(1:2,:,:,:,:).*repmat(I_l_ortho',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,4,5,2,1]);
 Rhat_c = Rhat./max(abs(Rhat),[],[1,2,3]);
 R_c = R./max(abs(R),[],[1,2,3]);
-R_c = R_c-mean(R_c(data_t<=0,:,:,:),'all');
+R_c = R_c-mean(R_c(data_t<=0,:,:,:),[1,2,3]);
 % R_c = (R-mean(R(data_t<=0,:,:,:),'all'))./max(abs(R-mean(R(data_t<=0,:,:,:),'all')),[],[1,2,3]);
 
 %% Estimate R from regression against inputs/dynamics
@@ -145,7 +148,7 @@ I_ortho = [I_l zeros(size(I_l_ortho,1),1)];
     end
     
     % Collect vectors
-    B = inv(Xin'*Xin)*Xin'*Xunexplained;
+    B = inv(Xin'*Xin + ridgeLambda*eye(size(Xin'*Xin)))*Xin'*Xunexplained;
     B = [I_ortho(:,1:size(I_ortho,2)-1)'; B];
     B2 = (B'./vecnorm(B'))';
     
@@ -183,7 +186,7 @@ while any(abs(angles(:)-90) > tol)
     end
     
     % Collect vectors
-    B = inv(Xin'*Xin)*Xin'*Xunexplained;
+    B = inv(Xin'*Xin + ridgeLambda*eye(size(Xin'*Xin)))*Xin'*Xunexplained;
     B = [I_ortho'; B];
     B2 = (B'./vecnorm(B'))';
     
@@ -209,6 +212,76 @@ for clusti = 1:neuronTyping.NumClusters
     mean_cc_by_cluster(clusti) = mean(cc(idx==clusti));
     ste_cc_by_cluster(clusti) = std(cc(idx==clusti))/sqrt(sum(idx==clusti));
 end
+
+%% Set covariance matrix
+C = cov(B');
+Sigma = nan(size(inputsTheory,1)+size(kappas,1)+size(kappas,1));
+
+% Diagonal elements
+for i = 1:size(inputsTheory,1)
+    Sigma(i,i) = sqrt(rrModel.modelFEF.sigmas(size(kappas,1)+i));     % Input
+end
+for i = size(inputsTheory,1)+1:size(inputsTheory,1)+size(kappas,1)
+    Sigma(i,i) = NaN;       % Selection vectors are unknown
+end
+ind = 0;
+for i = size(inputsTheory,1)+size(kappas,1)+1: size(inputsTheory,1)+size(kappas,1)+size(kappas,1)
+    ind = ind+1;
+    Sigma(i,i) = sqrt(rrModel.modelFEF.sigmas(ind));
+end
+
+% Off diagonal elements
+for i = 1:size(inputsTheory,1)
+    for j = 2:size(inputsTheory,1)
+        if i ~= j
+            Sigma(i,j) = C(i,j);        % Input vector covariance estimate
+            Sigma(j,i) = C(j,i);
+        end
+    end
+end
+indi = size(kappas,1);
+for i = 1:size(inputsTheory,1)
+    indi = indi+1;
+    indj = 0;
+    for j = size(inputsTheory,1)+1:size(inputsTheory,1)+size(kappas,1)
+        indj = indj+1;
+        if i ~= j
+            Sigma(i,j) = rrModel.modelFEF.overlaps(indj,indi);     % Input vector and selection vector covariance
+            Sigma(j,i) = rrModel.modelFEF.overlaps(indj,indi);     % Input vector and selection vector covariance
+        end
+    end
+end
+
+indi = 0;
+for i = size(inputsTheory,1)+1:size(inputsTheory,1)+size(kappas,1)
+    indi = indi+1;
+    indj = 0;
+    for j = size(inputsTheory,1)+size(kappas,1)+1:size(inputsTheory,1)+2*size(kappas,1)
+        indj = indj+1;
+        if i ~= j
+            Sigma(i,j) = rrModel.modelFEF.overlaps(indj,indi);     % output vector and selection vector covariance
+            Sigma(j,i) = rrModel.modelFEF.overlaps(indj,indi);     % output vector and selection vector covariance
+        end
+    end
+end
+
+Sigma(size(inputsTheory,1)+2*size(kappas,1)-1,size(inputsTheory,1)+2*size(kappas,1)) = C(size(inputsTheory,1)+size(kappas,1),size(inputsTheory,1)+size(kappas,1)-1);
+Sigma(size(inputsTheory,1)+2*size(kappas,1),size(inputsTheory,1)+2*size(kappas,1)-1) = C(size(inputsTheory,1)+size(kappas,1),size(inputsTheory,1)+size(kappas,1)-1);
+
+Sigma(1:size(inputsTheory,1),size(inputsTheory,1)+size(kappas,1)+1:size(inputsTheory,1)+2*size(kappas,1)) = 0;      % Input and output vectors are assumed to be uncorrelated
+Sigma(size(inputsTheory,1)+size(kappas,1)+1:size(inputsTheory,1)+2*size(kappas,1),1:size(inputsTheory,1)) = 0;
+
+%% Estimate mean and covariance of each element of the selection vectors
+mu = zeros(size(inputsTheory,1)+size(kappas,1)*2,1);
+x_indices = false(size(inputsTheory,1)+size(kappas,1)*2,1);
+x_indices(1:size(inputsTheory,1)) = true;
+x_indices(size(inputsTheory,1)+size(kappas,1)+1:end) = true;
+
+[mu_, Sig_, muUn, SigUnObs, SigObsObs] = conditionalGaussian(mu,Sigma,B(1:end-1,:),'x_indices',x_indices);
+
+%% Functional response topography collapsed onto 1D ring
+thetas = atan2(Y(:,2)-mean(Y(:,2)),Y(:,1)-mean(Y(:,1)));
+[~,thetaSort] = sort(thetas);
 
 %% Plotting
 
