@@ -193,5 +193,8 @@ end
 %% fr initialCoh
 
 %% ar dynamicCoh
+detectPoorPursuit.On = true;
+detectPoorPursuit.threshold = 1.5;
+[dyn, gain] = dynamicCohBehavioralAnalysis('ar','dcpObjectsFile','dcpObjects20210406.mat');
 
 %% fr dynamicCoh

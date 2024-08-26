@@ -577,6 +577,16 @@ modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNa
     'centerData',centerData,...
     'saveResults',true,'saveFigures',true);
 
+%% ar predict dynCoh data from reduced rank model
+predictDynCohRRdynamicsModel('ar','mirrorPositivePerturbation',true,...
+    'saveFigures',true,'saveResults',true,'dynDataLoad','dcpObjects',...
+    'trialCutoff',80)
+
+%% fr predict dynCoh data from reduced rank model
+predictDynCohRRdynamicsModel('fr','mirrorPositivePerturbation',true,...
+    'saveFigures',true,'saveResults',true,'dynDataLoad','dcpObjects',...
+    'trialCutoff',80)
+
 %% eggerDecoder
 speedPrefOpts.tWin = [40,120];
 speedPrefOpts.P0 = [16,1];

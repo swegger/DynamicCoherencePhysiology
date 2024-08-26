@@ -19,6 +19,7 @@ addParameter(Parser,'speeds',[5,10,20])
 addParameter(Parser,'cohs',[20 60 100])
 addParameter(Parser,'tol',1)
 addParameter(Parser,'ridgeLambda',0)
+addParameter(Parser,'saveResults',false)
 
 parse(Parser,subject,varargin{:})
 
@@ -31,6 +32,7 @@ speeds = Parser.Results.speeds;
 cohs = Parser.Results.cohs;
 tol = Parser.Results.tol;
 ridgeLambda = Parser.Results.ridgeLambda;
+saveResults = Parser.Results.saveResults;
 
 %% Colors
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
@@ -116,9 +118,9 @@ I_l_ortho = I_l_ortho./vecnorm(I_l_ortho);
 
 
 %% Estimate R from first principles
-Rhat = permute(sum(kappas.*repmat(m_r',[1,1,size(kappas,3),size(kappas,4),size(kappas,5)]),1) + ...
-    sum(input(1:2,:,:,:,:).*repmat(I_l_ortho',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,4,5,2,1]);
-Rhat_c = Rhat./max(abs(Rhat),[],[1,2,3]);
+% Rhat = permute(sum(kappas.*repmat(m_r',[1,1,size(kappas,3),size(kappas,4),size(kappas,5)]),1) + ...
+%     sum(input(1:2,:,:,:,:).*repmat(I_l_ortho',[1,1,size(input,3),size(input,4),size(input,5)]),1),[3,4,5,2,1]);
+% Rhat_c = Rhat./max(abs(Rhat),[],[1,2,3]);
 R_c = R./max(abs(R),[],[1,2,3]);
 R_c = R_c-mean(R_c(data_t<=0,:,:,:),[1,2,3]);
 % R_c = (R-mean(R(data_t<=0,:,:,:),'all'))./max(abs(R-mean(R(data_t<=0,:,:,:),'all')),[],[1,2,3]);
@@ -213,6 +215,15 @@ for clusti = 1:neuronTyping.NumClusters
     ste_cc_by_cluster(clusti) = std(cc(idx==clusti))/sqrt(sum(idx==clusti));
 end
 
+Rhat = nan(size(inputsTheory,2),size(inputsTheory,3),size(inputsTheory,4),size(Xhat,2));
+ind = 1;
+for si = 1:size(inputsTheory,3)
+    for ci = 1:size(inputsTheory,4)
+        Rhat(:,si,ci,:) = Xhat(ind:ind+size(inputsTheory,2)-1,:);
+        ind = ind+size(inputsTheory,2);
+    end
+end
+
 %% Set covariance matrix
 C = cov(B');
 Sigma = nan(size(inputsTheory,1)+size(kappas,1)+size(kappas,1));
@@ -283,6 +294,18 @@ x_indices(size(inputsTheory,1)+size(kappas,1)+1:end) = true;
 thetas = atan2(Y(:,2)-mean(Y(:,2)),Y(:,1)-mean(Y(:,1)));
 [~,thetaSort] = sort(thetas);
 
+%% Save results
+if saveResults
+        
+    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/' subject ...
+        '/ReducedRankModel'];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    save([saveLocation '/predictFiringRatesRRdynamics' datestr(now,'yyyymmdd')],'-v7.3')
+    
+end
+
 %% Plotting
 
 %% The population vectors represented in the functional topology
@@ -346,9 +369,30 @@ ylabel('Mean correlation coefficient')
 figure
 for idxi = 1:neuronTyping.NumClusters
     subplot(3,3,idxi)
-    plot(t,squeeze(Rhat_c(:,2,2,idx==idxi)),'Color',[0.6 0.6 0.6])
+    plot(t,mean(squeeze(Rhat(:,2,2,idx==idxi)),2),'Color',[0.6 0.6 0.6])
     hold on
     plot(data_t(data_t<=t(end)),nanmean(R_c(data_t<=t(end),2,2,idx==idxi),4),'k','LineWidth',2)
+end
+
+%% Best fit neuron in each cluster
+figure
+for idxi = 1:neuronTyping.NumClusters
+    subplot(3,3,idxi)
+    cctemp = cc(idx == idxi);
+    Rhattemp = Rhat(:,:,:,idx==idxi);
+    Rtemp = R_c(:,:,:,idx==idxi);
+    cellIDtemp = squeeze(neuronTyping.cellID(idx==idxi,1,1:2));
+    [~,ind] = max(cctemp);
+    for si = 1:length(speeds)
+        plot(t,squeeze(Rhattemp(:,si,3,ind)),'--','Color',[0.6 0.6 0.6])
+        hold on
+        plot(data_t(data_t<=t(end)),Rtemp(data_t<=t(end),si,3,ind),'-','Color',speedColors(si,:),...
+            'DisplayName',['Speed = ' num2str(speeds(si)) ' deg/s, Coh = 100%'])
+    end
+    xlabel('Time form motion onset (ms)')
+    ylabel('Normalized response')
+    ax = axis;
+    text(ax(1)+0.1*(ax(2)-ax(1)),ax(3) + 0.95*(ax(4)-ax(3)),[subject ', cell ' num2str(cellIDtemp(ind,:))])
 end
 
 %% Predicted firing rates vs firing rates by cluster

@@ -909,7 +909,7 @@ classdef dcpObj
                 cMask = ismember(obj.coh,cohs);
             end
 
-            if ~exist('seqs','var') || isnan(seqs)
+            if ~exist('seqs','var') || any(isnan(seqs))
                 qMask = true(size(obj.directions));
             else
                 qMask = ismember(obj.sequences,seqs);
