@@ -6,6 +6,7 @@ function [Rinit, Rdyn, cellID, passCutoff, locations, ResInit, Minit, Ninit, Cin
 %%
 
 %% Defaults
+calcCov_default.On = false;
 
 %% Parse inputs
 Parser = inputParser;
@@ -20,7 +21,7 @@ addParameter(Parser,'chanMap',[7 1; 6 2; 5 3; 4 4; 3 5; 2 6; 1 7; 0 8; 23 9; 22 
 addParameter(Parser,'checkUnitType',false)
 addParameter(Parser,'rateCutoff',NaN)
 addParameter(Parser,'calcRes',false)
-addParameter(Parser,'calcCov',false)
+addParameter(Parser,'calcCov',calcCov_default)
 addParameter(Parser,'calcVarCE',false)
 
 parse(Parser,dcp,varargin{:})
@@ -52,7 +53,7 @@ Ninit = NaN;%nan(1,preAllocationSize,3,3,1);
 if calcCov.On
     Cinit = nan(length(calcCov.binT),length(calcCov.binT),preAllocationSize);
 else
-    Cinit - nan(1,1,preAllocationSize);
+    Cinit = nan(1,1,preAllocationSize);
 end
 VarCEinit = nan(1701,preAllocationSize);
 

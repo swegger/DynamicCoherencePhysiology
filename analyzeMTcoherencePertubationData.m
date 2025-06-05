@@ -34,6 +34,7 @@ addParameter(Parser,'transitionTime',540)
 addParameter(Parser,'timeconstant',20)
 addParameter(Parser,'removeBaseline',true)
 addParameter(Parser,'smoothData',true)
+addParameter(Parser,'snames',{'Ar','Di'})
 addParameter(Parser,'plotFlg',true)
 
 parse(Parser,varargin{:})
@@ -49,6 +50,7 @@ transitionTime = Parser.Results.transitionTime;
 timeconstant = Parser.Results.timeconstant;
 removeBaseline = Parser.Results.removeBaseline;
 smoothData = Parser.Results.smoothData;
+snames = Parser.Results.snames;
 plotFlg = Parser.Results.plotFlg;
 
 transitionInd = find(t==transitionTime);
@@ -91,6 +93,7 @@ for mti = 1:length(mdall)
     cellName = mdall{mti};
     pulseData(mti,1) = any(strcmp(mdall,cellName) & cohPulse > 0);
     dataFR(:,mti) = dataFRall{mti}(1:length(t));
+    nameAccept(mti,1) = any(strcmp(mdall{mti}(1:2),snames));
 end
 
 for condi = 1:size(conditions,1)
@@ -99,7 +102,8 @@ for condi = 1:size(conditions,1)
         cohPulse == conditions(condi,3) & ...
         speedPulse == conditions(condi,4) & ...
         prefD == conditions(condi,5) & ...
-        pulseData;
+        pulseData & ...
+        nameAccept;
 end
 
 % Now average normalized firing rates across neurons for the relavant conditions

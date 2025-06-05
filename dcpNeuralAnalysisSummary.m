@@ -239,6 +239,8 @@ simulateMT.On = true;
 simulateMT.modelN = 1000;
 simulateMT.removeBaseline = true;
 simulateMT.gaussianApprox = true;
+simulateMT.accept = true(100,1);
+simulateMT.accept(end-26:end) = false;          % Remove Ar's MT data from simulation
 
 MTtoFEFregression(dcp,'speedPrefOpts',speedPrefOpts,'checkMTFit',false,'trainCondition',trainCondition,'rankN',80,...
     'compToBehavioralGain',compToBehavioralGain,...
@@ -277,6 +279,8 @@ simulateMT.On = true;
 simulateMT.modelN = 1000;
 simulateMT.removeBaseline = true;
 simulateMT.gaussianApprox = true;
+simulateMT.accept = true(100,1);
+simulateMT.accept(end-26:end) = false;
 
 MTtoFEFregression(dcp,'sourceDirectory','/mnt/Lisberger/Experiments/DynamicCoherencePhysiology/data/Frederick',...
     'speedPrefOpts',speedPrefOpts,'checkMTFit',false,'trainCondition',trainCondition,'rankN',80,...
@@ -416,6 +420,8 @@ simulateMT.On = true;
 simulateMT.modelN = 1000;
 simulateMT.removeBaseline = true;
 simulateMT.gaussianApprox = true;
+simulateMT.accept = true(100,1);
+simulateMT.accept(end-26:end) = false;
 
 equalizeInputsPriorToStimulusOnset.On = false;
 equalizeInputsPriorToStimulusOnset.method = 'time&conditions';
@@ -506,6 +512,8 @@ simulateMT.On = true;
 simulateMT.modelN = 1000;
 simulateMT.removeBaseline = true;
 simulateMT.gaussianApprox = true;
+simulateMT.accept = true(100,1);
+simulateMT.accept(end-26:end) = false;
 
 equalizeInputsPriorToStimulusOnset.On = false;
 equalizeInputsPriorToStimulusOnset.method = 'time&conditions';
@@ -577,6 +585,12 @@ modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNa
     'centerData',centerData,...
     'saveResults',true,'saveFigures',true);
 
+%% ar predict firing rates from reduced rank model
+predictFiringRatesFromRRdynamics('ar','saveResults',true,'saveFigures',true)
+
+%% fr predict firing rates from reduced rank model
+predictFiringRatesFromRRdynamics('fr','saveResults',true,'saveFigures',true)
+
 %% ar predict dynCoh data from reduced rank model
 predictDynCohRRdynamicsModel('ar','mirrorPositivePerturbation',true,...
     'saveFigures',true,'saveResults',true,'dynDataLoad','dcpObjects',...
@@ -608,6 +622,8 @@ simulateMT.On = true;
 simulateMT.modelN = 1000;
 simulateMT.removeBaseline = true;
 simulateMT.gaussianApprox = true;
+simulateMT.accept = true(100,1);
+simulateMT.accept(end-26:end) = false;
 
 % objectFile = 'allMT_20230419.mat';
 objectFile = '~/Projects/DynamicCoherencePhysiology/ar/mtdata/temp.mat';

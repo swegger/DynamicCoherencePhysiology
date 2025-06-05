@@ -8,7 +8,7 @@
 detectPoorPursuit.On = true;
 detectPoorPursuit.threshold = 1.5;
 [init,gain,gainModel] = initialCohPertBehavioralAnalysis('ar','dcpObjectsFile','dcpObjectsPertTemp',...
-    'detectPoorPursuit',detectPoorPursuit,'saveResults',true,'saveFigures',true);
+    'detectPoorPursuit',detectPoorPursuit,'saveResults',false,'saveFigures',false);
 
 %% fr initialCoh perturbation
 detectPoorPursuit.On = true;

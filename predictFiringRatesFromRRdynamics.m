@@ -20,6 +20,7 @@ addParameter(Parser,'cohs',[20 60 100])
 addParameter(Parser,'tol',1)
 addParameter(Parser,'ridgeLambda',0)
 addParameter(Parser,'saveResults',false)
+addParameter(Parser,'saveFigures',false)
 
 parse(Parser,subject,varargin{:})
 
@@ -33,6 +34,7 @@ cohs = Parser.Results.cohs;
 tol = Parser.Results.tol;
 ridgeLambda = Parser.Results.ridgeLambda;
 saveResults = Parser.Results.saveResults;
+saveFigures = Parser.Results.saveFigures;
 
 %% Colors
 speedColors = projectColorMaps_coh('speeds','sampleDepth',length(speeds),'sampleN',length(speeds));
@@ -115,6 +117,7 @@ end
 
 m_r = m_r./vecnorm(m_r);
 I_l_ortho = I_l_ortho./vecnorm(I_l_ortho);
+I_l_norm = I_l./vecnorm(I_l);
 
 
 %% Estimate R from first principles
@@ -127,6 +130,7 @@ R_c = R_c-mean(R_c(data_t<=0,:,:,:),[1,2,3]);
 
 %% Estimate R from regression against inputs/dynamics
 I_ortho = [I_l zeros(size(I_l_ortho,1),1)];
+I_l_temp = I_l;
 % angles = zeros(size(inputsTheory,1),length(rrModel.modelFEF.dimNames));
     X = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),size(inputsTheory,1)+size(kappas,1)+1);
     Xin = nan(size(inputsTheory,2)*size(inputsTheory,3)*size(inputsTheory,4),1+size(kappas,1)+1);
@@ -152,16 +156,16 @@ I_ortho = [I_l zeros(size(I_l_ortho,1),1)];
     % Collect vectors
     B = inv(Xin'*Xin + ridgeLambda*eye(size(Xin'*Xin)))*Xin'*Xunexplained;
     B = [I_ortho(:,1:size(I_ortho,2)-1)'; B];
-    B2 = (B'./vecnorm(B'))';
+    Bnorm = (B'./vecnorm(B'))';
     
     % Measure angles between input vectors and
-    angles = acosd(B2(1:size(inputsTheory,1),:)*B2(size(inputsTheory,1)+1:end-1,:)');
+    angles = acosd(Bnorm(1:size(inputsTheory,1),:)*Bnorm(size(inputsTheory,1)+1:end-1,:)');
     
     % Orthogonalize input space to recurrent space
-    I_l = B(1:size(inputsTheory,1),:)';
+    I_l_temp = B(1:size(inputsTheory,1),:)';
     m_r_temp = B(size(inputsTheory,1)+1:end-1,:)';
     for inputi = 1:size(I_ortho,2)
-        I_ortho(:,inputi) = I_l(:,inputi) - m_r_temp*inv(m_r_temp'*m_r_temp)*m_r_temp'*I_l(:,inputi);
+        I_ortho(:,inputi) = I_l_temp(:,inputi) - m_r_temp*inv(m_r_temp'*m_r_temp)*m_r_temp'*I_l_temp(:,inputi);
     end
     
 %     I_ortho = I_ortho./vecnorm(I_ortho);
@@ -190,16 +194,16 @@ while any(abs(angles(:)-90) > tol)
     % Collect vectors
     B = inv(Xin'*Xin + ridgeLambda*eye(size(Xin'*Xin)))*Xin'*Xunexplained;
     B = [I_ortho'; B];
-    B2 = (B'./vecnorm(B'))';
+    Bnorm = (B'./vecnorm(B'))';
     
     % Measure angles between input vectors and
-    angles = acosd(B2(1:size(inputsTheory,1),:)*B2(size(inputsTheory,1)+1:end-1,:)');
+    angles = acosd(Bnorm(1:size(inputsTheory,1),:)*Bnorm(size(inputsTheory,1)+1:end-1,:)');
     
     % Orthogonalize input space to recurrent space
-    I_l = B(1:size(inputsTheory,1),:)';
+    I_l_temp = B(1:size(inputsTheory,1),:)';
     m_r_temp = B(size(inputsTheory,1)+1:end-1,:)';
     for inputi = 1:size(I_ortho,2)
-        I_ortho(:,inputi) = I_l(:,inputi) - m_r_temp*inv(m_r_temp'*m_r_temp)*m_r_temp'*I_l(:,inputi);
+        I_ortho(:,inputi) = I_l_temp(:,inputi) - m_r_temp*inv(m_r_temp'*m_r_temp)*m_r_temp'*I_l_temp(:,inputi);
     end
     
 end
@@ -290,6 +294,22 @@ x_indices(size(inputsTheory,1)+size(kappas,1)+1:end) = true;
 
 [mu_, Sig_, muUn, SigUnObs, SigObsObs] = conditionalGaussian(mu,Sigma,B(1:end-1,:),'x_indices',x_indices);
 
+
+%% New do regression but with prior mean and covariance set according to estimated mean and covariance indicated by overlaps and input weights
+
+x_indices = false(size(inputsTheory,1)+size(kappas,1)*2,1);
+x_indices(1:size(inputsTheory,1)) = true;
+[mu_, Sig_, muUn, SigUnObs, SigObsObs] = conditionalGaussian(mu,Sigma,B(1:3,:),'x_indices',x_indices);
+
+Sig_2 = Sig_(size(kappas,1)+1:end,size(kappas,1)+1:end);
+Sig_2(size(kappas,1)+1,size(kappas,1)+1) = 1;
+mu_2 = mu_(size(kappas,1)+1:end,:);
+mu_2 = [mu_2; zeros(1,size(mu_2,2))];
+B_ = inv(Xin'*Xin + inv(Sig_2))*Xin'*Xunexplained + ...
+    ridgeLambda*inv(Xin'*Xin + inv(Sig_2))*mu_2;
+B_ = [I_ortho'; B_];
+Bnorm_ = (B_'./vecnorm(B_'))';
+
 %% Functional response topography collapsed onto 1D ring
 thetas = atan2(Y(:,2)-mean(Y(:,2)),Y(:,1)-mean(Y(:,1)));
 [~,thetaSort] = sort(thetas);
@@ -324,25 +344,32 @@ scatter(Y(:,1),Y(:,2),abs(I_l_ortho(:,2))*1000,I_l(:,2),'filled')
 axis([-30 30 -30 30])
 
 %% The population vectors identified by regression
-figure
+hPopVectors = figure('Name','Population vectors','Position',[211 546 2310 776]);
 for regressori = 1:size(B,1)
-    subplot(2,size(B,1)+1,regressori)
-    scatter(Y(:,1),Y(:,2),abs(B2(regressori,:)')/max(abs(B2),[],'all')*100,B2(regressori,:)','filled')
-    caxis([min(B2,[],'all'), max(B2,[],'all')])
+    subplot(2,size(B,1),regressori)
+%     if regressori <= 2
+%         scatter(Y(:,1),Y(:,2),abs(I_l_norm(:,regressori)')/max(abs(Bnorm),[],'all')*100,I_l(:,regressori)','filled')
+% %         caxis([min(I_l_norm(:,1:2),[],'all'), max(I_l_norm(:,1:2),[],'all')])
+%     else
+        scatter(Y(:,1),Y(:,2),abs(Bnorm(regressori,:)')/max(abs(Bnorm),[],'all')*100,Bnorm(regressori,:)','filled')
+        caxis([min(Bnorm,[],'all'), max(Bnorm,[],'all')])
+%     end
     xlabel('tSNE1')
     ylabel('tSNE2')
+    title(['Weights for regressor ' num2str(regressori)])
+    axis square
     axis([-30 30 -30 30])
     
     if regressori < 4
 %         A = B2(regressori,:).*input(regressori,:,:,:,:);
-        A = B2(regressori,:).*permute(R_c(data_t<=t(end),:,:,:),[5,4,1,2,3]);
+        A = Bnorm(regressori,:).*permute(R_c(data_t<=t(end),:,:,:),[5,4,1,2,3]);
     elseif regressori < 6
 %         A = B2(regressori,:).*kappas(regressori-3,:,:,:,:);
-        A = B2(regressori,:).*permute(R_c(data_t<=t(end),:,:,:),[5,4,1,2,3]);
+        A = Bnorm(regressori,:).*permute(R_c(data_t<=t(end),:,:,:),[5,4,1,2,3]);
     else
         A = nan(size(A));
     end
-    subplot(2,size(B,1)+1,regressori + size(B,1)+1)
+    subplot(2,size(B,1),regressori + size(B,1))
     for si = 1:3
         for ci = 1:3
             plot(t,squeeze(nanmean(A(:,:,:,si,ci),2)),'Color',[speedColors(si,:) cohs(ci)/100],...
@@ -353,29 +380,46 @@ for regressori = 1:size(B,1)
     xlabel('Time from motion onset (ms)')
     ylabel('Average along this population mode')
 end
-subplot(2,size(B,1)+1,regressori+1)
+
+%% Prediction performance summary
+hPredictionPerformance = figure('Name','Prediction performance','Position',[895 902 1626 420]);
+subplot(1,3,1)
 scatter(Y(:,1),Y(:,2),abs(cc)*100,cc,'filled')
 title('R-values of regression model')
 xlabel('tSNE1')
 ylabel('tSNE2')
+axis square
 axis([-30 30 -30 30])
 
-subplot(2,size(B,1)+1,regressori+2+size(B,1))
+subplot(1,3,2)
 errorbar(1:neuronTyping.NumClusters,mean_cc_by_cluster,ste_cc_by_cluster,'o')
+title('Mean r-value')
 xlabel('Cluster #')
 ylabel('Mean correlation coefficient')
 
+subplot(1,3,3)
+histogram(cc,linspace(-1,1,25))
+title('R-value by neuron')
+xlabel('r-value')
+ylabel('Number of neurons')
+
 %% Predicted firing rates and mean firing rate by cluster
-figure
+hMeanCluster = figure('Name','Mean of model prediction/neurons within cluster','Position',[899 379 853 654]);
 for idxi = 1:neuronTyping.NumClusters
     subplot(3,3,idxi)
-    plot(t,mean(squeeze(Rhat(:,2,2,idx==idxi)),2),'Color',[0.6 0.6 0.6])
-    hold on
-    plot(data_t(data_t<=t(end)),nanmean(R_c(data_t<=t(end),2,2,idx==idxi),4),'k','LineWidth',2)
+    for si = 1:length(speeds)
+        plot(t,mean(squeeze(Rhat(:,si,3,idx==idxi)),2),'--','Color',[0.6 0.6 0.6])
+        hold on
+        plot(data_t(data_t<=t(end)),nanmean(R_c(data_t<=t(end),si,2,idx==idxi),4),...
+            'Color',speedColors(si,:),'DisplayName',['Data, speed = ' num2str(speeds(si)) ' deg/s, coh = 100%'])
+    end
+    title(['Cluster ' num2str(idxi)])
+    xlabel('Time form motion onset (ms)')
+    ylabel('Normalized response')
 end
 
 %% Best fit neuron in each cluster
-figure
+hBestNeuronByCluster = figure('Name','Best fit neuron by cluster','Position',[899 379 853 654]);
 for idxi = 1:neuronTyping.NumClusters
     subplot(3,3,idxi)
     cctemp = cc(idx == idxi);
@@ -389,6 +433,7 @@ for idxi = 1:neuronTyping.NumClusters
         plot(data_t(data_t<=t(end)),Rtemp(data_t<=t(end),si,3,ind),'-','Color',speedColors(si,:),...
             'DisplayName',['Speed = ' num2str(speeds(si)) ' deg/s, Coh = 100%'])
     end
+    title(['Cluster ' num2str(idxi)])
     xlabel('Time form motion onset (ms)')
     ylabel('Normalized response')
     ax = axis;
@@ -406,4 +451,20 @@ for idxi = 1:neuronTyping.NumClusters
 end
     
 
+
+%% Save figures
+if saveFigures
+    
+    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/mat/' subject ...
+        '/predictFiringRatesRRdynamics/' datestr(now,'yyyymmdd')];
+    if ~exist(saveLocation,'dir')
+        mkdir(saveLocation)
+    end
+    
+    savefig(hPredictionPerformance,[saveLocation '/predictionPerformance.fig'])
+    savefig(hPopVectors,[saveLocation '/neuronRegressorValues.fig'])
+    savefig(hMeanCluster,[saveLocation '/meanClusterResponseVsPredictions.fig'])
+    savefig(hBestNeuronByCluster,[saveLocation '/bestNeuronFitByCluster.fig'])
+    
+end
 

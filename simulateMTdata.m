@@ -21,6 +21,7 @@ addParameter(Parser,'opponentMT',false)
 addParameter(Parser,'normalize',false)
 addParameter(Parser,'gaussianApprox',false)
 addParameter(Parser,'removeBaseline',false)
+addParameter(Parser,'accept',NaN)
 
 parse(Parser,mt,t,modelN,varargin{:})
 
@@ -34,6 +35,7 @@ opponentMT= Parser.Results.opponentMT;
 normalize = Parser.Results.normalize;
 gaussianApprox = Parser.Results.gaussianApprox;
 removeBaseline = Parser.Results.removeBaseline;
+accept = Parser.Results.accept;
 
 %% Parameters for each measured neuron
 foundation = horzcat(mt.foundation{:});
@@ -46,6 +48,16 @@ for ni = 1:size(mt.modulationSP,1)
         modulationSPnull(:,ni,ci) = mt.modulationSPnull{ni}{ci};
     end
 end
+
+if ~isnan(accept)
+    foundation = foundation(:,accept);
+    foundationNull = foundationNull(:,accept);
+    modulationH = modulationH(:,accept,:);
+    modulationHnull = modulationHnull(:,accept,:);
+    modulationSP = modulationSP(:,accept,:);
+    modulationSPnull = modulationSPnull(:,accept,:);
+end
+
 
 if removeBaseline
     foundation(6,:) = 0;

@@ -187,6 +187,20 @@ end
 %% Plot results
 if plotOpts.On
     
+    %% Random sample of MT neuron responses
+    hMTPSTH = figure;
+    samples = randsample(size(MT,4),10);
+    for si = 1:length(speeds)
+        for ci = 1:length(cohs)
+            subplot(length(speeds),length(cohs),ci + (si-1)*length(cohs))
+            plot(t,squeeze(MT(:,si,ci,samples)))
+            xlabel('Time from motion onset (ms)')
+            ylabel('Spikes/s')
+            title(['Speed = ' num2str(speeds(si)) ' deg/s, Coh = ' num2str(cohs(ci)) '%'])
+        end
+    end
+    
+    
     %% Decoder output over time
     hOutputOverTime = figure;
     for ci = 1:length(cohsFEF)

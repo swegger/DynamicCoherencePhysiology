@@ -127,7 +127,8 @@ if simulateMT.On
     t = -500:900;
     speeds = speedsFEF;
     [MT, spref, cohs] = simulateMTdata(mtResults,t,simulateMT.modelN,...
-        'speedsMT',speeds,'removeBaseline',simulateMT.removeBaseline,'gaussianApprox',simulateMT.gaussianApprox);
+        'speedsMT',speeds,'removeBaseline',simulateMT.removeBaseline,'gaussianApprox',simulateMT.gaussianApprox,...
+        'accept',simulateMT.accept);
     swidth = 1.2*ones(size(spref));
 else
     [MT, spref, swidth, dirMT] = getMTdata(mtResults.mt,...
