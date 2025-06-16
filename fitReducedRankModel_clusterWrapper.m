@@ -39,6 +39,31 @@ saveFileFull = ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiolo
 
 objectFile = '/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/ar/mtdata/temp.mat';
 
+speedPrefOpts.tWin = [40,120];
+speedPrefOpts.P0 = [16,1];
+speedPrefOpts.ub = [128 128];
+speedPrefOpts.lb = [1,0];
+speedPrefOpts.c = [10, 30, 70, 100];
+speedPrefOpts.s = NaN;
+speedPrefOpts.d = 0;
+
+simulateMT.On = true;
+simulateMT.modelN = 1000;
+simulateMT.removeBaseline = true;
+simulateMT.gaussianApprox = true;
+simulateMT.accept = true(100,1);
+simulateMT.accept(end-26:end) = false;
+
+equalizeInputsPriorToStimulusOnset.On = false;
+equalizeInputsPriorToStimulusOnset.method = 'time&conditions';
+equalizeInputsPriorToStimulusOnset.latency = 30;
+
+theoretical.weightTheory = 'simple';
+theoretical.expansionDef = 'bestfit';
+              
+centerData.On = false;
+centerData.inds = [2,2];
+
 dimNames = {'Speed','Gain'};
 
 % Load data
