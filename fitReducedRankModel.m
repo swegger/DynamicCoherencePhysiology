@@ -547,12 +547,16 @@ end
 %% Saving
 if saveResults
         
-    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/' subject ...
-        '/ReducedRankModel'];
-    if ~exist(saveLocation,'dir')
-        mkdir(saveLocation)
+    if isempty(saveLocation)
+        saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/Subprojects/FEFdynamics/' subject ...
+            '/ReducedRankModel'];
+        if ~exist(saveLocation,'dir')
+            mkdir(saveLocation)
+        end
+        save([saveLocation '/fitReducedRankModel' datestr(now,'yyyymmdd')],'-v7.3')
+    else
+        save(saveLocation,'-v7.3')
     end
-    save([saveLocation '/fitReducedRankModel' datestr(now,'yyyymmdd')],'-v7.3')
     
 end
 
