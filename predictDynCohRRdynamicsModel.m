@@ -317,6 +317,10 @@ end
     CC = corrcoef([dR(t>correlationWin(1) & t<correlationWin(2),:,ci(1)),dRhat(t>correlationWin(1) & t<correlationWin(2),:,ci(1));...
         dR(t>correlationWin(1) & t<correlationWin(2),:,ci(2)),dRhat(t>correlationWin(1) & t<correlationWin(2),:,ci(2))]);
     cc = diag(CC(size(dR,2)+1:end,1:size(dR,2)));
+    
+    CC2 = corrcoef([Rout(1:size(input,2),:,1),Rhat(1:size(input,2),:,1);...
+        Rout(1:size(input,2),:,1),Rhat(1:size(input,2),:,1)]);
+    cc2 = diag(CC2(size(Rout,2)+1:end,1:size(Rout,2)));
 % end
 
 dcontrol = Xout(1:length(t),:) - control;
@@ -388,6 +392,24 @@ for ci = 2:size(input,3)
 end
 
 hCC = figure('Name','Distribution of model correlation coefficients','Position',[1960 552 560 250]);
+subplot(2,1,1)
+histogram(cc2,linspace(-1,1,20),...
+    'DisplayName','All neurons')
+hold on
+histogram(cc2(significantResponse),linspace(-1,1,20),...
+    'DisplayName','SNR > 1.75')
+plotVertical([mean(cc2(~isnan(cc2))) ...
+    mean(cc2(~isnan(cc2)))+1.96*std(cc2(~isnan(cc2)))/sqrt(sum(~isnan(cc2))) ...
+    mean(cc2(~isnan(cc2)))-1.96*std(cc2(~isnan(cc2)))/sqrt(sum(~isnan(cc2)))]);
+lineProps.Color = c(2,:);
+plotVertical([mean(cc2(significantResponse)) ...
+    mean(cc2(significantResponse))+1.96*std(cc2(significantResponse))/sqrt(sum(significantResponse)) ...
+    mean(cc2(significantResponse))-1.96*std(cc2(significantResponse))/sqrt(sum(significantResponse))],...
+    'lineProperties',lineProps);
+xlabel('r value')
+ylabel('# of neurons')
+
+subplot(2,1,2)
 histogram(cc,linspace(-1,1,20),...
     'DisplayName','All neurons')
 hold on

@@ -23,6 +23,8 @@ simulateMT_default.On = false;
 
 centerData_default.On = false;
 
+loadFromDataFile_default.On = false;
+
 %% Parse inputs
 Parser = inputParser;
 
@@ -62,6 +64,8 @@ addParameter(Parser,'probeObjectiveFunction',false)
 addParameter(Parser,'plotOpts',plotOpts_default)
 addParameter(Parser,'saveResults',false)
 addParameter(Parser,'saveFigures',false)
+addParameter(Parser,'loadFromDataFile',loadFromDataFile_default)
+addParameter(Parser,'saveLocation',[])
 
 parse(Parser,subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNames,varargin{:})
 
@@ -100,6 +104,8 @@ probeObjectiveFunction = Parser.Results.probeObjectiveFunction;
 plotOpts = Parser.Results.plotOpts;
 saveResults = Parser.Results.saveResults;
 saveFigures = Parser.Results.saveFigures;
+loadFromDataFile = Parser.Results.loadFromDataFile;
+saveLocation = Parser.Results.saveLocation;
 
 %% Preliminary
 
@@ -116,7 +122,15 @@ Rinit = nan(1701,3,3,1000);
 cellID = nan(1000,100,3);
 indx = 1;
 
-
+if loadFromDataFile.On
+    saveResultsOld = saveResults;
+    saveFiguresOld = saveFigures;
+    plotOptsOld = plotOpts;
+    load(loadFromDataFile.File)  
+    saveResults = saveResultsOld;
+    saveFigures = saveFiguresOld;
+    plotOpts = plotOptsOld;
+else
 %% Get MT data and organize as an input
 
 % Load mtObjs
@@ -189,7 +203,7 @@ RtoFit = RtoFit./max(abs(RtoFit),[],[1,2,3]);
 switch theoretical.weightTheory
     case 'simple'
         % Simple, log2(spref) weighting
-        Atheory = [(log2(sp)' - log2(mean(speedsFEF))) ones(size(sp'))];
+        Atheory = [['hpc/(log2(sp)' - log2(mean(speedsFEF))) ones(size(sp'))];
 %         Atheory = [(log2(sp)') ones(size(sp'))];
         
     case 'optimal'
@@ -527,7 +541,8 @@ rvalsFit = corrcoef([Y, Yhat]);
 RhatCC = diag(rvalsFit(size(Y,2)+1:end,1:size(Y,2)));
 RhatZ = 0.5*log( (1+RhatCC)./(1-RhatCC) );
 [~,zvalSort] = sort(RhatZ);
-
+    
+end
 
 %% Saving
 if saveResults
@@ -578,20 +593,76 @@ if plotOpts.On
         
     %% Model parameters
     hModelParameters = figure('Name','ModelParameters');
-    subplot(1,2,1)
+    subplot(2,2,1)
     imagesc(modelFEF.overlaps(:,1:N))
     colorbar
     axis square
     ylabel('Reduced rank dimension')
     xlabel('Reduced rank dimension')
     
-    subplot(1,2,2)
+    subplot(2,2,2)
     imagesc(modelFEF.overlaps(:,N+1:end))
     colorbar
     axis equal
     axis tight
     ylabel('Reduced rank dimension')
     xlabel('Input dimension')
+    
+    subplot(2,2,3)
+    temp = nan(N^2,1);
+    tickNames = {};
+    for i = 1:N
+        temp(i) = modelFEF.overlaps(i,i);
+%         tickNames{i} = [sprintf(strrep('\u03C3', '\u', '\x')) '_{' modelFEF.dimNames{i} ',' modelFEF.dimNames{i} '}'];
+        if i <= length(modelFEF.dimNames)
+            tickNames{i} = [modelFEF.dimNames{i} ',' modelFEF.dimNames{i}];
+        else
+            tickNames{i} = '';
+        end
+    end
+    ind = i;
+    for i = 1:N
+        for j = 1:N
+            if i ~= j
+                ind = ind+1;
+                temp(ind) = modelFEF.overlaps(i,j);
+%                 tickNames{ind} = [sprintf(strrep('\u03C3', '\u', '\x')) '_{' modelFEF.dimNames{i} ',' modelFEF.dimNames{j} '}'];
+                if i <= length(modelFEF.dimNames) && j <= length(modelFEF.dimNames)
+                    tickNames{ind} = [modelFEF.dimNames{i} ',' modelFEF.dimNames{j}];
+                else
+                    tickNames{ind} = '';
+                end
+            end
+        end
+    end
+    bar(temp,'DisplayName',[subject ' ' fitType ' Recurrent connections'])
+    axTemp = gca;
+    axTemp.XTickLabels = tickNames;
+    axTemp.YLabel.String = 'Overlap';
+    %text(min(xlim),max(ylim),tickNames)
+    
+    
+    subplot(2,2,4)
+    temp = nan(M*N,1);
+    tickNames = {};
+    ind = 0;
+    for i = 1:N
+        for j = 1:M
+            ind = ind+1;
+            temp(ind) = modelFEF.overlaps(i,N+j);
+%             tickNames{ind} = [sprintf(strrep('\u03C3', '\u', '\x')) '_{' modelFEF.dimNames{i} ', Input' num2str(j) '}'];
+            if i <= length(modelFEF.dimNames)
+                tickNames{ind} = [modelFEF.dimNames{i} ', Input' num2str(j)];
+            else
+                tickNames{ind} = [' , Input' num2str(j)];
+            end
+        end
+    end
+    bar(temp,'DisplayName',[subject ' ' fitType ' Recurrent connections'])
+    axTemp = gca;
+    axTemp.XTickLabels = tickNames;
+    axTemp.YLabel.String = 'Overlap';
+    %text(min(xlim),max(ylim),tickNames)
     
     %% 
             
@@ -704,7 +775,9 @@ if plotOpts.On
             ax = axis;
             text(0.9*ax(2),0.9*ax(4),['R^2 = ' num2str(speed_projection_cc(1,2).^2)])
             xlabel('Eye speed (deg/s)')
-            ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+            if targetedDim <= length(dimNames)
+                ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+            end
             
             tempData = [];
             subplot(N,2,2*targetedDim)
@@ -726,7 +799,9 @@ if plotOpts.On
             ax = axis;
             text(0.9*ax(2),0.9*ax(4),['R^2 = ' num2str(gain_projection_cc(1,2).^2)])
             xlabel('Behavioral gain (unitless)')
-            ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+            if targetedDim <= length(dimNames)
+                ylabel(['Projection on ' dimNames{targetedDim} ' dimension'])
+            end
         end
     
 end
@@ -734,8 +809,11 @@ end
 %% Save figures
 if saveFigures
     
-    saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/mat/' subject ...
-        '/fitReducedRankModel/' datestr(now,'yyyymmdd')];
+    if isempty(saveLocation)
+        saveLocation = ['/mnt/Lisberger/Manuscripts/FEFphysiology/mat/' subject ...
+            '/fitReducedRankModel/' datestr(now,'yyyymmdd')];
+    end
+        
     if ~exist(saveLocation,'dir')
         mkdir(saveLocation)
     end

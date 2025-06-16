@@ -1,4 +1,4 @@
-function [dyn, gain] = dynamicCohBehavioralAnalysis(sname,varargin)
+function [dyn, gain, gainSTE] = dynamicCohBehavioralAnalysis(sname,varargin)
 %%
 %
 %
@@ -143,6 +143,7 @@ for seqi = 1:length(seqs)
                 ./repmat(dyn.conditions.speeds(acceptvec)',[length(dyn.t>=win(1) & dyn.t<=win(2)),1]),2);
             dyn.eye.pert.ste(:,seqi,pi) = nanstd(dyn.eye.speed( dyn.t>=win(1) & dyn.t<=win(2),acceptvec)...
                 ./repmat(dyn.conditions.speeds(acceptvec)',[length(dyn.t>=win(1) & dyn.t<=win(2)),1]),[],2)/sqrt(sum(acceptvec));
+            dyn.eye.pert.N(:,seqi,pi) = sum(acceptvec);
             
             if perts(pi) == 0
                 dyn.eye.pert.t(seqi,pi) = NaN;
@@ -295,6 +296,58 @@ end
 ax = axis;
 text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
 
+%% Change in eye speeds
+figure;
+colors = colormap('lines');
+close(gcf)
+figure('Name','Mean dynCoh response')
+subplot(2,1,1)
+for seqi = 1:length(seqs)
+    for si = 1:length(speeds)
+        patchProps.FaceAlpha = 0.3;
+        patchProps.FaceColor = colors(seqi,:);
+        myPatch(dyn.t(:),dyn.eye.mean(:,si,seqi)-dyn.eye.mean(:,si,5),sqrt(dyn.eye.ste(:,si,seqi).^2+dyn.eye.ste(:,si,5).^2),'patchProperties',patchProps);
+        hold on
+        
+        plot(dyn.t,dyn.eye.mean(:,si,seqi)-dyn.eye.mean(:,si,5),'Color',colors(seqi,:),'LineWidth',2)
+        
+        xlabel('Time from motion onset (ms)')
+        ylabel('Eye speeds (deg/s)')
+        title(['Target speed = ' num2str(speeds(si)) ' (deg/s)']);
+        plotVertical(motionChangeTimes);
+    end
+end
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
+
+% Collate across identical conditions up to 750 ms
+subplot(2,1,2)
+seqsToCombine = [1,3; 2,4];
+for seqi = 1:size(seqsToCombine,1)
+    for si = 1:length(speeds)
+        patchProps.FaceAlpha = 0.3;
+        patchProps.FaceColor = colors(seqi,:);
+        
+        acceptvec = dyn.conditions.speeds == speeds(si) & ismember(dyn.conditions.seq,seqsToCombine(seqi,:)) & ...
+            ismember(dyn.conditions.directions,directions);
+        meyespeeds = nanmean(dyn.eye.speed(:,acceptvec),2);
+        steeyespeeds = std(dyn.eye.speed(:,acceptvec),[],2)/sqrt(sum(acceptvec));
+                
+        myPatch(dyn.t(:),meyespeeds-dyn.eye.mean(:,si,5),sqrt(steeyespeeds.^2+dyn.eye.ste(:,si,5).^2),'patchProperties',patchProps);
+        hold on
+        
+        plot(dyn.t,meyespeeds-dyn.eye.mean(:,si,5),'Color',colors(seqi,:),'LineWidth',2)
+        
+        xlabel('Time from motion onset (ms)')
+        ylabel('Eye speeds (deg/s)')
+        title(['Target speed = ' num2str(speeds(si)) ' (deg/s)']);
+        plotVertical(motionChangeTimes);
+    end
+end
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
+
+
 %% Perturbations
 figure('Name','Pertubation response','Position',[855 54 583 1242])
 pertInds = 1:length(perts);
@@ -351,3 +404,21 @@ xlabel('Coherence')
 ylabel('Gain')
 ax = axis;
 text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
+
+figure('Name','Feedforward gain estimate')
+symbols = {'d','o','s'};
+for pi = 1:3
+    for seqi = 1:length(seqs)
+        %     plot(dyn.eye.pert.coh(seqi,:)',dyn.eye.pert.res(seqi,:)'/0.2/2,...
+        %         'o-','Color',colors(seqi,:))
+        errorbar(dyn.eye.pert.coh(seqi,pi+1)',gain(seqi,pi+1)',gainSTE(seqi,pi+1)*1.64,[],...
+            symbols{pi},'Color',colors(seqi,:),'MarkerFaceColor',colors(seqi,:),'MarkerSize',8)
+        hold on
+    end
+end
+plotHorizontal(0);
+xlabel('Coherence')
+ylabel('Gain')
+ax = axis;
+text(ax(2)*0.05,ax(4)*0.95,['Dirs: ' num2str(directions)])
+

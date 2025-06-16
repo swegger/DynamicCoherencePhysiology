@@ -316,7 +316,7 @@ gain(1).rmse = sqrt(nanmean( (res(testvec) - (g(testvec).*ss(testvec) + off(test
 %% Compare regression models of gain
 [Cs,Ss] = meshgrid(cohs,speeds);
 Mask = [true true true;
-        true true true;
+        false false false;
         true true true];
 tempRes = (init.eye.pert.res(:,:,2)-init.eye.pert.resControl)./(0.4.*Ss);
 tempSTE = sqrt(init.eye.pert.resSTE(:,:,2).^2 + init.eye.pert.resControlSTE(:,:,2).^2)./(0.4*Ss);
