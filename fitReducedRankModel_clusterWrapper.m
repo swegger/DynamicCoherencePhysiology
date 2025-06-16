@@ -28,31 +28,21 @@ neuralDataFile = Parser.Results.neuralDataFile;
 plotOpts = Parser.Results.plotOpts;
 
 %% Set file names and locations
-% switch subject
-%     case 'ar'
-        behavioralDataFile= ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/'...
-            subject '/targetedDimensionality/targetedDimsInitCoh20240610.mat'];
-        
-        saveFileFull = ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/'...
-            subject '/ReducedRankModelFits/' fitType '/fitReducedRankModel_' fitType '_' num2str(fitNumber) '_' datestr(now,'yyyymmdd')];
-        
-%     case 'fr'
-%         behavioralDataFile= ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/'...
-%             subject '/targetedDimensionality/targetedDimsInitCoh20240610.mat'];
-%         
-%         saveFileFull = ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/'...
-%             subject '/ReducedRankModelFits/' fitType '/fitReducedRankModel_' fitType '_' num2str(fitNumber) '_' datestr(now,'yyyymmdd')];
-%         
-%     otherwise
-%         error(['Subject ' subject ' not recognized!'])
-% end
+behavioralDataFile= ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/'...
+    subject '/targetedDimensionality/targetedDimsInitCoh20240610.mat'];
 
-%% Fit the model
+saveFileFull = ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/'...
+    subject '/ReducedRankModelFits/' fitType '/fitReducedRankModel_' fitType '_' num2str(fitNumber) '_' datestr(now,'yyyymmdd')];
+        
+
+%% Set up the variabiles
+
+objectFile = '/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/ar/mtdata/temp.mat';
+
 dimNames = {'Speed','Gain'};
 
 % Load data
-temp = load(neuralDataFile,'Rinit','initCoh','initGain','subjects','idx','NumClusters','meanEyeSpeed','eye_t','gainRegression');
-subject = temp.subjects{1};
+temp = load(neuralDataFile,'Rinit','initCoh','initGain','idx','NumClusters','meanEyeSpeed','eye_t','gainRegression');
 for clusi = 1:temp.NumClusters
     Rtemp(:,:,:,clusi) = nanmean(temp.Rinit(:,:,:,temp.idx==clusi),4);
 end
@@ -71,6 +61,8 @@ end
 
 loadFromDataFile.On = false;
 
+
+%% Fit the model
 modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNames,...
     'fitType',fitType,...
     'objectFile',objectFile,...
@@ -85,5 +77,3 @@ modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNa
     'saveResults',true,'saveLocation',saveFileFull,...
     'saveFigures',false,'loadFromDataFile',loadFromDataFile,...
     'plotOpts',plotOpts);
-
-end
