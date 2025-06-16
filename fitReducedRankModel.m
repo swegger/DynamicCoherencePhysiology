@@ -203,7 +203,7 @@ RtoFit = RtoFit./max(abs(RtoFit),[],[1,2,3]);
 switch theoretical.weightTheory
     case 'simple'
         % Simple, log2(spref) weighting
-        Atheory = [['hpc/(log2(sp)' - log2(mean(speedsFEF))) ones(size(sp'))];
+        Atheory = [(log2(sp)' - log2(mean(speedsFEF))) ones(size(sp'))];
 %         Atheory = [(log2(sp)') ones(size(sp'))];
         
     case 'optimal'
