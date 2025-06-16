@@ -60,6 +60,11 @@ equalizeInputsPriorToStimulusOnset.latency = 30;
 
 theoretical.weightTheory = 'simple';
 theoretical.expansionDef = 'bestfit';
+
+% Train condition not yet implemented!
+trainCondition = [true, false, true;
+                  true, false, true;
+                  true, false, true];
               
 centerData.On = false;
 centerData.inds = [2,2];
