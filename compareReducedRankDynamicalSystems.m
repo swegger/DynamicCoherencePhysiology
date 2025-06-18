@@ -22,6 +22,7 @@ generationDate = Parser.Results.generationDate;
 %% Load results
 model_cc.eyeSpeed = nan(length(fitTypes),1000);
 model_cc.gain = nan(length(fitTypes),1000);
+model_sse = nan([1001,1000,length(fitTypes)]);
 for fitTypei = 1:length(fitTypes)
     
     sourcePath = ['/mnt/Lisberger/Manuscripts/FEFphysiology/mat/ar/fitReducedRankModel/' fitTypes{fitTypei} '/'];
@@ -33,26 +34,37 @@ for fitTypei = 1:length(fitTypes)
     files = dir([sourcePath, sourcePattern]);
         
     for filei = 1:length(files)
-        disp([sourcePath, files(filei).name])
-        
-        temp = load([sourcePath, files(filei).name],'N','speeds','meanEyeSpeed','eye_t','Rhat','t','initGain');
-        for targetedDim = 1:temp.N
+        disp(filei)
+        try
+            temp = load([sourcePath, files(filei).name],'N','speeds','meanEyeSpeed','eye_t','Rhat','t','initGain','RtoFit','dimNames','modelFEF');
+            num = regexp(files(filei).name,'_\d+_','match');
+            num = str2num(num{1}(num{1}~='_'));
             tempData = [];
             for si = 1:length(temp.speeds)
                 eyeSpeedTemp = squeeze(nanmean(temp.meanEyeSpeed(temp.eye_t >= 750 & temp.eye_t <= 750,:,:),1));
-                initRatesTemp = squeeze(nanmean(temp.Rhat(temp.t >= 700 & temp.t <= 800,si,:,targetedDim),1));
-                tempData = [tempData; eyeSpeedTemp(si,:)', temp.initGain(si,:,3)', initRatesTemp(:)];
+                targetedDim = find(strcmp(temp.dimNames,'Speed'));
+                initRatesTempSpeed = squeeze(nanmean(temp.Rhat(temp.t >= 700 & temp.t <= 800,si,:,targetedDim),1));
+                targetedDim = find(strcmp(temp.dimNames,'Gain'));
+                initRatesTempGain = squeeze(nanmean(temp.Rhat(temp.t >= 700 & temp.t <= 800,si,:,targetedDim),1));
+                tempData = [tempData; eyeSpeedTemp(si,:)', temp.initGain(si,:,3)', initRatesTempSpeed(:) initRatesTempGain(:)];
                 
                 eyeSpeedTemp = squeeze(nanmean(temp.meanEyeSpeed(temp.eye_t >= 150 & temp.eye_t <= 150,:,:),1));
-                initRatesTemp = squeeze(nanmean(temp.Rhat(temp.t >= 100 & temp.t <= 200,si,:,targetedDim),1));
-                tempData = [tempData; eyeSpeedTemp(si,:)', temp.initGain(si,:,2)', initRatesTemp(:)];
+                targetedDim = find(strcmp(temp.dimNames,'Speed'));
+                initRatesTempSpeed = squeeze(nanmean(temp.Rhat(temp.t >= 700 & temp.t <= 800,si,:,targetedDim),1));
+                targetedDim = find(strcmp(temp.dimNames,'Gain'));
+                initRatesTempGain = squeeze(nanmean(temp.Rhat(temp.t >= 700 & temp.t <= 800,si,:,targetedDim),1));
+                tempData = [tempData; eyeSpeedTemp(si,:)', temp.initGain(si,:,2)', initRatesTempSpeed(:) initRatesTempGain(:)];
             end
             rvals = corrcoef(tempData);
-            num = regexp(files(filei).name,'_\d+_','match');
-            num = str2num(num{1}(num{1}~='_'));
             model_cc.eyeSpeed(fitTypei,num) = rvals(1,3);
-            model_cc.gain(fitTypei,num) = rvals(2,3);
+            model_cc.gain(fitTypei,num) = rvals(2,4);
+            
+            model_sse(:,num,fitTypei) = sum((temp.RtoFit-temp.Rhat).^2,[2,3,4]);
+            
+        catch
+            disp([sourcePath, files(filei).name])
         end
+            
 
     end
 end

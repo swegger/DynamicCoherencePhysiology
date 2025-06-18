@@ -17,6 +17,7 @@ addRequired(Parser,'subject')
 addRequired(Parser,'fitType')
 addRequired(Parser,'fitNumber')
 addParameter(Parser,'subjectMap',{'ar','fr'})
+addParameter(Parser,'usefitforP0',false)
 addParameter(Parser,'neuralDataFile',neuralDataFile_default)
 addParameter(Parser,'plotOpts',plotOpts_default)
 
@@ -27,6 +28,7 @@ fitType = Parser.Results.fitType;
 fitNumber = Parser.Results.fitNumber;
 neuralDataFile = Parser.Results.neuralDataFile;
 plotOpts = Parser.Results.plotOpts;
+usefitforP0 = Parser.Results.usefitforP0;
 
 %% Set file names and locations
 behavioralDataFile= ['/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/'...
@@ -92,6 +94,46 @@ end
 
 loadFromDataFile.On = false;
 
+if usefitforP0
+    switch subject
+        case 'ar'
+            temp = load('/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/ar/ReducedRankModelFits/fitReducedRankModel20240729.mat','modelFEF','N','M');
+            
+        case 'fr'
+            temp = load('/hpc/group/lisbergerlab/se138/Projects/DynamicCoherencePhysiology/fr/ReducedRankModelFits/fitReducedRankModel20240613.mat','modelFEF','N','M');
+            
+        otherwise
+            error(['Subject ' subject ' not recognized!'])
+    end
+    switch fitType
+        case 'fitSigmas'
+            P0 = nan(1,temp.N*temp.N + (temp.M-1)*temp.N + temp.N + temp.M - 1);
+            P0(1:end -(temp.N+temp.M-1)) = reshape(temp.modelFEF.overlaps(:,1:(temp.N+temp.M-1)),[1,temp.N*temp.N + temp.N*(temp.M-1)]);
+            P0(end-(temp.N+temp.M-1)+1:end) = temp.modelFEF.sigmas(1:temp.N+temp.M-1);
+            
+        case 'fitSigmasWithDummy'
+            P0 = nan(1,(temp.N+1)*(temp.N+1) + (temp.N+1)*(temp.M-1) + temp.N + temp.M -1);
+            overlaps = [temp.modelFEF.overlaps(1:temp.N,1:temp.N); zeros(1,temp.N)];
+            overlaps = [overlaps zeros(temp.N+1,1)];
+            overlaps = [overlaps [temp.modelFEF.overlaps(:,temp.N+1:temp.N+temp.M-1); zeros(1,temp.M-1)]];
+            sigmas = zeros(1,temp.N+1+temp.M-1);
+            sigmas(1:temp.N) = temp.modelFEF.sigmas(1:temp.N);
+            sigmas(temp.N+2:end) = temp.modelFEF.sigmas(temp.N+1:temp.N+temp.M-1);
+            P0(1:end -(temp.N+temp.M-1)) = reshape(overlaps,[1,(temp.N+1)*(temp.N+1) + (temp.N+1)*(temp.M-1)]);
+            P0(end-(temp.N+temp.M)+1:end) = temp.modelFEF.sigmas;
+            
+        case 'fitSigmasExtraInput'
+            P0 = nan(1,temp.N*temp.N + temp.M*temp.N + temp.M + temp.N);
+            P0(1:end -(temp.N+temp.M)) = reshape(temp.modelFEF.overlaps,[1,temp.N*temp.N + temp.N*temp.M]);
+            P0(end-(temp.N+temp.M)+1:end) = temp.modelFEF.sigmas;
+            P0 = [P0 temp.modelFEF.extraInput(:)'];
+            
+        otherwise
+            error(['Fit type ' fitType ' not recognized!'])
+    end
+else
+    P0 = NaN;
+end
 
 %% Fit the model
 modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNames,...
@@ -105,6 +147,7 @@ modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNa
     'equalizeInputsPriorToStimulusOnset',equalizeInputsPriorToStimulusOnset,...
     'theoretical',theoretical,...
     'centerData',centerData,...
+    'P0',P0,...
     'saveResults',true,'saveLocation',saveFileFull,'reducedSave',true,...
     'saveFigures',false,'loadFromDataFile',loadFromDataFile,...
     'plotOpts',plotOpts);
