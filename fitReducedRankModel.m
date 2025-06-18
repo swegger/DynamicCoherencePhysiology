@@ -386,7 +386,7 @@ switch fitType
         N = size(RtoFit,4)+1;
         M = size(theoreticalInput,1);
         
-        if isempty(P0)
+        if any(isnan(P0))
             P0 = zeros(N*(N+M) + N + M,1);            
         else
             P0 = P0;
