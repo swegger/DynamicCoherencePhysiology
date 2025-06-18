@@ -66,6 +66,7 @@ addParameter(Parser,'saveResults',false)
 addParameter(Parser,'saveFigures',false)
 addParameter(Parser,'loadFromDataFile',loadFromDataFile_default)
 addParameter(Parser,'saveLocation',[])
+addParameter(Parser,'reducedSave',false)
 
 parse(Parser,subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNames,varargin{:})
 
@@ -106,6 +107,7 @@ saveResults = Parser.Results.saveResults;
 saveFigures = Parser.Results.saveFigures;
 loadFromDataFile = Parser.Results.loadFromDataFile;
 saveLocation = Parser.Results.saveLocation;
+reducedSave = Parser.Results.reducedSave;
 
 %% Preliminary
 
@@ -261,7 +263,9 @@ switch fitType
         overlapsSet(2,N+1) = 1.9;
         
         % P0 = reshape(overlapsSet,[N*(N+M),1]);
-        P0 = zeros(N*(N+M),1);
+        if any(isnan(P0))
+            P0 = zeros(N*(N+M),1);
+        end            
         lb = -Inf*ones(N,N+M);
         temp = zeros(N);
         temp(~eye(N)) = -Inf*1;
@@ -322,7 +326,9 @@ switch fitType
         overlapsSet(2,N+1) = 1.9;
         
         % P0 = reshape(overlapsSet,[N*(N+M),1]);
-        P0 = zeros(N*(N+M) + N + M,1);
+        if any(isnan(P0))
+            P0 = zeros(N*(N+M) + N + M,1);    
+        end
         lb = -Inf*ones(N,N+M);
         temp = zeros(N);
         temp(~eye(N)) = -Inf*1;
@@ -379,8 +385,12 @@ switch fitType
         % Fit sigmas
         N = size(RtoFit,4)+1;
         M = size(theoreticalInput,1);
-                
-        P0 = zeros(N*(N+M) + N + M,1);
+        
+        if isempty(initialConditions)
+            P0 = zeros(N*(N+M) + N + M,1);            
+        else
+            P0 = initialConditions;
+        end
         
         lb = -Inf*ones(N,N+M);
         temp = zeros(N);
@@ -434,8 +444,11 @@ switch fitType
         N = size(RtoFit,4);
         M = size(theoreticalInput,1);
         
-        P0 = zeros(N*(N+M) + N + M,1);
-        P0 = [P0; 1/100; 250];
+        
+        if any(isnan(P0))
+            P0 = zeros(N*(N+M) + N + M,1);
+            P0 = [P0; 1/100; 250];
+        end
         lb = -Inf*ones(N,N+M);
         temp = zeros(N);
         temp(~eye(N)) = -Inf*1;
@@ -445,6 +458,7 @@ switch fitType
         lb = [lb; sigmaLowerBound*ones(N+M,1); 0; -Inf];
         ub = Inf*ones(N*(N+M)+N+M,1);
         ub = [ub; 1/200; Inf];
+        
         
         if any(isnan(P0))
             P0 = zeros(N*(N+M),1);
@@ -553,9 +567,19 @@ if saveResults
         if ~exist(saveLocation,'dir')
             mkdir(saveLocation)
         end
-        save([saveLocation '/fitReducedRankModel' datestr(now,'yyyymmdd')],'-v7.3')
+        if reducedSave
+            save([saveLocation '/fitReducedRankModel' datestr(now,'yyyymmdd')],'-v7.3',...
+                'N','speeds','meanEyeSpeed','eye_t','Rhat','t','initGain','inputTheoretical','modelFEF','RtoFit')
+        else
+            save([saveLocation '/fitReducedRankModel' datestr(now,'yyyymmdd')],'-v7.3')
+        end
     else
-        save(saveLocation,'-v7.3')
+        if reducedSave
+            save(saveLocation,'-v7.3',...
+                'N','speeds','meanEyeSpeed','eye_t','Rhat','t','initGain','inputTheoretical','modelFEF','RtoFit')
+        else
+            save(saveLocation,'-v7.3')
+        end
     end
     
 end

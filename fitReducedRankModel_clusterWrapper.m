@@ -16,6 +16,7 @@ Parser = inputParser;
 addRequired(Parser,'subject')
 addRequired(Parser,'fitType')
 addRequired(Parser,'fitNumber')
+addParameter(Parser,'subjectMap',{'ar','fr'})
 addParameter(Parser,'neuralDataFile',neuralDataFile_default)
 addParameter(Parser,'plotOpts',plotOpts_default)
 
@@ -77,7 +78,7 @@ for clusi = 1:temp.NumClusters
     Rtemp(:,:,:,clusi) = nanmean(temp.Rinit(:,:,:,temp.idx==clusi),4);
 end
 R(:,:,:,1) = Rtemp(:,:,:,9);
-R(:,:,:,2) = sum(Rtemp.*permute(temp.gainRegression(1).B(1:temp.NumClusters),[4,2,3,1]),4);
+R(:,:,:,2) = sum(Rtemp.*permute(temp.gainRegression(strcmp(subject,subjectMap)).B(1:temp.NumClusters),[4,2,3,1]),4);
 fef_t = temp.initCoh.neuron_t;
 temp = load(behavioralDataFile,'initGain','meanEyeSpeed','eye_t');
 initGain = temp.initGain;
@@ -104,6 +105,6 @@ modelFEF = fitReducedRankModel(subject,R,fef_t,eye_t,initGain,meanEyeSpeed,dimNa
     'equalizeInputsPriorToStimulusOnset',equalizeInputsPriorToStimulusOnset,...
     'theoretical',theoretical,...
     'centerData',centerData,...
-    'saveResults',true,'saveLocation',saveFileFull,...
+    'saveResults',true,'saveLocation',saveFileFull,'reducedSave',true,...
     'saveFigures',false,'loadFromDataFile',loadFromDataFile,...
     'plotOpts',plotOpts);
