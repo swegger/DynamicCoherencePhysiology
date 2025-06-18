@@ -576,7 +576,7 @@ if saveResults
     else
         if reducedSave
             save(saveLocation,'-v7.3',...
-                'N','speeds','meanEyeSpeed','eye_t','Rhat','t','initGain','inputTheoretical','modelFEF','RtoFit')
+                'N','speeds','meanEyeSpeed','eye_t','Rhat','t','initGain','theoreticalInput','modelFEF','RtoFit')
         else
             save(saveLocation,'-v7.3')
         end
