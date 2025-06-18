@@ -26,6 +26,7 @@ parse(Parser,subject,fitType,fitNumber,varargin{:})
 subject = Parser.Results.subject;
 fitType = Parser.Results.fitType;
 fitNumber = Parser.Results.fitNumber;
+subjectMap = Parser.Results.subjectMap;
 neuralDataFile = Parser.Results.neuralDataFile;
 plotOpts = Parser.Results.plotOpts;
 usefitforP0 = Parser.Results.usefitforP0;
