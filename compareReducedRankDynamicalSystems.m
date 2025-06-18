@@ -122,4 +122,12 @@ for i = 1:length(fitTypes)
         end
     end
 end
+
+figure('Name','Root sum of squared errors across conditions and target functions')
+for fitTypei = 1:length(fitTypes)
+    subplot(1,length(fitTypes),fitTypei)
+    imagesc(1:1000,linspace(-100,900,1001),sqrt(model_sse(:,:,fitTypei)))
+    xlabel('MT population simulation')
+    ylabel('Time from motion onset (ms)')
+end
     

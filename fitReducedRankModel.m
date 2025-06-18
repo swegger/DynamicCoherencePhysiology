@@ -386,10 +386,10 @@ switch fitType
         N = size(RtoFit,4)+1;
         M = size(theoreticalInput,1);
         
-        if isempty(initialConditions)
+        if isempty(P0)
             P0 = zeros(N*(N+M) + N + M,1);            
         else
-            P0 = initialConditions;
+            P0 = P0;
         end
         
         lb = -Inf*ones(N,N+M);
@@ -406,7 +406,7 @@ switch fitType
         ub(N,N+M) = Inf;
         ub = reshape(ub,[N*(N+M),1]);
         ub = [ub; Inf*ones(N+M,1)];
-                        
+                            
         if any(isnan(P0))
             P0 = zeros(N*(N+M),1);
         end
